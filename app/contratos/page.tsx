@@ -3,7 +3,8 @@
 import ProtectedRoute from "../../components/ProtectedRoute";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
-import { Suspense, useEffect, useState } from "react";import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import jsPDF from "jspdf";
 
 type Evento = {
