@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
+
 import {
   LayoutDashboard,
   CalendarDays,
@@ -11,6 +13,8 @@ import {
   UserCog,
   Settings,
   LogOut,
+  Menu,
+  X,
 } from "lucide-react";
 
 export default function AppLayout({
@@ -19,6 +23,23 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const verificarTela = () => {
+      setIsMobile(window.innerWidth <= 900);
+    };
+
+    verificarTela();
+
+    window.addEventListener("resize", verificarTela);
+
+    return () => {
+      window.removeEventListener("resize", verificarTela);
+    };
+  }, []);
 
   const menu = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -38,13 +59,54 @@ export default function AppLayout({
         background: "linear-gradient(135deg, #050510, #12001f, #00172f)",
         color: "#fff",
         fontFamily: "Arial, sans-serif",
+        overflow: "hidden",
       }}
     >
+      {/* BOTÃO MOBILE */}
+      {isMobile && (
+        <button
+          onClick={() => setMobileOpen(true)}
+          style={{
+            position: "fixed",
+            top: "18px",
+            left: "18px",
+            zIndex: 9999,
+            border: "none",
+            borderRadius: "12px",
+            background: "linear-gradient(90deg, #8b35ff, #00aaff)",
+            width: "48px",
+            height: "48px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#fff",
+            cursor: "pointer",
+            boxShadow: "0 0 20px rgba(0,0,0,0.35)",
+          }}
+        >
+          <Menu size={24} />
+        </button>
+      )}
+
+      {/* OVERLAY MOBILE */}
+      {mobileOpen && isMobile && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.65)",
+            zIndex: 999,
+          }}
+        />
+      )}
+
+      {/* SIDEBAR */}
       <aside
         style={{
           width: "280px",
           minWidth: "280px",
-          minHeight: "100vh",
+          height: "100vh",
           padding: "24px",
           background: "rgba(0,0,0,0.42)",
           borderRight: "1px solid rgba(255,255,255,0.10)",
@@ -52,31 +114,65 @@ export default function AppLayout({
           flexDirection: "column",
           justifyContent: "space-between",
           boxSizing: "border-box",
+
+          position: isMobile ? "fixed" : "relative",
+          left: isMobile
+            ? mobileOpen
+              ? "0"
+              : "-320px"
+            : "0",
+
+          top: 0,
+          zIndex: 1000,
+
+          transition: "all 0.35s ease",
+          backdropFilter: "blur(12px)",
         }}
       >
         <div>
+          {/* TOPO */}
           <div
             style={{
-              width: "100%",
               display: "flex",
-              justifyContent: "center",
+              justifyContent: "space-between",
               alignItems: "center",
               marginBottom: "20px",
-              paddingTop: "6px",
             }}
           >
-            <img
-              src="/logo-giba-horizontal.png"
-              alt="Logo GIBA"
+            <div
               style={{
-                width: "360px",
-                height: "auto",
-                objectFit: "contain",
-                display: "block",
+                width: "100%",
+                display: "flex",
+                justifyContent: "center",
               }}
-            />
+            >
+              <img
+                src="/logo-giba-horizontal.png"
+                alt="Logo GIBA"
+                style={{
+                  width: "190px",
+                  height: "auto",
+                  objectFit: "contain",
+                }}
+              />
+            </div>
+
+            {isMobile && (
+              <button
+                onClick={() => setMobileOpen(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                <X size={24} />
+              </button>
+            )}
           </div>
 
+          {/* MENU */}
           <nav
             style={{
               display: "flex",
@@ -92,6 +188,7 @@ export default function AppLayout({
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={() => isMobile && setMobileOpen(false)}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -100,16 +197,22 @@ export default function AppLayout({
                     borderRadius: "16px",
                     color: "#fff",
                     textDecoration: "none",
+
                     background: ativo
                       ? "linear-gradient(90deg, #8b35ff, #00aaff)"
                       : "rgba(255,255,255,0.06)",
+
                     border: ativo
                       ? "1px solid rgba(255,255,255,0.25)"
                       : "1px solid rgba(255,255,255,0.10)",
+
                     boxShadow: ativo
                       ? "0 0 25px rgba(139,53,255,0.35)"
                       : "none",
+
                     fontWeight: ativo ? "bold" : "normal",
+
+                    transition: "0.25s",
                   }}
                 >
                   <Icon size={22} />
@@ -120,6 +223,7 @@ export default function AppLayout({
           </nav>
         </div>
 
+        {/* RODAPÉ */}
         <div>
           <div
             style={{
@@ -133,6 +237,7 @@ export default function AppLayout({
             <p style={{ margin: 0, fontWeight: "bold" }}>
               Vinícius Ribeiro
             </p>
+
             <p
               style={{
                 marginTop: "6px",
@@ -165,11 +270,13 @@ export default function AppLayout({
         </div>
       </aside>
 
+      {/* CONTEÚDO */}
       <main
         style={{
           flex: 1,
-          padding: "32px",
+          padding: isMobile ? "90px 18px 18px 18px" : "32px",
           overflowY: "auto",
+          width: "100%",
           boxSizing: "border-box",
         }}
       >
