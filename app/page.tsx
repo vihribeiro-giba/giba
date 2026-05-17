@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function Home() {
   const whatsapp =
-    "https://wa.me/5531999999999?text=Olá!%20Quero%20conhecer%20a%20plataforma%20GIBA.";
+    "https://wa.me/5531993575969?text=Olá!%20Quero%20conhecer%20a%20plataforma%20GIBA.";
 
   return (
     <main style={pageStyle}>
