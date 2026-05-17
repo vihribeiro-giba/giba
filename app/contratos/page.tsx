@@ -3,8 +3,7 @@
 import ProtectedRoute from "../../components/ProtectedRoute";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
-import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";import { useSearchParams } from "next/navigation";
 import jsPDF from "jspdf";
 
 type Evento = {
@@ -48,7 +47,7 @@ type WordPart = {
   bold: boolean;
 };
 
-export default function ContratosPage() {
+function ContratosContent() {
   const searchParams = useSearchParams();
 
   const [eventos, setEventos] = useState<Evento[]>([]);
@@ -520,6 +519,13 @@ E, por estarem assim de comum acordo, as partes assinam o presente CONTRATO em 0
         </div>
       </AppLayout>
     </ProtectedRoute>
+  );
+}
+export default function ContratosPage() {
+  return (
+    <Suspense fallback={<div style={{ color: "#fff", padding: "40px" }}>Carregando contratos...</div>}>
+      <ContratosContent />
+    </Suspense>
   );
 }
 
