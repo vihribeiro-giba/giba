@@ -13,6 +13,11 @@ import {
   MapPin,
   Clock,
 } from "lucide-react";
+import {
+  getEventStatus,
+  getEventStatusColor,
+  getEventStatusLabel,
+} from "../../lib/eventStatus";
 
 type Evento = {
   id: string;
@@ -142,7 +147,18 @@ export default function DashboardPage() {
               </div>
 
               <div style={{ marginTop: "20px" }}>
-                {eventos.slice(0, 5).map((evento) => (
+                {eventos
+ .filter(
+  (evento) =>
+    getEventStatus(evento.event_date) !== "realizado"
+)
+ .sort(
+    (a, b) =>
+      new Date(a.event_date).getTime() -
+      new Date(b.event_date).getTime()
+  )
+  .slice(0, 5)
+  .map((evento) => (
                   <div key={evento.id} style={eventItemStyle}>
                     <div>
                       <strong>
@@ -161,9 +177,20 @@ export default function DashboardPage() {
                       </p>
                     </div>
 
-                    <span style={statusBadge(evento.status)}>
-                      {evento.status || "Sem status"}
-                    </span>
+                    {(() => {
+  const status = getEventStatus(evento.event_date);
+
+  return (
+    <span
+      style={{
+        ...statusBadge(status),
+        background: getEventStatusColor(status),
+      }}
+    >
+      {getEventStatusLabel(status)}
+    </span>
+  );
+})()}
                   </div>
                 ))}
 

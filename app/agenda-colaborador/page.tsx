@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
+import {
+  getEventStatus,
+  getEventStatusColor,
+  getEventStatusLabel,
+} from "../../lib/eventStatus";
 
 type Evento = {
   id: string;
@@ -35,24 +40,45 @@ export default function AgendaColaboradorPage() {
   const [colaboradorSelecionado, setColaboradorSelecionado] = useState("");
 
   async function carregarDados() {
-    const eventosRes = await supabase
-      .from("events")
-      .select("*")
-      .order("event_date", { ascending: true });
+    const {
+  data: { user },
+} = await supabase.auth.getUser();
 
-    const colaboradoresRes = await supabase
-      .from("collaborators")
-      .select("id, nome, funcao, status")
-      .eq("status", "Ativo")
-      .order("nome", { ascending: true });
+if (!user?.email) return;
 
-    const vinculosRes = await supabase
-      .from("event_collaborators")
-      .select("event_id, collaborator_id");
+const { data: colaborador } = await supabase
+  .from("collaborators")
+  .select("*")
+  .eq("email", user.email)
+  .single();
 
-    setEventos(eventosRes.data || []);
-    setColaboradores(colaboradoresRes.data || []);
-    setVinculos(vinculosRes.data || []);
+if (!colaborador) {
+  setEventos([]);
+  return;
+}
+
+const { data: vinculosRes } = await supabase
+  .from("event_collaborators")
+  .select("*")
+  .eq("collaborator_id", colaborador.id);
+
+const idsEventos =
+  vinculosRes?.map((item) => item.event_id) || [];
+
+if (idsEventos.length === 0) {
+  setEventos([]);
+  return;
+}
+
+const eventosRes = await supabase
+  .from("events")
+  .select("*")
+  .in("id", idsEventos)
+  .order("event_date", { ascending: true });
+
+setEventos(eventosRes.data || []);
+setColaboradores([colaborador]);
+setVinculos(vinculosRes || []);
   }
 
   const eventosDoColaborador = useMemo(() => {
@@ -73,7 +99,19 @@ export default function AgendaColaboradorPage() {
     return colaboradores.filter((colaborador) => ids.includes(colaborador.id));
   }
 
+  const [userEmail, setUserEmail] = useState("");
   useEffect(() => {
+    const carregarUsuario = async () => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user?.email) {
+    setUserEmail(user.email);
+  }
+};
+
+carregarUsuario();
     carregarDados();
   }, []);
 
@@ -123,13 +161,37 @@ export default function AgendaColaboradorPage() {
               </p>
             )}
 
-            {eventosDoColaborador.map((evento) => (
+            {eventosDoColaborador
+  .filter(
+    (evento) =>
+      getEventStatus(evento.event_date) !== "realizado"
+  )
+  .map((evento) => (
               <div key={evento.id} style={eventCard}>
                 <div>
                   <h3 style={{ margin: "0 0 10px" }}>
                     {evento.event_type} — {evento.show_format}
                   </h3>
+                  {(() => {
+  const status = getEventStatus(evento.event_date);
 
+  return (
+    <span
+      style={{
+        padding: "4px 10px",
+        borderRadius: "999px",
+        fontSize: "12px",
+        fontWeight: "bold",
+        background: getEventStatusColor(status),
+        color: "#fff",
+        display: "inline-block",
+        marginTop: "8px",
+      }}
+    >
+      {getEventStatusLabel(status)}
+    </span>
+  );
+})()}
                   <p style={textoMuted}>
                     <strong>Contratante:</strong>{" "}
                     {evento.client_name || "Não informado"}

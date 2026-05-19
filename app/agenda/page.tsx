@@ -4,6 +4,11 @@ import ProtectedRoute from "../../components/ProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
+import {
+  getEventStatus,
+  getEventStatusColor,
+  getEventStatusLabel,
+} from "../../lib/eventStatus";
 
 type Cliente = {
   id: string;
@@ -212,7 +217,7 @@ export default function AgendaPage() {
       show_duration: showDuration,
       fee: fee ? Number(fee) : 0,
       payment_format: paymentFormat,
-      status: "Confirmado",
+      status: getEventStatus(diaSelecionado),
       notes,
     };
 
@@ -401,6 +406,26 @@ export default function AgendaPage() {
                           <span style={{ color: "#e4e4ff" }}>
                             {evento.show_format || "Formato não informado"}
                           </span>
+                          {(() => {
+  const status = getEventStatus(evento.event_date);
+
+  return (
+    <span
+      style={{
+        padding: "4px 10px",
+        borderRadius: "999px",
+        fontSize: "12px",
+        fontWeight: "bold",
+        background: getEventStatusColor(status),
+        color: "#fff",
+        display: "inline-block",
+        marginTop: "8px",
+      }}
+    >
+      {getEventStatusLabel(status)}
+    </span>
+  );
+})()}
                         </div>
                       ))}
                     </div>
