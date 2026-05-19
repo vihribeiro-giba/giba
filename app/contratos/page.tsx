@@ -6,6 +6,7 @@ import { supabase } from "../../lib/supabase";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import jsPDF from "jspdf";
+import Link from "next/link";
 
 type Evento = {
   id: string;
@@ -15,7 +16,7 @@ type Evento = {
   event_date: string;
   event_time: string;
   show_duration: string;
-  fee: number;
+  fee: number | string;
   payment_format: string;
   client_name: string;
 };
@@ -43,9 +44,47 @@ type Empresa = {
   logo_url: string;
 };
 
-type WordPart = {
+type ContractSettings = {
+  id?: string;
+  titulo: string;
+  contratado_texto: string;
+  objeto_base: string;
+  remuneracao_base: string;
+  obrigacao_contratado: string;
+  obrigacao_contratante: string;
+  multa_contratado: string;
+  multa_contratante: string;
+  foro: string;
+  texto_final: string;
+  cidade_assinatura: string;
+};
+
+type WordToken = {
   text: string;
   bold: boolean;
+};
+
+const modeloPadrao: ContractSettings = {
+  titulo: "Contrato de Prestação de Serviços Artísticos",
+  contratado_texto:
+    "**32.419.876 Vinicius Ribeiro Duarte**, de CNPJ **32.419.876/0001-63**, com Sede na **Rua França, 373, Nações Unidas**, **Sabará**. Representado por **Vinicius Ribeiro Duarte**, portador do CPF nº **127.376.726-86**, residente e domiciliado na **Rua França, 373, Nações Unidas**, **Sabará, Minas Gerais**.",
+  objeto_base:
+    "O presente contrato tem como OBJETO, a realização, pelo artista **VIH RIBEIRO**, neste ato representado pelo CONTRATADO, de apresentação Artística Musical.",
+  remuneracao_base:
+    "O CONTRATANTE pagará o valor acordado pela apresentação do artista contratado.",
+  obrigacao_contratado:
+    "Será de responsabilidade do CONTRATADO pela presença do artista no dia, local e com antecedência como combinado, para que seja feita a apresentação como descrito na cláusula 1ª.",
+  obrigacao_contratante:
+    "Será de responsabilidade do CONTRATANTE a disponibilização do local para apresentação, alimentação para que o artista se prepare para tal apresentação.",
+  multa_contratado:
+    "Fica acordado caso haja imprevisto por parte do contratado o mesmo fará a devolução do sinal descrito na cláusula 2ª.",
+  multa_contratante:
+    "Caso haja o cancelamento do show por parte do contratante ficará a parte contratada isenta da devolução do Sinal na cláusula 2ª, Exceto em caso de uma Crise Pandêmica ou Problema de Saúde comprovado com Atestado Médico, valor fica como saldo para contratações futuras por um período de Seis Meses.",
+  foro:
+    "Fica eleito o Foro da Comarca de **Sabará**, no Estado de **Minas Gerais** para dirimir toda e qualquer questão oriunda deste CONTRATO.",
+  texto_final:
+    "E, por estarem assim de comum acordo, as partes assinam o presente CONTRATO em 02 (duas) vias de igual teor e forma, para um mesmo fim.",
+  cidade_assinatura: "Sabará",
 };
 
 function ContratosContent() {
@@ -54,10 +93,14 @@ function ContratosContent() {
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
+  const [modeloContrato, setModeloContrato] = useState<ContractSettings>(modeloPadrao);
   const [eventoSelecionado, setEventoSelecionado] = useState("");
   const [textoContrato, setTextoContrato] = useState("");
+  const [carregando, setCarregando] = useState(true);
 
   async function carregarDados() {
+    setCarregando(true);
+
     const eventosRes = await supabase
       .from("events")
       .select("*")
@@ -70,18 +113,48 @@ function ContratosContent() {
       .select("*")
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
+
+    const modeloRes = await supabase
+      .from("contract_settings")
+      .select("*")
+      .limit(1)
+      .maybeSingle();
 
     setEventos(eventosRes.data || []);
     setClientes(clientesRes.data || []);
     setEmpresa(empresaRes.data || null);
 
+    if (modeloRes.data) {
+      setModeloContrato({
+        id: modeloRes.data.id,
+        titulo: modeloRes.data.titulo || modeloPadrao.titulo,
+        contratado_texto: modeloRes.data.contratado_texto || modeloPadrao.contratado_texto,
+        objeto_base: modeloRes.data.objeto_base || modeloPadrao.objeto_base,
+        remuneracao_base: modeloRes.data.remuneracao_base || modeloPadrao.remuneracao_base,
+        obrigacao_contratado:
+          modeloRes.data.obrigacao_contratado || modeloPadrao.obrigacao_contratado,
+        obrigacao_contratante:
+          modeloRes.data.obrigacao_contratante || modeloPadrao.obrigacao_contratante,
+        multa_contratado: modeloRes.data.multa_contratado || modeloPadrao.multa_contratado,
+        multa_contratante:
+          modeloRes.data.multa_contratante || modeloPadrao.multa_contratante,
+        foro: modeloRes.data.foro || modeloPadrao.foro,
+        texto_final: modeloRes.data.texto_final || modeloPadrao.texto_final,
+        cidade_assinatura:
+          modeloRes.data.cidade_assinatura || modeloPadrao.cidade_assinatura,
+      });
+    }
+
     const eventIdUrl = searchParams.get("eventId");
     if (eventIdUrl) setEventoSelecionado(eventIdUrl);
+
+    setCarregando(false);
   }
 
   useEffect(() => {
     carregarDados();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function normalizar(texto: string) {
@@ -104,21 +177,41 @@ function ContratosContent() {
     if (!hora || !duracao) return "";
 
     const [h, m] = hora.split(":").map(Number);
+    const textoDuracao = String(duracao).toLowerCase();
 
-    let horas = 0;
-    let minutos = 0;
+    let totalMinutos = 0;
 
-    const matchHoras = duracao.match(/(\d+)\s*hora/i);
-    const matchMinutos = duracao.match(/(\d+)\s*min/i);
+    // Soma todas as ocorrências de horas.
+    // Exemplo: "2 horas 30 minutos mais intervalo de 30 minutos" = 2h + 30min + 30min.
+    const horasEncontradas = textoDuracao.matchAll(/(\d+)\s*(?:h|hora|horas)/g);
+    for (const item of horasEncontradas) {
+      totalMinutos += Number(item[1]) * 60;
+    }
 
-    if (matchHoras) horas = Number(matchHoras[1]);
-    if (matchMinutos) minutos = Number(matchMinutos[1]);
+    // Soma todas as ocorrências de minutos, incluindo intervalo.
+    const minutosEncontrados = textoDuracao.matchAll(/(\d+)\s*(?:min|minuto|minutos)/g);
+    for (const item of minutosEncontrados) {
+      totalMinutos += Number(item[1]);
+    }
+
+    // Suporte extra para formatos simples como "2h30" ou "2:30".
+    if (totalMinutos === 0) {
+      const compacto = textoDuracao.match(/(\d+)\s*h\s*(\d+)?/);
+      const doisPontos = textoDuracao.match(/(\d+)\s*:\s*(\d+)/);
+
+      if (compacto) {
+        totalMinutos += Number(compacto[1]) * 60;
+        totalMinutos += compacto[2] ? Number(compacto[2]) : 0;
+      } else if (doisPontos) {
+        totalMinutos += Number(doisPontos[1]) * 60;
+        totalMinutos += Number(doisPontos[2]);
+      }
+    }
 
     const data = new Date();
     data.setHours(h || 0);
     data.setMinutes(m || 0);
-    data.setHours(data.getHours() + horas);
-    data.setMinutes(data.getMinutes() + minutos);
+    data.setMinutes(data.getMinutes() + totalMinutos);
 
     const hf = String(data.getHours()).padStart(2, "0");
     const mf = String(data.getMinutes()).padStart(2, "0");
@@ -126,28 +219,154 @@ function ContratosContent() {
     return `${hf}h${mf}min`;
   }
 
-  function formatarMoeda(valor: number) {
-    return Number(valor || 0).toLocaleString("pt-BR", {
+  function formatarPagamentoContrato(pagamentoOriginal: string, dataEvento: string) {
+    const pagamento = pagamentoOriginal || "Sinal de 50% e o restante na data do evento";
+
+    return pagamento
+      .replace(/data do evento/gi, `data de ${dataEvento}`)
+      .replace(/dia do evento/gi, `dia ${dataEvento}`);
+  }
+
+  function valorNumerico(valor: number | string) {
+    if (typeof valor === "number") return valor;
+
+    const valorLimpo = String(valor || "")
+      .replace(/R\$/gi, "")
+      .replace(/\s/g, "")
+      .replace(/\./g, "")
+      .replace(",", ".");
+
+    const numero = Number(valorLimpo);
+    return Number.isFinite(numero) ? numero : 0;
+  }
+
+  function formatarMoeda(valor: number | string) {
+    return valorNumerico(valor).toLocaleString("pt-BR", {
       style: "currency",
       currency: "BRL",
     });
   }
 
-  function valorPorExtenso(valor: number) {
-    const numero = Number(valor || 0);
+  function numeroInteiroPorExtenso(numero: number): string {
+    const n = Math.floor(Number(numero || 0));
 
-    if (numero === 500) return "Quinhentos Reais";
-    if (numero === 1000) return "Um Mil Reais";
-    if (numero === 1500) return "Mil e Quinhentos Reais";
-    if (numero === 2000) return "Dois Mil Reais";
-    if (numero === 2500) return "Dois Mil e Quinhentos Reais";
-    if (numero === 3000) return "Três Mil Reais";
-    if (numero === 3500) return "Três Mil e Quinhentos Reais";
-    if (numero === 4000) return "Quatro Mil Reais";
-    if (numero === 4500) return "Quatro Mil e Quinhentos Reais";
-    if (numero === 5000) return "Cinco Mil Reais";
+    if (n === 0) return "zero";
 
-    return "Valor descrito em reais";
+    const unidades = [
+      "",
+      "um",
+      "dois",
+      "três",
+      "quatro",
+      "cinco",
+      "seis",
+      "sete",
+      "oito",
+      "nove",
+    ];
+
+    const especiais = [
+      "dez",
+      "onze",
+      "doze",
+      "treze",
+      "quatorze",
+      "quinze",
+      "dezesseis",
+      "dezessete",
+      "dezoito",
+      "dezenove",
+    ];
+
+    const dezenas = [
+      "",
+      "",
+      "vinte",
+      "trinta",
+      "quarenta",
+      "cinquenta",
+      "sessenta",
+      "setenta",
+      "oitenta",
+      "noventa",
+    ];
+
+    const centenas = [
+      "",
+      "cento",
+      "duzentos",
+      "trezentos",
+      "quatrocentos",
+      "quinhentos",
+      "seiscentos",
+      "setecentos",
+      "oitocentos",
+      "novecentos",
+    ];
+
+    function ate999(valorAte999: number): string {
+      if (valorAte999 === 0) return "";
+      if (valorAte999 === 100) return "cem";
+
+      const c = Math.floor(valorAte999 / 100);
+      const resto = valorAte999 % 100;
+      const d = Math.floor(resto / 10);
+      const u = resto % 10;
+
+      const partes: string[] = [];
+
+      if (c > 0) partes.push(centenas[c]);
+
+      if (resto >= 10 && resto <= 19) {
+        partes.push(especiais[resto - 10]);
+      } else {
+        if (d > 0) partes.push(dezenas[d]);
+        if (u > 0) partes.push(unidades[u]);
+      }
+
+      return partes.filter(Boolean).join(" e ");
+    }
+
+    if (n < 1000) return ate999(n);
+
+    if (n < 1000000) {
+      const milhar = Math.floor(n / 1000);
+      const resto = n % 1000;
+      const textoMilhar = milhar === 1 ? "mil" : `${ate999(milhar)} mil`;
+
+      if (resto === 0) return textoMilhar;
+
+      const conector = resto < 100 || resto % 100 === 0 ? " e " : " ";
+      return `${textoMilhar}${conector}${ate999(resto)}`;
+    }
+
+    const milhoes = Math.floor(n / 1000000);
+    const restoMilhoes = n % 1000000;
+    const textoMilhoes = milhoes === 1 ? "um milhão" : `${ate999(milhoes)} milhões`;
+
+    if (restoMilhoes === 0) return textoMilhoes;
+
+    return `${textoMilhoes} e ${numeroInteiroPorExtenso(restoMilhoes)}`;
+  }
+
+  function valorPorExtenso(valor: number | string) {
+    const numero = valorNumerico(valor);
+    const reais = Math.floor(numero);
+    const centavos = Math.round((numero - reais) * 100);
+
+    const textoReais = `${numeroInteiroPorExtenso(reais)} ${reais === 1 ? "real" : "reais"}`;
+
+    if (centavos > 0) {
+      const textoCentavos = `${numeroInteiroPorExtenso(centavos)} ${
+        centavos === 1 ? "centavo" : "centavos"
+      }`;
+
+      return `${textoReais} e ${textoCentavos}`.replace(/^./, (letra) =>
+        letra.toUpperCase()
+      );
+    }
+
+    return textoReais.replace(/^./, (letra) => letra.toUpperCase());
   }
 
   function dataAtualContrato() {
@@ -157,6 +376,14 @@ function ContratosContent() {
       month: "long",
       year: "numeric",
     });
+  }
+
+  function textoContratado() {
+    if (modeloContrato.contratado_texto) return modeloContrato.contratado_texto;
+
+    if (!empresa) return "";
+
+    return `**${empresa.razao_social}**, de CNPJ **${empresa.cnpj}**, com Sede na **${empresa.endereco_completo}**, **${empresa.cidade}**. Representado por **${empresa.responsavel}**, portador do CPF nº **${empresa.cpf}**, residente e domiciliado na **${empresa.endereco_completo}**, **${empresa.cidade}, ${empresa.estado}**.`;
   }
 
   function gerarContrato() {
@@ -188,8 +415,15 @@ function ContratosContent() {
     const horaFim = calcularHorarioFinal(evento.event_time, evento.show_duration);
     const valor = formatarMoeda(evento.fee);
     const valorExtenso = valorPorExtenso(evento.fee);
+    const pagamento = formatarPagamentoContrato(
+      evento.payment_format || "Sinal de 50% e o restante na data do evento",
+      dataEvento
+    );
 
-    const texto = `Contrato de Prestação de Serviços Artísticos
+    const objetoEditavel = modeloContrato.objeto_base || modeloPadrao.objeto_base;
+    const remuneracaoEditavel = modeloContrato.remuneracao_base || modeloPadrao.remuneracao_base;
+
+    const texto = `${modeloContrato.titulo || modeloPadrao.titulo}
 
 CONTRATANTE:
 
@@ -197,324 +431,256 @@ CONTRATANTE:
 
 CONTRATADO:
 
-**${empresa.razao_social}**, de CNPJ **${empresa.cnpj}**, com Sede na **${empresa.endereco_completo}**, **${empresa.cidade}**. Representado por **${empresa.responsavel}**, portador do CPF nº **${empresa.cpf}**, residente e domiciliado na **${empresa.endereco_completo}**, **${empresa.cidade}, ${empresa.estado}**.
+${textoContratado()}
 
 DO OBJETO DO CONTRATO
 
-Cláusula 1ª. O presente contrato tem como OBJETO, a realização, pelo artista **${empresa.nome_artistico}**, neste ato representado pelo CONTRATADO, de apresentação Artística Musical, no local, **${evento.location}** no dia **${dataEvento}**, iniciando-se às **${horaInicio}**, e terminando às **${horaFim}** sendo o show de **${evento.show_duration}**, sendo feito o trabalho de **${empresa.nome_artistico} ${evento.show_format}**, Incluso Equipamento de Som para a Apresentação.
+Cláusula 1ª. ${objetoEditavel} A apresentação será realizada no local **${evento.location}**, no dia **${dataEvento}**, iniciando-se às **${horaInicio}**, e terminando às **${horaFim}**, sendo o show de **${evento.show_duration}**, sendo feito o trabalho de **${evento.show_format}**, Incluso Equipamento de Som para a Apresentação.
 
 DA REMUNERAÇÃO
 
-Cláusula 2ª. O CONTRATANTE  pagará o valor de **${valor} (${valorExtenso})** pela apresentação do artista contratado, efetuando o pagamento de 50% na contratação e o restante do valor na data de **${dataEvento}**.
+Cláusula 2ª. ${remuneracaoEditavel} O CONTRATANTE pagará o valor de **${valor} (${valorExtenso})** pela apresentação do artista contratado, efetuando o pagamento de **${pagamento}**.
 
 DAS OBRIGAÇÕES
 
-Cláusula 3ª. Será de responsabilidade do CONTRATADO pela presença do artista no dia, local e com antecedência como combinado, para que seja feita a apresentação como descrito na cláusula 1ª.
+Cláusula 3ª. ${modeloContrato.obrigacao_contratado || modeloPadrao.obrigacao_contratado}
 
-Cláusula 4ª. Será de responsabilidade do CONTRATANTE a disponibilização do local para apresentação, alimentação para que o artista se prepare para tal apresentação.
+Cláusula 4ª. ${modeloContrato.obrigacao_contratante || modeloPadrao.obrigacao_contratante}
 
 DA MULTA
 
-Cláusula 5ª. Fica acordado caso haja imprevisto por parte do contratado o mesmo fará a devolução do sinal descrito na cláusula 2ª.
+Cláusula 5ª. ${modeloContrato.multa_contratado || modeloPadrao.multa_contratado}
 
-Cláusula 6ª. Caso haja o cancelamento do show por parte do contratante ficará a parte contratada isenta da devolução do Sinal na cláusula 2ª, Exceto em caso de uma Crise Pandêmica ou Problema de Saúde comprovado com Atestado Médico, valor fica como saldo para contratações futuras por um período de Seis Meses.
+Cláusula 6ª. ${modeloContrato.multa_contratante || modeloPadrao.multa_contratante}
 
-Cláusula 7ª. Fica eleito o Foro da Comarca de **Sabará**, no Estado de **Minas Gerais** para dirimir toda e qualquer questão oriunda deste CONTRATO.
+Cláusula 7ª. ${modeloContrato.foro || modeloPadrao.foro}
 
-E, por estarem assim de comum acordo, as partes assinam o presente CONTRATO em 02 (duas) vias de igual teor e forma, para um mesmo fim.
+${modeloContrato.texto_final || modeloPadrao.texto_final}
 
-**Sabará, ${dataAtualContrato()}.**`;
+**${modeloContrato.cidade_assinatura || "Sabará"}, ${dataAtualContrato()}.**`;
 
     setTextoContrato(texto);
   }
 
-  function parseBoldText(texto: string): WordPart[] {
+  function parseBoldText(texto: string): WordToken[] {
     const partes = texto.split(/(\*\*.*?\*\*)/g);
-
-    return partes
-      .filter((parte) => parte.length > 0)
-      .map((parte) => {
-        const bold = parte.startsWith("**") && parte.endsWith("**");
-        return {
-          text: parte.replace(/\*\*/g, ""),
-          bold,
-        };
-      });
-  }
-
-  function getTextWidth(doc: jsPDF, texto: string, bold: boolean) {
-    doc.setFont("times", bold ? "bold" : "normal");
-    doc.setFontSize(12);
-    return doc.getTextWidth(texto);
-  }
-
-  function quebrarLinhasComNegrito(
-    doc: jsPDF,
-    partes: WordPart[],
-    larguraMaxima: number
-  ) {
-    const palavras: WordPart[] = [];
+    const tokens: WordToken[] = [];
 
     partes.forEach((parte) => {
-      const split = parte.text.split(/(\s+)/);
+      if (!parte) return;
 
-      split.forEach((p) => {
-        if (p !== "") {
-          palavras.push({
-            text: p,
-            bold: parte.bold,
-          });
-        }
+      const bold = parte.startsWith("**") && parte.endsWith("**");
+      const textoLimpo = parte.replace(/\*\*/g, "");
+      const palavras = textoLimpo.split(/\s+/).filter(Boolean);
+
+      palavras.forEach((palavra) => {
+        tokens.push({ text: palavra, bold });
       });
     });
 
-    const linhas: WordPart[][] = [];
-    let linhaAtual: WordPart[] = [];
-    let larguraAtual = 0;
-
-    palavras.forEach((palavra) => {
-      const larguraPalavra = getTextWidth(doc, palavra.text, palavra.bold);
-
-      if (larguraAtual + larguraPalavra > larguraMaxima && linhaAtual.length > 0) {
-        linhas.push(linhaAtual);
-        linhaAtual = [palavra];
-        larguraAtual = larguraPalavra;
-      } else {
-        linhaAtual.push(palavra);
-        larguraAtual += larguraPalavra;
-      }
-    });
-
-    if (linhaAtual.length > 0) {
-      linhas.push(linhaAtual);
-    }
-
-    return linhas;
+    return tokens;
   }
 
-  function desenharLinha(
+  function larguraToken(doc: jsPDF, token: WordToken) {
+    doc.setFont("helvetica", token.bold ? "bold" : "normal");
+    return doc.getTextWidth(token.text);
+  }
+
+  function renderizarLinhaJustificada(
     doc: jsPDF,
-    linha: WordPart[],
+    linha: WordToken[],
     x: number,
     y: number,
-    largura: number,
+    larguraMaxima: number,
     justificar: boolean
   ) {
-    const textoSemEspacos = linha.filter((p) => p.text.trim() !== "");
-    const espacos = linha.filter((p) => /^\s+$/.test(p.text)).length;
+    if (linha.length === 0) return;
 
-    let larguraLinha = 0;
+    const larguraPalavras = linha.reduce((total, token) => total + larguraToken(doc, token), 0);
+    const larguraEspacoNormal = doc.getTextWidth(" ");
+    const quantidadeEspacos = Math.max(linha.length - 1, 0);
 
-    linha.forEach((parte) => {
-      larguraLinha += getTextWidth(doc, parte.text, parte.bold);
-    });
+    let espacoEntrePalavras = larguraEspacoNormal;
 
-    const sobra = largura - larguraLinha;
-    const extraPorEspaco = justificar && espacos > 0 ? sobra / espacos : 0;
+    if (justificar && quantidadeEspacos > 0) {
+      const sobra = larguraMaxima - larguraPalavras;
+      espacoEntrePalavras = sobra / quantidadeEspacos;
+    }
 
-    let cursorX = x;
+    let xAtual = x;
 
-    linha.forEach((parte) => {
-      const isSpace = /^\s+$/.test(parte.text);
+    linha.forEach((token, index) => {
+      doc.setFont("helvetica", token.bold ? "bold" : "normal");
+      doc.text(token.text, xAtual, y);
+      xAtual += larguraToken(doc, token);
 
-      doc.setFont("times", parte.bold ? "bold" : "normal");
-      doc.setFontSize(12);
-
-      if (!isSpace) {
-        doc.text(parte.text, cursorX, y);
-      }
-
-      cursorX += getTextWidth(doc, parte.text, parte.bold);
-
-      if (isSpace) {
-        cursorX += extraPorEspaco;
+      if (index < linha.length - 1) {
+        xAtual += espacoEntrePalavras;
       }
     });
   }
 
-  function escreverParagrafo(
+  function adicionarTextoComNegritoJustificado(
     doc: jsPDF,
     texto: string,
     x: number,
-    y: number,
-    largura: number,
-    alturaLinha: number
+    yInicial: number,
+    larguraMaxima: number,
+    lineHeight: number
   ) {
-    const partes = parseBoldText(texto);
-    const linhas = quebrarLinhasComNegrito(doc, partes, largura);
+    let y = yInicial;
+    const paragrafos = texto.split("\n");
 
-    linhas.forEach((linha, index) => {
-      if (y > 265) {
-        doc.addPage();
-        y = 25;
+    paragrafos.forEach((paragrafo) => {
+      if (!paragrafo.trim()) {
+        y += lineHeight;
+        return;
       }
 
-      const ultimaLinha = index === linhas.length - 1;
-      desenharLinha(doc, linha, x, y, largura, !ultimaLinha);
-      y += alturaLinha;
+      const tokens = parseBoldText(paragrafo);
+      let linhaAtual: WordToken[] = [];
+      let larguraLinha = 0;
+      const larguraEspaco = doc.getTextWidth(" ");
+
+      tokens.forEach((token) => {
+        const largura = larguraToken(doc, token);
+        const larguraComEspaco = linhaAtual.length > 0 ? largura + larguraEspaco : largura;
+
+        if (larguraLinha + larguraComEspaco > larguraMaxima && linhaAtual.length > 0) {
+          renderizarLinhaJustificada(doc, linhaAtual, x, y, larguraMaxima, true);
+          y += lineHeight;
+          linhaAtual = [token];
+          larguraLinha = largura;
+        } else {
+          linhaAtual.push(token);
+          larguraLinha += larguraComEspaco;
+        }
+      });
+
+      if (linhaAtual.length > 0) {
+        renderizarLinhaJustificada(doc, linhaAtual, x, y, larguraMaxima, false);
+        y += lineHeight;
+      }
     });
 
     return y;
   }
 
-  function gerarPDF(texto: string, cliente: string) {
+  function baixarPDF() {
+    if (!textoContrato) {
+      alert("Gere o contrato antes de baixar o PDF.");
+      return;
+    }
+
     const doc = new jsPDF("p", "mm", "a4");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
 
-    const x = 20;
-    const largura = 170;
-    const alturaLinha = 6.8;
-    let y = 24;
+    const margemX = 18;
+    const larguraTexto = 174;
+    const lineHeight = 6;
+    let y = 20;
 
-    doc.setFont("times", "bold");
-    doc.setFontSize(14);
-    doc.text("Contrato de Prestação de Serviços Artísticos", 105, y, {
-      align: "center",
-    });
-
-    y += 18;
-
-    const blocos = texto
-      .replace("Contrato de Prestação de Serviços Artísticos", "")
-      .split("\n\n")
-      .map((bloco) => bloco.trim())
-      .filter(Boolean);
+    const blocos = textoContrato.split("\n\n");
 
     blocos.forEach((bloco) => {
-      if (y > 260) {
+      const blocoLimpo = bloco.trim();
+      if (!blocoLimpo) return;
+
+      if (y > 267) {
         doc.addPage();
-        y = 25;
+        y = 20;
       }
 
-      const ehTitulo =
-        bloco === "CONTRATANTE:" ||
-        bloco === "CONTRATADO:" ||
-        bloco === "DO OBJETO DO CONTRATO" ||
-        bloco === "DA REMUNERAÇÃO" ||
-        bloco === "DAS OBRIGAÇÕES" ||
-        bloco === "DA MULTA";
+      const isTitulo = blocoLimpo === (modeloContrato.titulo || modeloPadrao.titulo);
+      const isSecao = blocoLimpo === blocoLimpo.toUpperCase() && blocoLimpo.length < 45;
 
-      if (ehTitulo) {
-        doc.setFont("times", "bold");
-        doc.setFontSize(12);
-        doc.text(bloco, x, y);
+      if (isTitulo) {
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.text(blocoLimpo, 105, y, { align: "center" });
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "normal");
+        y += 10;
+        return;
+      }
+
+      if (isSecao) {
+        doc.setFont("helvetica", "bold");
+        doc.text(blocoLimpo, 105, y, { align: "center" });
+        doc.setFont("helvetica", "normal");
         y += 8;
         return;
       }
 
-      y = escreverParagrafo(doc, bloco, x, y, largura, alturaLinha);
-      y += 5;
+      y = adicionarTextoComNegritoJustificado(doc, blocoLimpo, margemX, y, larguraTexto, lineHeight);
+      y += 3;
     });
 
-    if (y > 230) {
-      doc.addPage();
-      y = 45;
-    } else {
-      y += 20;
-    }
-
-    doc.setFont("times", "normal");
-    doc.setFontSize(12);
-
-    doc.line(25, y, 85, y);
-    doc.line(125, y, 185, y);
-
-    y += 7;
-
-    doc.setFont("times", "bold");
-    doc.text("Contratante", 55, y, { align: "center" });
-    doc.text("Contratado", 155, y, { align: "center" });
-
-    const nomeArquivo = `contrato-${cliente
-      .toLowerCase()
-      .replaceAll(" ", "-")
-      .replace(/[^\w-]/g, "")}.pdf`;
-
-    doc.save(nomeArquivo);
+    doc.save("contrato-giba.pdf");
   }
 
-  async function salvarContrato() {
-    const evento = eventos.find((e) => e.id === eventoSelecionado);
-
-    if (!evento || !textoContrato) {
-      alert("Gere o contrato antes de salvar.");
-      return;
-    }
-
-    const { error } = await supabase.from("contracts").insert({
-      event_id: evento.id,
-      client_name: evento.client_name,
-      contract_text: textoContrato,
-      status: "Gerado",
-    });
-
-    if (error) {
-      alert("Erro ao salvar contrato.");
-      return;
-    }
-
-    gerarPDF(textoContrato, evento.client_name);
-
-    alert("Contrato salvo e PDF baixado com sucesso.");
+  function textoPreviewSemMarkdown(texto: string) {
+    return texto.replace(/\*\*/g, "");
   }
 
   return (
     <ProtectedRoute adminOnly>
       <AppLayout>
         <div style={{ color: "#fff" }}>
-          <h1 style={{ fontSize: "34px", marginBottom: "8px" }}>
-            Contratos
-          </h1>
+          <h1 style={{ fontSize: "34px", marginBottom: "8px" }}>Contratos</h1>
 
-          <p style={{ color: "#b8b8d8", marginBottom: "28px" }}>
+          <p style={{ color: "#b8b8d8", marginBottom: "22px" }}>
             Gere contratos automáticos dos eventos cadastrados.
           </p>
 
+          <div style={{ marginBottom: "24px" }}>
+            <Link href="/contratos-modelo">
+              <button style={botaoConfigurarContrato}>Configurar Contrato</button>
+            </Link>
+          </div>
+
           <section style={panelStyle}>
-            <label style={labelStyle}>Selecionar Evento</label>
+            <label style={labelStyle}>Selecione o evento</label>
 
             <select
+              style={inputStyle}
               value={eventoSelecionado}
               onChange={(e) => setEventoSelecionado(e.target.value)}
-              style={inputStyle}
             >
-              <option value="">Selecione</option>
+              <option value="">Selecione um evento</option>
 
               {eventos.map((evento) => (
-  <option key={evento.id} value={evento.id}>
-    {formatarDataBR(evento.event_date)} — {evento.event_type} — {evento.client_name}
-  </option>
-))}
+                <option key={evento.id} value={evento.id}>
+                  {evento.event_date} - {evento.client_name} - {evento.show_format}
+                </option>
+              ))}
             </select>
 
-            <div style={{ marginTop: "20px" }}>
-              <button style={buttonStyle} onClick={gerarContrato}>
+            <div style={{ display: "flex", gap: "12px", marginTop: "18px", flexWrap: "wrap" }}>
+              <button type="button" onClick={gerarContrato} style={buttonStyle}>
                 Gerar Contrato
               </button>
+
+              <button type="button" onClick={baixarPDF} style={buttonSecondaryStyle}>
+                Baixar PDF
+              </button>
             </div>
+
+            {carregando && (
+              <p style={{ color: "#b8b8d8", marginTop: "16px" }}>
+                Carregando informações...
+              </p>
+            )}
           </section>
 
           {textoContrato && (
             <section style={{ ...panelStyle, marginTop: "24px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "18px",
-                  gap: "12px",
-                }}
-              >
-                <h2 style={{ margin: 0 }}>Contrato Gerado</h2>
+              <h2 style={{ marginTop: 0 }}>Prévia do Contrato</h2>
 
-                <button style={buttonStyle} onClick={salvarContrato}>
-                  Salvar e Baixar PDF
-                </button>
+              <div style={previewStyle}>
+                {textoPreviewSemMarkdown(textoContrato)}
               </div>
-
-              <textarea
-                value={textoContrato}
-                onChange={(e) => setTextoContrato(e.target.value)}
-                style={textareaStyle}
-              />
             </section>
           )}
         </div>
@@ -522,6 +688,7 @@ E, por estarem assim de comum acordo, as partes assinam o presente CONTRATO em 0
     </ProtectedRoute>
   );
 }
+
 export default function ContratosPage() {
   return (
     <Suspense fallback={<div style={{ color: "#fff", padding: "40px" }}>Carregando contratos...</div>}>
@@ -543,29 +710,17 @@ const labelStyle: React.CSSProperties = {
   marginBottom: "8px",
   color: "#cbd5e1",
   fontSize: "14px",
+  fontWeight: "bold",
 };
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "14px",
   borderRadius: "12px",
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(0,0,0,0.22)",
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "rgba(0,0,0,0.28)",
   color: "#fff",
   fontSize: "15px",
-  boxSizing: "border-box",
-};
-
-const textareaStyle: React.CSSProperties = {
-  width: "100%",
-  minHeight: "700px",
-  padding: "20px",
-  borderRadius: "18px",
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(0,0,0,0.22)",
-  color: "#fff",
-  fontSize: "15px",
-  lineHeight: "1.8",
   boxSizing: "border-box",
 };
 
@@ -577,4 +732,39 @@ const buttonStyle: React.CSSProperties = {
   color: "#fff",
   fontWeight: "bold",
   cursor: "pointer",
+};
+
+const buttonSecondaryStyle: React.CSSProperties = {
+  padding: "14px 22px",
+  borderRadius: "12px",
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "rgba(255,255,255,0.08)",
+  color: "#fff",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const botaoConfigurarContrato: React.CSSProperties = {
+  padding: "14px 22px",
+  borderRadius: "12px",
+  border: "none",
+  background: "linear-gradient(90deg, #8b35ff, #00aaff)",
+  color: "#fff",
+  fontWeight: "bold",
+  cursor: "pointer",
+};
+
+const previewStyle: React.CSSProperties = {
+  width: "100%",
+  minHeight: "520px",
+  padding: "22px",
+  borderRadius: "16px",
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "rgba(0,0,0,0.30)",
+  color: "#fff",
+  fontSize: "15px",
+  lineHeight: "1.7",
+  boxSizing: "border-box",
+  whiteSpace: "pre-wrap",
+  textAlign: "justify",
 };

@@ -15,6 +15,7 @@ import {
   LogOut,
   Menu,
   X,
+  FileText,
 } from "lucide-react";
 
 export default function AppLayout({
@@ -48,6 +49,7 @@ export default function AppLayout({
     { label: "Financeiro", href: "/financeiro", icon: DollarSign },
     { label: "Formatos", href: "/formatos", icon: Music },
     { label: "Colaboradores", href: "/colaboradores", icon: UserCog },
+    { label: "Contratos", href: "/contratos", icon: FileText },
     { label: "Configurações", href: "/configuracoes", icon: Settings },
   ];
 

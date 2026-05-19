@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import ProtectedRoute from "../../components/ProtectedRoute";
-import AppLayout from "../../components/AppLayout";
+import Link from "next/link";
 import { supabase } from "../../lib/supabase";
+import AppLayout from "../../components/AppLayout";
 
 type ContractSettings = {
-  id: string;
+  id?: string;
   titulo: string;
   contratado_texto: string;
-  clausula_obrigacao_contratado: string;
-  clausula_obrigacao_contratante: string;
+  objeto_base: string;
+  remuneracao_base: string;
+  obrigacao_contratado: string;
+  obrigacao_contratante: string;
   multa_contratado: string;
   multa_contratante: string;
   foro: string;
@@ -19,67 +21,102 @@ type ContractSettings = {
 };
 
 export default function ContratosModeloPage() {
-  const [modelo, setModelo] = useState<ContractSettings | null>(null);
-  const [carregando, setCarregando] = useState(true);
-  const [salvando, setSalvando] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const [form, setForm] = useState<ContractSettings>({
+    titulo: "",
+    contratado_texto: "",
+    objeto_base: "",
+    remuneracao_base: "",
+    obrigacao_contratado: "",
+    obrigacao_contratante: "",
+    multa_contratado: "",
+    multa_contratante: "",
+    foro: "",
+    texto_final: "",
+    cidade_assinatura: "",
+  });
 
   async function carregarModelo() {
-    setCarregando(true);
+    try {
+      const { data, error } = await supabase
+        .from("contract_settings")
+        .select("*")
+        .limit(1)
+        .single();
 
-    const { data, error } = await supabase
-      .from("contract_settings")
-      .select("*")
-      .limit(1)
-      .single();
+      if (error) {
+        console.error(error);
+        alert("Erro ao carregar modelo de contrato.");
+        return;
+      }
 
-    if (error) {
-      alert("Erro ao carregar modelo de contrato.");
-      setCarregando(false);
-      return;
+      if (data) {
+        setForm({
+          id: data.id,
+          titulo: data.titulo || "",
+          contratado_texto: data.contratado_texto || "",
+          objeto_base: data.objeto_base || "",
+          remuneracao_base: data.remuneracao_base || "",
+          obrigacao_contratado: data.obrigacao_contratado || "",
+          obrigacao_contratante: data.obrigacao_contratante || "",
+          multa_contratado: data.multa_contratado || "",
+          multa_contratante: data.multa_contratante || "",
+          foro: data.foro || "",
+          texto_final: data.texto_final || "",
+          cidade_assinatura: data.cidade_assinatura || "",
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erro inesperado.");
+    } finally {
+      setLoading(false);
     }
-
-    setModelo(data);
-    setCarregando(false);
-  }
-
-  function atualizarCampo(campo: keyof ContractSettings, valor: string) {
-    if (!modelo) return;
-
-    setModelo({
-      ...modelo,
-      [campo]: valor,
-    });
   }
 
   async function salvarModelo() {
-    if (!modelo) return;
+    try {
+      if (form.id) {
+        const { error } = await supabase
+          .from("contract_settings")
+          .update({
+            titulo: form.titulo,
+            contratado_texto: form.contratado_texto,
+            objeto_base: form.objeto_base,
+            remuneracao_base: form.remuneracao_base,
+            obrigacao_contratado: form.obrigacao_contratado,
+            obrigacao_contratante: form.obrigacao_contratante,
+            multa_contratado: form.multa_contratado,
+            multa_contratante: form.multa_contratante,
+            foro: form.foro,
+            texto_final: form.texto_final,
+            cidade_assinatura: form.cidade_assinatura,
+          })
+          .eq("id", form.id);
 
-    setSalvando(true);
+        if (error) {
+          console.error(error);
+          alert("Erro ao salvar contrato.");
+          return;
+        }
+      } else {
+        const { error } = await supabase
+          .from("contract_settings")
+          .insert([form]);
 
-    const { error } = await supabase
-      .from("contract_settings")
-      .update({
-        titulo: modelo.titulo,
-        contratado_texto: modelo.contratado_texto,
-        clausula_obrigacao_contratado: modelo.clausula_obrigacao_contratado,
-        clausula_obrigacao_contratante: modelo.clausula_obrigacao_contratante,
-        multa_contratado: modelo.multa_contratado,
-        multa_contratante: modelo.multa_contratante,
-        foro: modelo.foro,
-        texto_final: modelo.texto_final,
-        cidade_assinatura: modelo.cidade_assinatura,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", modelo.id);
+        if (error) {
+          console.error(error);
+          alert("Erro ao criar contrato.");
+          return;
+        }
+      }
 
-    setSalvando(false);
-
-    if (error) {
-      alert("Erro ao salvar modelo.");
-      return;
+      alert("Modelo salvo com sucesso!");
+    } catch (err) {
+      console.error(err);
+      alert("Erro inesperado.");
     }
-
-    alert("Modelo de contrato salvo com sucesso.");
   }
 
   useEffect(() => {
@@ -87,206 +124,255 @@ export default function ContratosModeloPage() {
   }, []);
 
   return (
-    <ProtectedRoute adminOnly>
-      <AppLayout>
-        <div style={{ color: "#fff" }}>
-          <h1 style={{ fontSize: "34px", marginBottom: "8px" }}>
-            Modelo de Contrato
-          </h1>
+    <AppLayout>
+      <div className="min-h-screen bg-[#0b0f1a] text-white p-8">
+        <div className="max-w-6xl mx-auto">
 
-          <p style={{ color: "#b8b8d8", marginBottom: "28px" }}>
-            Configure as cláusulas fixas usadas na geração dos contratos.
-          </p>
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-4xl font-bold">
+                Modelo de Contrato
+              </h1>
 
-          {carregando && (
-            <section style={panelStyle}>
-              <p style={{ color: "#b8b8d8" }}>Carregando modelo...</p>
-            </section>
-          )}
+              <p className="text-gray-400 mt-2">
+                Configure as cláusulas fixas usadas na geração dos contratos.
+              </p>
+            </div>
 
-          {!carregando && modelo && (
-            <section style={panelStyle}>
-              <div style={gridStyle}>
-                <CampoTexto
-                  label="Título do contrato"
-                  value={modelo.titulo}
-                  onChange={(valor) => atualizarCampo("titulo", valor)}
-                />
+            <Link
+              href="/contratos"
+              className="px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 transition"
+            >
+              Voltar para Contratos
+            </Link>
+          </div>
 
-                <CampoArea
-                  label="Texto do contratado"
-                  value={modelo.contratado_texto}
-                  onChange={(valor) =>
-                    atualizarCampo("contratado_texto", valor)
-                  }
-                />
+          <div className="bg-[#131b2e] border border-purple-500/20 rounded-3xl p-8">
 
-                <CampoArea
-                  label="Cláusula 3ª — Obrigação do contratado"
-                  value={modelo.clausula_obrigacao_contratado}
-                  onChange={(valor) =>
-                    atualizarCampo("clausula_obrigacao_contratado", valor)
-                  }
-                />
+            {loading ? (
+              <p>Carregando modelo...</p>
+            ) : (
+              <div className="space-y-8">
 
-                <CampoArea
-                  label="Cláusula 4ª — Obrigação do contratante"
-                  value={modelo.clausula_obrigacao_contratante}
-                  onChange={(valor) =>
-                    atualizarCampo("clausula_obrigacao_contratante", valor)
-                  }
-                />
+                {/* TÍTULO */}
+                <div>
+                  <label className="block mb-2 font-semibold">
+                    Título do contrato
+                  </label>
 
-                <CampoArea
-                  label="Cláusula 5ª — Multa / imprevisto do contratado"
-                  value={modelo.multa_contratado}
-                  onChange={(valor) =>
-                    atualizarCampo("multa_contratado", valor)
-                  }
-                />
+                  <input
+                    type="text"
+                    value={form.titulo}
+                    onChange={(e) =>
+                      setForm({ ...form, titulo: e.target.value })
+                    }
+                    className="w-full bg-[#0f1729] border border-purple-500/20 rounded-xl p-4"
+                  />
+                </div>
 
-                <CampoArea
-                  label="Cláusula 6ª — Cancelamento pelo contratante"
-                  value={modelo.multa_contratante}
-                  onChange={(valor) =>
-                    atualizarCampo("multa_contratante", valor)
-                  }
-                />
+                {/* CONTRATADO */}
+                <div>
+                  <label className="block mb-2 font-semibold">
+                    Texto do contratado
+                  </label>
 
-                <CampoArea
-                  label="Cláusula 7ª — Foro"
-                  value={modelo.foro}
-                  onChange={(valor) => atualizarCampo("foro", valor)}
-                />
+                  <textarea
+                    rows={5}
+                    value={form.contratado_texto}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        contratado_texto: e.target.value,
+                      })
+                    }
+                    className="w-full bg-[#0f1729] border border-purple-500/20 rounded-xl p-4"
+                  />
+                </div>
 
-                <CampoArea
-                  label="Texto final"
-                  value={modelo.texto_final}
-                  onChange={(valor) => atualizarCampo("texto_final", valor)}
-                />
+                {/* OBJETO */}
+                <div>
+                  <label className="block mb-2 font-semibold">
+                    Cláusula 1ª — Objeto do contrato
+                  </label>
 
-                <CampoTexto
-                  label="Cidade da assinatura"
-                  value={modelo.cidade_assinatura}
-                  onChange={(valor) =>
-                    atualizarCampo("cidade_assinatura", valor)
-                  }
-                />
-              </div>
+                  <textarea
+                    rows={5}
+                    value={form.objeto_base}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        objeto_base: e.target.value,
+                      })
+                    }
+                    className="w-full bg-[#0f1729] border border-purple-500/20 rounded-xl p-4"
+                  />
+                </div>
 
-              <div style={{ marginTop: "24px" }}>
+                {/* REMUNERAÇÃO */}
+                <div>
+                  <label className="block mb-2 font-semibold">
+                    Cláusula 2ª — Remuneração
+                  </label>
+
+                  <textarea
+                    rows={5}
+                    value={form.remuneracao_base}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        remuneracao_base: e.target.value,
+                      })
+                    }
+                    className="w-full bg-[#0f1729] border border-purple-500/20 rounded-xl p-4"
+                  />
+                </div>
+
+                {/* OBRIGAÇÃO CONTRATADO */}
+                <div>
+                  <label className="block mb-2 font-semibold">
+                    Cláusula 3ª — Obrigação do contratado
+                  </label>
+
+                  <textarea
+                    rows={5}
+                    value={form.obrigacao_contratado}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        obrigacao_contratado: e.target.value,
+                      })
+                    }
+                    className="w-full bg-[#0f1729] border border-purple-500/20 rounded-xl p-4"
+                  />
+                </div>
+
+                {/* OBRIGAÇÃO CONTRATANTE */}
+                <div>
+                  <label className="block mb-2 font-semibold">
+                    Cláusula 4ª — Obrigação do contratante
+                  </label>
+
+                  <textarea
+                    rows={5}
+                    value={form.obrigacao_contratante}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        obrigacao_contratante: e.target.value,
+                      })
+                    }
+                    className="w-full bg-[#0f1729] border border-purple-500/20 rounded-xl p-4"
+                  />
+                </div>
+
+                {/* MULTA CONTRATADO */}
+                <div>
+                  <label className="block mb-2 font-semibold">
+                    Cláusula 5ª — Multa do contratado
+                  </label>
+
+                  <textarea
+                    rows={5}
+                    value={form.multa_contratado}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        multa_contratado: e.target.value,
+                      })
+                    }
+                    className="w-full bg-[#0f1729] border border-purple-500/20 rounded-xl p-4"
+                  />
+                </div>
+
+                {/* MULTA CONTRATANTE */}
+                <div>
+                  <label className="block mb-2 font-semibold">
+                    Cláusula 6ª — Multa do contratante
+                  </label>
+
+                  <textarea
+                    rows={5}
+                    value={form.multa_contratante}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        multa_contratante: e.target.value,
+                      })
+                    }
+                    className="w-full bg-[#0f1729] border border-purple-500/20 rounded-xl p-4"
+                  />
+                </div>
+
+                {/* FORO */}
+                <div>
+                  <label className="block mb-2 font-semibold">
+                    Foro
+                  </label>
+
+                  <textarea
+                    rows={4}
+                    value={form.foro}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        foro: e.target.value,
+                      })
+                    }
+                    className="w-full bg-[#0f1729] border border-purple-500/20 rounded-xl p-4"
+                  />
+                </div>
+
+                {/* TEXTO FINAL */}
+                <div>
+                  <label className="block mb-2 font-semibold">
+                    Texto Final
+                  </label>
+
+                  <textarea
+                    rows={4}
+                    value={form.texto_final}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        texto_final: e.target.value,
+                      })
+                    }
+                    className="w-full bg-[#0f1729] border border-purple-500/20 rounded-xl p-4"
+                  />
+                </div>
+
+                {/* CIDADE */}
+                <div>
+                  <label className="block mb-2 font-semibold">
+                    Cidade da assinatura
+                  </label>
+
+                  <input
+                    type="text"
+                    value={form.cidade_assinatura}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        cidade_assinatura: e.target.value,
+                      })
+                    }
+                    className="w-full bg-[#0f1729] border border-purple-500/20 rounded-xl p-4"
+                  />
+                </div>
+
+                {/* BOTÃO */}
                 <button
-                  type="button"
                   onClick={salvarModelo}
-                  disabled={salvando}
-                  style={buttonStyle}
+                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-purple-600 to-blue-500 font-bold text-lg hover:opacity-90 transition"
                 >
-                  {salvando ? "Salvando..." : "Salvar Modelo"}
+                  Salvar Modelo de Contrato
                 </button>
+
               </div>
-            </section>
-          )}
+            )}
+          </div>
         </div>
-      </AppLayout>
-    </ProtectedRoute>
+      </div>
+    </AppLayout>
   );
 }
-
-function CampoTexto({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (valor: string) => void;
-}) {
-  return (
-    <div>
-      <label style={labelStyle}>{label}</label>
-      <input
-        style={inputStyle}
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </div>
-  );
-}
-
-function CampoArea({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (valor: string) => void;
-}) {
-  return (
-    <div>
-      <label style={labelStyle}>{label}</label>
-      <textarea
-        style={textareaStyle}
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </div>
-  );
-}
-
-const panelStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  borderRadius: "24px",
-  padding: "24px",
-  boxShadow: "0 0 35px rgba(0,0,0,0.25)",
-};
-
-const gridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: "18px",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  marginBottom: "8px",
-  color: "#cbd5e1",
-  fontSize: "14px",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "14px",
-  borderRadius: "12px",
-  border: "1px solid rgba(255,255,255,0.16)",
-  background: "rgba(0,0,0,0.28)",
-  color: "#fff",
-  fontSize: "15px",
-  boxSizing: "border-box",
-};
-
-const textareaStyle: React.CSSProperties = {
-  width: "100%",
-  minHeight: "130px",
-  padding: "14px",
-  borderRadius: "12px",
-  border: "1px solid rgba(255,255,255,0.16)",
-  background: "rgba(0,0,0,0.28)",
-  color: "#fff",
-  fontSize: "15px",
-  lineHeight: "1.6",
-  boxSizing: "border-box",
-};
-
-const buttonStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "15px",
-  borderRadius: "12px",
-  border: "none",
-  background: "linear-gradient(90deg, #8b35ff, #00aaff)",
-  color: "#fff",
-  fontSize: "16px",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
