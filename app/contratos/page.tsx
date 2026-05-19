@@ -482,7 +482,7 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
   }
 
   function larguraToken(doc: jsPDF, token: WordToken) {
-    doc.setFont("helvetica", token.bold ? "bold" : "normal");
+    doc.setFont("times", token.bold ? "bold" : "normal");
     return doc.getTextWidth(token.text);
   }
 
@@ -510,7 +510,7 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
     let xAtual = x;
 
     linha.forEach((token, index) => {
-      doc.setFont("helvetica", token.bold ? "bold" : "normal");
+      doc.setFont("times", token.bold ? "bold" : "normal");
       doc.text(token.text, xAtual, y);
       xAtual += larguraToken(doc, token);
 
@@ -567,58 +567,130 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
   }
 
   function baixarPDF() {
-    if (!textoContrato) {
-      alert("Gere o contrato antes de baixar o PDF.");
+  if (!textoContrato) {
+    alert("Gere o contrato antes de baixar o PDF.");
+    return;
+  }
+
+  const evento = eventos.find((e) => e.id === eventoSelecionado);
+
+  const cliente = evento
+    ? clientes.find((c) => normalizar(c.nome) === normalizar(evento.client_name))
+    : null;
+
+  const nomeContratante = cliente?.nome || "CONTRATANTE";
+  const nomeContratado =
+    empresa?.responsavel || empresa?.razao_social || "CONTRATADO";
+
+  const doc = new jsPDF("p", "mm", "a4");
+  doc.setFont("times", "normal");
+  doc.setFontSize(11);
+
+  const margemX = 18;
+  const larguraTexto = 174;
+  const lineHeight = 6;
+  let y = 20;
+
+  const blocos = textoContrato.split("\n\n");
+
+  blocos.forEach((bloco) => {
+    const blocoLimpo = bloco.trim();
+    if (!blocoLimpo) return;
+
+    if (y > 267) {
+      doc.addPage();
+      y = 20;
+    }
+
+    const isTitulo =
+      blocoLimpo === (modeloContrato.titulo || modeloPadrao.titulo);
+
+    const isSecao =
+      blocoLimpo === blocoLimpo.toUpperCase() && blocoLimpo.length < 45;
+
+    if (isTitulo) {
+      doc.setFontSize(14);
+      doc.setFont("times", "bold");
+
+      // Título principal alinhado à esquerda
+      doc.text(blocoLimpo, margemX, y);
+
+      doc.setFontSize(11);
+      doc.setFont("times", "normal");
+      y += 10;
       return;
     }
 
-    const doc = new jsPDF("p", "mm", "a4");
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
+    if (isSecao) {
+      doc.setFont("times", "bold");
 
-    const margemX = 18;
-    const larguraTexto = 174;
-    const lineHeight = 6;
-    let y = 20;
+      // Títulos das seções alinhados à esquerda
+      doc.text(blocoLimpo.replace(":", ""), margemX, y);
 
-    const blocos = textoContrato.split("\n\n");
+      doc.setFont("times", "normal");
+      y += 8;
+      return;
+    }
 
-    blocos.forEach((bloco) => {
-      const blocoLimpo = bloco.trim();
-      if (!blocoLimpo) return;
+    y = adicionarTextoComNegritoJustificado(
+      doc,
+      blocoLimpo,
+      margemX,
+      y,
+      larguraTexto,
+      lineHeight
+    );
 
-      if (y > 267) {
-        doc.addPage();
-        y = 20;
-      }
+    y += 3;
+  });
 
-      const isTitulo = blocoLimpo === (modeloContrato.titulo || modeloPadrao.titulo);
-      const isSecao = blocoLimpo === blocoLimpo.toUpperCase() && blocoLimpo.length < 45;
-
-      if (isTitulo) {
-        doc.setFontSize(14);
-        doc.setFont("helvetica", "bold");
-        doc.text(blocoLimpo, 105, y, { align: "center" });
-        doc.setFontSize(11);
-        doc.setFont("helvetica", "normal");
-        y += 10;
-        return;
-      }
-
-      if (isSecao) {
-        doc.setFont("helvetica", "bold");
-        doc.text(blocoLimpo, 105, y, { align: "center" });
-        doc.setFont("helvetica", "normal");
-        y += 8;
-        return;
-      }
-
-      y = adicionarTextoComNegritoJustificado(doc, blocoLimpo, margemX, y, larguraTexto, lineHeight);
-      y += 3;
-    });
-
-    doc.save("contrato-giba.pdf");
+  // Garante espaço para as assinaturas
+  if (y > 230) {
+    doc.addPage();
+    y = 40;
+  } else {
+    y += 28;
   }
+
+  const larguraAssinatura = 75;
+  const xContratante = 18;
+  const xContratado = 117;
+
+  doc.setLineWidth(0.2);
+
+  // Linhas de assinatura lado a lado
+  doc.line(xContratante, y, xContratante + larguraAssinatura, y);
+  doc.line(xContratado, y, xContratado + larguraAssinatura, y);
+
+  y += 6;
+
+  doc.setFontSize(10);
+  doc.setFont("times", "bold");
+
+  doc.text("CONTRATANTE", xContratante + larguraAssinatura / 2, y, {
+    align: "center",
+  });
+
+  doc.text("CONTRATADO", xContratado + larguraAssinatura / 2, y, {
+    align: "center",
+  });
+
+  y += 6;
+
+  doc.setFont("times", "normal");
+
+  doc.text(nomeContratante, xContratante + larguraAssinatura / 2, y, {
+    align: "center",
+    maxWidth: larguraAssinatura,
+  });
+
+  doc.text(nomeContratado, xContratado + larguraAssinatura / 2, y, {
+    align: "center",
+    maxWidth: larguraAssinatura,
+  });
+
+  doc.save(`Contrato-Prestação-de-Serviços(${nomeContratante}).pdf`);
+}
 
   function textoPreviewSemMarkdown(texto: string) {
     return texto.replace(/\*\*/g, "");
