@@ -17,6 +17,7 @@ type Cliente = {
 export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [buscaCliente, setBuscaCliente] = useState("");
 
   const [nome, setNome] = useState("");
   const [cpfCnpj, setCpfCnpj] = useState("");
@@ -84,6 +85,17 @@ export default function ClientesPage() {
   useEffect(() => {
     carregarClientes();
   }, []);
+
+  const clientesFiltrados = clientes.filter((cliente) => {
+  const termo = buscaCliente.toLowerCase();
+
+  return (
+    cliente.nome?.toLowerCase().includes(termo) ||
+    cliente.cpf_cnpj?.toLowerCase().includes(termo) ||
+    cliente.celular?.toLowerCase().includes(termo) ||
+    cliente.email?.toLowerCase().includes(termo)
+  );
+});
 
   return (
   <ProtectedRoute adminOnly>
@@ -165,10 +177,19 @@ export default function ClientesPage() {
           </section>
 
           <section style={panelStyle}>
-            <h2 style={{ marginTop: 0 }}>Clientes cadastrados</h2>
+            <h2 style={{ marginTop: 0 }}>Clientes Cadastrados</h2>
+
+            <input
+  type="text"
+  placeholder="Buscar cliente por nome, CPF/CNPJ, telefone ou e-mail..."
+  value={buscaCliente}
+  onChange={(e) => setBuscaCliente(e.target.value)}
+  style={inputStyle}
+/>
 
             <div style={{ marginTop: "20px", display: "grid", gap: "14px" }}>
-              {clientes.map((cliente) => (
+              <div style={clientesScrollStyle}>
+  {clientesFiltrados.map((cliente) => (
                 <div key={cliente.id} style={cardCliente}>
                   <div>
                     <h3 style={{ margin: "0 0 8px" }}>{cliente.nome}</h3>
@@ -198,6 +219,7 @@ export default function ClientesPage() {
                   </div>
                 </div>
               ))}
+            </div>
 
               {clientes.length === 0 && (
                 <p style={{ color: "#b8b8d8" }}>
@@ -287,4 +309,11 @@ const botaoExcluir: React.CSSProperties = {
   background: "rgba(255,91,138,0.18)",
   color: "#ff7aa2",
   cursor: "pointer",
+};
+
+const clientesScrollStyle: React.CSSProperties = {
+  maxHeight: "520px",
+  overflowY: "auto",
+  paddingRight: "8px",
+  marginTop: "16px",
 };

@@ -34,8 +34,7 @@ type Evento = {
 type Cliente = {
   id: string;
   nome: string;
-  cidade?: string;
-  estado?: string;
+  cpf_cnpj: string;
   created_at?: string;
 };
 
@@ -157,7 +156,7 @@ export default function DashboardPage() {
       new Date(a.event_date).getTime() -
       new Date(b.event_date).getTime()
   )
-  .slice(0, 5)
+  .slice(0, 3)
   .map((evento) => (
                   <div key={evento.id} style={eventItemStyle}>
                     <div>
@@ -206,7 +205,7 @@ export default function DashboardPage() {
               </div>
 
               <div style={{ marginTop: "20px" }}>
-                {clientes.slice(0, 5).map((cliente) => (
+                {clientes.slice(0, 4).map((cliente) => (
                   <div key={cliente.id} style={clientItemStyle}>
                     <div style={avatarStyle}>
                       <UserRound size={20} />
@@ -215,8 +214,7 @@ export default function DashboardPage() {
                     <div>
                       <strong>{cliente.nome}</strong>
                       <p style={mutedText}>
-                        {cliente.cidade || "Cidade não informada"}
-                        {cliente.estado ? ` - ${cliente.estado}` : ""}
+                        {cliente.cpf_cnpj || "Cpf/Cnpj não informado"}
                       </p>
                     </div>
                   </div>
