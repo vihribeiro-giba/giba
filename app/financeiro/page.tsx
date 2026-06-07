@@ -13,6 +13,20 @@ type Evento = {
   fee: number;
 };
 
+type Vinculo = {
+  id: string;
+  event_id: string;
+  collaborator_id: string;
+};
+
+type Colaborador = {
+  id: string;
+  nome?: string;
+  name?: string;
+  role?: string;
+  funcao?: string;
+};
+
 type Financeiro = {
   id: string;
   type: string;
@@ -33,6 +47,10 @@ export default function FinanceiroPage() {
   const hoje = new Date();
 
   const [eventos, setEventos] = useState<Evento[]>([]);
+  const [vinculos, setVinculos] = useState<Vinculo[]>([]);
+  const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
+  const [colaboradorSelecionado, setColaboradorSelecionado] = useState("");
+
   const [movimentacoes, setMovimentacoes] = useState<Financeiro[]>([]);
   const [editandoId, setEditandoId] = useState<string | null>(null);
 
@@ -50,8 +68,23 @@ export default function FinanceiroPage() {
   const [paymentDate, setPaymentDate] = useState("");
   const [notes, setNotes] = useState("");
 
-  const categoriasEntrada = ["Cachê", "Sinal", "Pagamento Integral", "Patrocínio", "Extra"];
-  const categoriasSaida = ["Combustível", "Colaboradores", "Hospedagem", "Transporte", "Alimentação", "Produção", "Outros"];
+  const categoriasEntrada = [
+    "Cachê",
+    "Sinal",
+    "Pagamento Integral",
+    "Patrocínio",
+    "Extra",
+  ];
+
+  const categoriasSaida = [
+    "Combustível",
+    "Colaboradores",
+    "Hospedagem",
+    "Transporte",
+    "Alimentação",
+    "Produção",
+    "Outros",
+  ];
 
   async function carregarEventos() {
     const { data } = await supabase
@@ -60,6 +93,16 @@ export default function FinanceiroPage() {
       .order("event_date", { ascending: false });
 
     setEventos(data || []);
+  }
+
+  async function carregarColaboradores() {
+    const { data } = await supabase.from("collaborators").select("*");
+    setColaboradores(data || []);
+  }
+
+  async function carregarVinculos() {
+    const { data } = await supabase.from("event_collaborators").select("*");
+    setVinculos(data || []);
   }
 
   async function carregarFinanceiro() {
@@ -71,16 +114,36 @@ export default function FinanceiroPage() {
     setMovimentacoes(data || []);
   }
 
+  function nomeColaborador(colaborador: Colaborador) {
+    return colaborador.nome || colaborador.name || "Colaborador sem nome";
+  }
+
+  function funcaoColaborador(colaborador: Colaborador) {
+    return colaborador.role || colaborador.funcao || "";
+  }
+
   function selecionarEvento(id: string) {
     setEventId(id);
+    setColaboradorSelecionado("");
 
     const evento = eventos.find((item) => item.id === id);
 
-    if (evento) {
-      setEventName(evento.title);
-      setClientName(evento.client_name);
+    if (!evento) {
+      setEventName("");
+      setClientName("");
+      return;
+    }
+
+    setEventName(evento.title || "");
+
+    if (type === "Entrada") {
+      setClientName(evento.client_name || "");
       setAmount(String(evento.fee || ""));
-      setDescription(`Pagamento referente ao evento: ${evento.title}`);
+      setDescription(`Pagamento referente ao evento: ${evento.title || evento.client_name}`);
+    } else {
+      setClientName("");
+      setAmount("");
+      setDescription(`Despesa referente ao evento: ${evento.title || evento.client_name}`);
     }
   }
 
@@ -93,6 +156,7 @@ export default function FinanceiroPage() {
     setEventId("");
     setEventName("");
     setClientName("");
+    setColaboradorSelecionado("");
     setPaymentMethod("PIX");
     setPaymentDate("");
     setNotes("");
@@ -106,16 +170,26 @@ export default function FinanceiroPage() {
       return;
     }
 
+    if (type === "Saída" && eventId && category === "Colaboradores" && !colaboradorSelecionado) {
+      alert("Selecione o colaborador vinculado ao evento.");
+      return;
+    }
+
     const dataPagamento = new Date(paymentDate + "T00:00:00");
+
+    const descricaoFinal =
+      type === "Saída" && colaboradorSelecionado
+        ? `${description || "Pagamento de colaborador"} - ${colaboradorSelecionado}`
+        : description;
 
     const dados = {
       type,
       category,
-      description,
+      description: descricaoFinal,
       amount: Number(amount),
       event_id: eventId || null,
       event_name: eventName,
-      client_name: clientName,
+      client_name: type === "Entrada" ? clientName : colaboradorSelecionado,
       payment_method: paymentMethod,
       payment_date: paymentDate,
       notes,
@@ -154,10 +228,17 @@ export default function FinanceiroPage() {
     setAmount(String(item.amount || ""));
     setEventId(item.event_id || "");
     setEventName(item.event_name || "");
-    setClientName(item.client_name || "");
     setPaymentMethod(item.payment_method || "PIX");
     setPaymentDate(item.payment_date || "");
     setNotes(item.notes || "");
+
+    if (item.type === "Saída") {
+      setColaboradorSelecionado(item.client_name || "");
+      setClientName("");
+    } else {
+      setClientName(item.client_name || "");
+      setColaboradorSelecionado("");
+    }
   }
 
   async function excluirMovimentacao(id: string) {
@@ -221,194 +302,278 @@ export default function FinanceiroPage() {
   useEffect(() => {
     carregarEventos();
     carregarFinanceiro();
+    carregarColaboradores();
+    carregarVinculos();
   }, []);
 
   useEffect(() => {
     setCategory(type === "Entrada" ? "Cachê" : "Combustível");
+
+    if (eventId) {
+      const evento = eventos.find((item) => item.id === eventId);
+
+      if (evento) {
+        if (type === "Entrada") {
+          setClientName(evento.client_name || "");
+          setAmount(String(evento.fee || ""));
+          setDescription(`Pagamento referente ao evento: ${evento.title || evento.client_name}`);
+          setColaboradorSelecionado("");
+        } else {
+          setClientName("");
+          setAmount("");
+          setDescription(`Despesa referente ao evento: ${evento.title || evento.client_name}`);
+        }
+      }
+    }
   }, [type]);
 
+  const colaboradoresEvento = vinculos.filter((item) => item.event_id === eventId);
+
   return (
-  <ProtectedRoute adminOnly>
-    <AppLayout>
-      <div>
-        <h1 style={{ fontSize: "36px", marginBottom: "8px" }}>
-          Financeiro GIBA
-        </h1>
+    <ProtectedRoute adminOnly>
+      <AppLayout>
+        <div>
+          <h1 style={{ fontSize: "36px", marginBottom: "8px" }}>
+            Financeiro GIBA
+          </h1>
 
-        <p style={{ color: "#b8b8d8", marginBottom: "28px" }}>
-          Controle mensal e anual de entradas, pagamentos e despesas.
-        </p>
+          <p style={{ color: "#b8b8d8", marginBottom: "28px" }}>
+            Controle mensal e anual de entradas, pagamentos e despesas.
+          </p>
 
-        <div style={filterBar}>
-          <select style={inputStyle} value={mesFiltro} onChange={(e) => setMesFiltro(Number(e.target.value))}>
-            {Array.from({ length: 12 }).map((_, index) => (
-              <option key={index + 1} value={index + 1}>
-                {index + 1}
-              </option>
-            ))}
-          </select>
+          <div style={filterBar}>
+            <select
+              style={inputStyle}
+              value={mesFiltro}
+              onChange={(e) => setMesFiltro(Number(e.target.value))}
+            >
+              {Array.from({ length: 12 }).map((_, index) => (
+                <option key={index + 1} value={index + 1}>
+                  {index + 1}
+                </option>
+              ))}
+            </select>
 
-          <input
-            style={inputStyle}
-            type="number"
-            value={anoFiltro}
-            onChange={(e) => setAnoFiltro(Number(e.target.value))}
-          />
-        </div>
+            <input
+              style={inputStyle}
+              type="number"
+              value={anoFiltro}
+              onChange={(e) => setAnoFiltro(Number(e.target.value))}
+            />
+          </div>
 
-        <div style={cardsGrid}>
-          <Card titulo="Entradas do Mês" valor={resumoMensal.entradas} cor="#37e884" />
-          <Card titulo="Saídas do Mês" valor={resumoMensal.saidas} cor="#ff5b8a" />
-          <Card titulo="Lucro Líquido do Mês" valor={resumoMensal.liquido} cor="#38bdf8" />
-          <Card titulo="Faturamento Bruto Anual" valor={resumoAnual.bruto} cor="#8b35ff" />
-          <Card titulo="Despesas Anuais" valor={resumoAnual.despesas} cor="#ff7aa2" />
-          <Card titulo="Lucro Líquido Anual" valor={resumoAnual.liquido} cor="#00aaff" />
-        </div>
+          <div style={cardsGrid}>
+            <Card titulo="Entradas do Mês" valor={resumoMensal.entradas} cor="#37e884" />
+            <Card titulo="Saídas do Mês" valor={resumoMensal.saidas} cor="#ff5b8a" />
+            <Card titulo="Lucro Líquido do Mês" valor={resumoMensal.liquido} cor="#38bdf8" />
+            <Card titulo="Faturamento Bruto Anual" valor={resumoAnual.bruto} cor="#8b35ff" />
+            <Card titulo="Despesas Anuais" valor={resumoAnual.despesas} cor="#ff7aa2" />
+            <Card titulo="Lucro Líquido Anual" valor={resumoAnual.liquido} cor="#00aaff" />
+          </div>
 
-        <div style={mainGrid}>
-          <section style={panelStyle}>
-            <h2 style={{ marginTop: 0 }}>
-              {editandoId ? "Editar Lançamento" : "Novo Lançamento"}
-            </h2>
+          <div style={mainGrid}>
+            <section style={panelStyle}>
+              <h2 style={{ marginTop: 0 }}>
+                {editandoId ? "Editar Lançamento" : "Novo Lançamento"}
+              </h2>
 
-            <form onSubmit={salvarMovimentacao} style={{ display: "grid", gap: "12px" }}>
-              <select style={inputStyle} value={type} onChange={(e) => setType(e.target.value)}>
-                <option>Entrada</option>
-                <option>Saída</option>
-              </select>
+              <form onSubmit={salvarMovimentacao} style={{ display: "grid", gap: "12px" }}>
+                <select
+                  style={inputStyle}
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                >
+                  <option>Entrada</option>
+                  <option>Saída</option>
+                </select>
 
-              <select style={inputStyle} value={category} onChange={(e) => setCategory(e.target.value)}>
-                {(type === "Entrada" ? categoriasEntrada : categoriasSaida).map((cat) => (
-                  <option key={cat}>{cat}</option>
-                ))}
-              </select>
+                <select
+                  style={inputStyle}
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  {(type === "Entrada" ? categoriasEntrada : categoriasSaida).map((cat) => (
+                    <option key={cat}>{cat}</option>
+                  ))}
+                </select>
 
-              {type === "Entrada" && (
-                <select style={inputStyle} value={eventId} onChange={(e) => selecionarEvento(e.target.value)}>
+                <select
+                  style={inputStyle}
+                  value={eventId}
+                  onChange={(e) => selecionarEvento(e.target.value)}
+                >
                   <option value="">Vincular a um evento</option>
+
                   {eventos.map((evento) => (
                     <option key={evento.id} value={evento.id}>
                       {evento.event_date} - {evento.client_name}
                     </option>
                   ))}
                 </select>
-              )}
 
-              <input
-                style={inputStyle}
-                placeholder="Cliente"
-                value={clientName}
-                onChange={(e) => setClientName(e.target.value)}
-              />
+                {type === "Entrada" && (
+                  <input
+                    style={inputStyle}
+                    placeholder="Cliente"
+                    value={clientName}
+                    onChange={(e) => setClientName(e.target.value)}
+                  />
+                )}
 
-              <input
-                style={inputStyle}
-                placeholder="Evento"
-                value={eventName}
-                onChange={(e) => setEventName(e.target.value)}
-              />
+                {type === "Saída" && eventId && (
+                  <select
+                    value={colaboradorSelecionado}
+                    onChange={(e) => setColaboradorSelecionado(e.target.value)}
+                    style={inputStyle}
+                  >
+                    <option value="">Selecione o colaborador</option>
 
-              <input
-                style={inputStyle}
-                placeholder="Descrição"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
+                    {colaboradoresEvento.map((vinculo) => {
+                      const colaborador = colaboradores.find(
+                        (c) => c.id === vinculo.collaborator_id
+                      );
 
-              <input
-                style={inputStyle}
-                type="number"
-                placeholder="Valor"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
+                      if (!colaborador) return null;
 
-              <select style={inputStyle} value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-                <option>PIX</option>
-                <option>Dinheiro</option>
-                <option>Cartão de Crédito</option>
-                <option>Cartão de Débito</option>
-                <option>Transferência</option>
-                <option>Boleto</option>
-              </select>
+                      const nome = nomeColaborador(colaborador);
+                      const funcao = funcaoColaborador(colaborador);
 
-              <input
-                style={inputStyle}
-                type="date"
-                value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-              />
+                      return (
+                        <option key={colaborador.id} value={nome}>
+                          {nome}
+                          {funcao ? ` — ${funcao}` : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
 
-              <textarea
-                style={{ ...inputStyle, minHeight: "90px" }}
-                placeholder="Observações"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
+                {type === "Saída" && eventId && colaboradoresEvento.length === 0 && (
+                  <p style={textoMuted}>
+                    Nenhum colaborador vinculado a este evento.
+                  </p>
+                )}
 
-              <button type="submit" style={botaoPrincipal}>
-                {editandoId ? "Salvar Alterações" : "Salvar Lançamento"}
-              </button>
+                <input
+                  style={inputStyle}
+                  placeholder="Evento"
+                  value={eventName}
+                  onChange={(e) => setEventName(e.target.value)}
+                />
 
-              {editandoId && (
-                <button type="button" onClick={limparFormulario} style={botaoSecundario}>
-                  Cancelar edição
+                <input
+                  style={inputStyle}
+                  placeholder="Descrição"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+
+                <input
+                  style={inputStyle}
+                  type="number"
+                  placeholder="Valor"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+
+                <select
+                  style={inputStyle}
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                >
+                  <option>PIX</option>
+                  <option>Dinheiro</option>
+                  <option>Cartão de Crédito</option>
+                  <option>Cartão de Débito</option>
+                  <option>Transferência</option>
+                  <option>Boleto</option>
+                </select>
+
+                <input
+                  style={inputStyle}
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                />
+
+                <textarea
+                  style={{ ...inputStyle, minHeight: "90px" }}
+                  placeholder="Observações"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+
+                <button type="submit" style={botaoPrincipal}>
+                  {editandoId ? "Salvar Alterações" : "Salvar Lançamento"}
                 </button>
-              )}
-            </form>
-          </section>
 
-          <section style={panelStyle}>
-            <h2 style={{ marginTop: 0 }}>Movimentações do Mês</h2>
+                {editandoId && (
+                  <button type="button" onClick={limparFormulario} style={botaoSecundario}>
+                    Cancelar edição
+                  </button>
+                )}
+              </form>
+            </section>
 
-            <div style={{ marginTop: "18px", display: "grid", gap: "12px" }}>
-              {movimentacoesMes.map((item) => (
-                <div key={item.id} style={movementCard}>
-                  <div>
-                    <strong>{item.description || item.category}</strong>
-                    <p style={textoMuted}>
-                      {item.type} • {item.category} • {item.payment_date}
-                    </p>
-                    <p style={textoMuted}>
-                      {item.client_name || "-"} {item.event_name ? `| ${item.event_name}` : ""}
-                    </p>
-                  </div>
+            <section style={panelStyle}>
+              <h2 style={{ marginTop: 0 }}>Movimentações do Mês</h2>
 
-                  <div style={{ textAlign: "right" }}>
-                    <strong style={{ color: item.type === "Entrada" ? "#37e884" : "#ff5b8a" }}>
-                      R$ {Number(item.amount).toFixed(2)}
-                    </strong>
+              <div style={{ marginTop: "18px", display: "grid", gap: "12px" }}>
+                {movimentacoesMes.map((item) => (
+                  <div key={item.id} style={movementCard}>
+                    <div>
+                      <strong>{item.description || item.category}</strong>
 
-                    <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-                      <button onClick={() => editarMovimentacao(item)} style={botaoEditar}>
-                        Editar
-                      </button>
-                      <button onClick={() => excluirMovimentacao(item.id)} style={botaoExcluir}>
-                        Excluir
-                      </button>
+                      <p style={textoMuted}>
+                        {item.type} • {item.category} • {item.payment_date}
+                      </p>
+
+                      <p style={textoMuted}>
+                        {item.client_name || "-"} {item.event_name ? `| ${item.event_name}` : ""}
+                      </p>
+                    </div>
+
+                    <div style={{ textAlign: "right" }}>
+                      <strong
+                        style={{
+                          color: item.type === "Entrada" ? "#37e884" : "#ff5b8a",
+                        }}
+                      >
+                        R$ {Number(item.amount).toFixed(2)}
+                      </strong>
+
+                      <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                        <button onClick={() => editarMovimentacao(item)} style={botaoEditar}>
+                          Editar
+                        </button>
+
+                        <button onClick={() => excluirMovimentacao(item.id)} style={botaoExcluir}>
+                          Excluir
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
 
-              {movimentacoesMes.length === 0 && (
-                <p style={{ color: "#b8b8d8" }}>
-                  Nenhuma movimentação neste mês.
-                </p>
-              )}
-            </div>
-          </section>
+                {movimentacoesMes.length === 0 && (
+                  <p style={{ color: "#b8b8d8" }}>
+                    Nenhuma movimentação neste mês.
+                  </p>
+                )}
+              </div>
+            </section>
+          </div>
         </div>
-      </div>
-        </AppLayout>
-  </ProtectedRoute>
-);
+      </AppLayout>
+    </ProtectedRoute>
+  );
 }
 
 function Card({ titulo, valor, cor }: { titulo: string; valor: number; cor: string }) {
   return (
     <div style={cardStyle}>
       <p style={{ color: "#b8b8d8", margin: 0 }}>{titulo}</p>
+
       <h2 style={{ color: cor, margin: "12px 0 0" }}>
         R$ {valor.toFixed(2)}
       </h2>
