@@ -5,6 +5,7 @@ import jsPDF from "jspdf";
 
 import AppLayout from "../../components/AppLayout";
 import ProtectedRoute from "../../components/ProtectedRoute";
+import { supabase } from "../../lib/supabase";
 
 type Item = {
   id: number;
@@ -14,20 +15,30 @@ type Item = {
 };
 
 type OrcamentoSalvo = {
-  id: number;
+  id: string;
   nome: string;
-  criadoEm: string;
-  valorShow: string;
-  valorNota: string;
-  percentualImposto: string;
-  cacheArtista: string;
-  caches: Item[];
-  logistica: Item[];
-  marketing: Item[];
-  efeitos: Item[];
+  created_at?: string;
+  criadoEm?: string;
+  valorShow?: string;
+  valorNota?: string;
+  percentualImposto?: string;
+  cacheArtista?: string;
+  caches?: Item[];
+  logistica?: Item[];
+  marketing?: Item[];
+  efeitos?: Item[];
+  dados?: {
+    nome?: string;
+    valorShow?: string;
+    valorNota?: string;
+    percentualImposto?: string;
+    cacheArtista?: string;
+    caches?: Item[];
+    logistica?: Item[];
+    marketing?: Item[];
+    efeitos?: Item[];
+  };
 };
-
-const STORAGE_KEY = "giba_calculadora_orcamentos";
 
 const cachesPadrao: Item[] = [
   { id: 1, campo1: "", campo2: "", valor: "" },
@@ -51,7 +62,7 @@ const efeitosPadrao: Item[] = [
 export default function CalculadoraShowPage() {
   const [nomeOrcamento, setNomeOrcamento] = useState("");
   const [orcamentosSalvos, setOrcamentosSalvos] = useState<OrcamentoSalvo[]>([]);
-  const [orcamentoEditandoId, setOrcamentoEditandoId] = useState<number | null>(null);
+  const [orcamentoEditandoId, setOrcamentoEditandoId] = useState<string | null>(null);
 
   const [valorShow, setValorShow] = useState("");
   const [valorNota, setValorNota] = useState("");
@@ -64,16 +75,23 @@ export default function CalculadoraShowPage() {
   const [efeitos, setEfeitos] = useState<Item[]>(efeitosPadrao);
 
   useEffect(() => {
-    const salvos = localStorage.getItem(STORAGE_KEY);
-
-    if (salvos) {
-      try {
-        setOrcamentosSalvos(JSON.parse(salvos));
-      } catch {
-        setOrcamentosSalvos([]);
-      }
-    }
+    carregarOrcamentos();
   }, []);
+
+  async function carregarOrcamentos() {
+    const { data, error } = await supabase
+      .from("show_calculations")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Erro ao carregar orçamentos:", error);
+      alert("Erro ao carregar orçamentos salvos.");
+      return;
+    }
+
+    setOrcamentosSalvos((data || []) as OrcamentoSalvo[]);
+  }
 
   function valorNumerico(valor: string) {
     return (
@@ -94,7 +112,8 @@ export default function CalculadoraShowPage() {
     });
   }
 
-  function formatarDataHora(dataISO: string) {
+  function formatarDataHora(dataISO?: string) {
+    if (!dataISO) return "Data não informada";
     return new Date(dataISO).toLocaleString("pt-BR", {
       day: "2-digit",
       month: "2-digit",
@@ -168,18 +187,12 @@ export default function CalculadoraShowPage() {
       ? (lucroLiquido / valorNumerico(valorShow)) * 100
       : 0;
 
-  function salvarListaOrcamentos(lista: OrcamentoSalvo[]) {
-    setOrcamentosSalvos(lista);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(lista));
-  }
 
-  function montarOrcamentoAtual(): OrcamentoSalvo {
+  function montarOrcamentoAtual() {
     return {
-      id: Date.now(),
       nome:
         nomeOrcamento.trim() ||
         `Orçamento ${new Date().toLocaleDateString("pt-BR")}`,
-      criadoEm: new Date().toISOString(),
       valorShow,
       valorNota,
       percentualImposto,
@@ -191,59 +204,102 @@ export default function CalculadoraShowPage() {
     };
   }
 
-  function salvarOrcamento() {
-  const novoOrcamento = montarOrcamentoAtual();
+  async function salvarOrcamento() {
+    const dados = montarOrcamentoAtual();
 
-  if (orcamentoEditandoId) {
-    const listaAtualizada = orcamentosSalvos.map((orcamento) =>
-      orcamento.id === orcamentoEditandoId
-        ? {
-            ...novoOrcamento,
-            id: orcamentoEditandoId,
-            criadoEm: orcamento.criadoEm,
-          }
-        : orcamento
-    );
+    const payload = {
+      nome: dados.nome,
+      valor_show: valorNumerico(valorShow),
+      valor_nota: valorNumerico(valorNota),
+      percentual_imposto: valorNumerico(percentualImposto),
+      cache_artista: valorNumerico(cacheArtista),
+      total_caches: totalCaches,
+      total_logistica: totalLogistica,
+      total_marketing: totalMarketing,
+      total_efeitos: totalEfeitos,
+      imposto_calculado: impostoCalculado,
+      total_custos: totalCustos,
+      lucro_liquido: lucroLiquido,
+      margem,
+      dados,
+    };
 
-    salvarListaOrcamentos(listaAtualizada);
-    alert("Orçamento atualizado com sucesso.");
-    return;
+    if (orcamentoEditandoId) {
+      const { error } = await supabase
+        .from("show_calculations")
+        .update(payload)
+        .eq("id", orcamentoEditandoId);
+
+      if (error) {
+        console.error("Erro ao atualizar orçamento:", error);
+        alert("Erro ao atualizar orçamento.");
+        return;
+      }
+
+      alert("Orçamento atualizado com sucesso.");
+      await carregarOrcamentos();
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("show_calculations")
+      .insert(payload)
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("Erro ao salvar orçamento:", error);
+      alert("Erro ao salvar orçamento.");
+      return;
+    }
+
+    if (data?.id) {
+      setOrcamentoEditandoId(data.id);
+    }
+
+    alert("Orçamento salvo com sucesso.");
+    await carregarOrcamentos();
   }
 
-  const novaLista = [novoOrcamento, ...orcamentosSalvos];
-  salvarListaOrcamentos(novaLista);
-  setOrcamentoEditandoId(novoOrcamento.id);
-
-  alert("Orçamento salvo com sucesso.");
-}
-
   function carregarOrcamento(orcamento: OrcamentoSalvo) {
-    setNomeOrcamento(orcamento.nome || "");
-    setValorShow(orcamento.valorShow || "");
-    setValorNota(orcamento.valorNota || "");
-    setPercentualImposto(orcamento.percentualImposto || "");
-    setCacheArtista(orcamento.cacheArtista || "");
-    setCaches(orcamento.caches?.length ? orcamento.caches : cachesPadrao);
-    setLogistica(orcamento.logistica?.length ? orcamento.logistica : logisticaPadrao);
-    setMarketing(orcamento.marketing?.length ? orcamento.marketing : marketingPadrao);
-    setEfeitos(orcamento.efeitos?.length ? orcamento.efeitos : efeitosPadrao);
+    const dados = orcamento.dados || orcamento;
+
+    setNomeOrcamento(dados.nome || orcamento.nome || "");
+    setValorShow(dados.valorShow || "");
+    setValorNota(dados.valorNota || "");
+    setPercentualImposto(dados.percentualImposto || "");
+    setCacheArtista(dados.cacheArtista || "");
+    setCaches(dados.caches?.length ? dados.caches : cachesPadrao);
+    setLogistica(dados.logistica?.length ? dados.logistica : logisticaPadrao);
+    setMarketing(dados.marketing?.length ? dados.marketing : marketingPadrao);
+    setEfeitos(dados.efeitos?.length ? dados.efeitos : efeitosPadrao);
     setOrcamentoEditandoId(orcamento.id);
   }
 
-  function excluirOrcamento(id: number) {
+  async function excluirOrcamento(id: string) {
     const confirmar = confirm("Deseja excluir este orçamento salvo?");
 
     if (!confirmar) return;
 
-    const novaLista = orcamentosSalvos.filter((orcamento) => orcamento.id !== id);
-    salvarListaOrcamentos(novaLista);
+    const { error } = await supabase
+      .from("show_calculations")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error("Erro ao excluir orçamento:", error);
+      alert("Erro ao excluir orçamento.");
+      return;
+    }
+
+    if (orcamentoEditandoId === id) {
+      limparCalculadoraSemConfirmar();
+    }
+
+    await carregarOrcamentos();
   }
 
-  function limparCalculadora() {
-    const confirmar = confirm("Deseja limpar todos os campos da calculadora?");
-
-    if (!confirmar) return;
-
+  function limparCalculadoraSemConfirmar() {
     setNomeOrcamento("");
     setValorShow("");
     setValorNota("");
@@ -254,6 +310,14 @@ export default function CalculadoraShowPage() {
     setMarketing(marketingPadrao);
     setEfeitos(efeitosPadrao);
     setOrcamentoEditandoId(null);
+  }
+
+  function limparCalculadora() {
+    const confirmar = confirm("Deseja limpar todos os campos da calculadora?");
+
+    if (!confirmar) return;
+
+    limparCalculadoraSemConfirmar();
   }
 
   function exportarPDF() {
@@ -380,7 +444,7 @@ export default function CalculadoraShowPage() {
                       <strong>{orcamento.nome}</strong>
 
                       <p style={{ color: "#b8b8d8", margin: "6px 0 0" }}>
-                        Salvo em {formatarDataHora(orcamento.criadoEm)}
+                        Salvo em {formatarDataHora(orcamento.created_at || orcamento.criadoEm)}
                       </p>
                     </div>
 
