@@ -14,6 +14,12 @@ type Item = {
   valor: string;
 };
 
+type Colaborador = {
+  id: string;
+  nome: string;
+  role?: string;
+};
+
 type OrcamentoSalvo = {
   id: string;
   nome: string;
@@ -64,10 +70,16 @@ export default function CalculadoraShowPage() {
   const [orcamentosSalvos, setOrcamentosSalvos] = useState<OrcamentoSalvo[]>([]);
   const [orcamentoEditandoId, setOrcamentoEditandoId] = useState<string | null>(null);
 
+  const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
+
   const [valorShow, setValorShow] = useState("");
   const [valorNota, setValorNota] = useState("");
   const [percentualImposto, setPercentualImposto] = useState("");
   const [cacheArtista, setCacheArtista] = useState("");
+
+  const [dataFinanceiro, setDataFinanceiro] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
 
   const [caches, setCaches] = useState<Item[]>(cachesPadrao);
   const [logistica, setLogistica] = useState<Item[]>(logisticaPadrao);
@@ -75,8 +87,9 @@ export default function CalculadoraShowPage() {
   const [efeitos, setEfeitos] = useState<Item[]>(efeitosPadrao);
 
   useEffect(() => {
-    carregarOrcamentos();
-  }, []);
+  carregarOrcamentos();
+  carregarColaboradores();
+}, []);
 
   async function carregarOrcamentos() {
     const { data, error } = await supabase
@@ -93,7 +106,9 @@ export default function CalculadoraShowPage() {
     setOrcamentosSalvos((data || []) as OrcamentoSalvo[]);
   }
 
-  function valorNumerico(valor: string) {
+  function valorNumerico(valor: string | number) {
+    if (typeof valor === "number") return valor;
+
     return (
       Number(
         String(valor || "")
@@ -114,6 +129,7 @@ export default function CalculadoraShowPage() {
 
   function formatarDataHora(dataISO?: string) {
     if (!dataISO) return "Data não informada";
+
     return new Date(dataISO).toLocaleString("pt-BR", {
       day: "2-digit",
       month: "2-digit",
@@ -187,6 +203,14 @@ export default function CalculadoraShowPage() {
       ? (lucroLiquido / valorNumerico(valorShow)) * 100
       : 0;
 
+async function carregarColaboradores() {
+  const { data } = await supabase
+    .from("collaborators")
+    .select("*")
+    .order("nome", { ascending: true });
+
+  setColaboradores(data || []);
+}    
 
   function montarOrcamentoAtual() {
     return {
@@ -318,6 +342,157 @@ export default function CalculadoraShowPage() {
     if (!confirmar) return;
 
     limparCalculadoraSemConfirmar();
+  }
+
+  function criarLancamentoFinanceiro(
+    category: string,
+    description: string,
+    amount: number,
+    clientName: string,
+    notes: string
+  ) {
+    const dataPagamento = new Date(dataFinanceiro + "T00:00:00");
+
+    return {
+      type: "Saída",
+      category,
+      description,
+      amount,
+      event_id: null,
+      event_name: nomeOrcamento || "Calculadora de Show",
+      client_name: clientName,
+      payment_method: "PIX",
+      payment_date: dataFinanceiro,
+      notes,
+      reference_month: dataPagamento.getMonth() + 1,
+      reference_year: dataPagamento.getFullYear(),
+    };
+  }
+
+  async function enviarParaFinanceiro() {
+    if (!dataFinanceiro) {
+      alert("Informe a data dos lançamentos financeiros.");
+      return;
+    }
+
+    const confirmar = confirm(
+      "Deseja enviar os custos deste orçamento para o Financeiro como lançamentos de saída?"
+    );
+
+    if (!confirmar) return;
+
+    const lancamentos: any[] = [];
+
+    caches.forEach((item) => {
+      const valor = valorNumerico(item.valor);
+      if (valor <= 0) return;
+
+      lancamentos.push(
+        criarLancamentoFinanceiro(
+          "Colaboradores",
+          `${item.campo1 || "Função não informada"} - ${item.campo2 || "Nome não informado"}`,
+          valor,
+          item.campo2 || "",
+          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`
+        )
+      );
+    });
+
+    logistica.forEach((item) => {
+      const valor = valorNumerico(item.valor);
+      if (valor <= 0) return;
+
+      const tipo = item.campo1 || "Logística";
+      const categoria =
+        tipo.toLowerCase().includes("transporte")
+          ? "Transporte"
+          : tipo.toLowerCase().includes("hosped")
+          ? "Hospedagem"
+          : tipo.toLowerCase().includes("aliment")
+          ? "Alimentação"
+          : "Outros";
+
+      lancamentos.push(
+        criarLancamentoFinanceiro(
+          categoria,
+          `${tipo} - ${item.campo2 || "Prestador não informado"}`,
+          valor,
+          item.campo2 || "",
+          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`
+        )
+      );
+    });
+
+    marketing.forEach((item) => {
+      const valor = valorNumerico(item.valor);
+      if (valor <= 0) return;
+
+      lancamentos.push(
+        criarLancamentoFinanceiro(
+          "Marketing",
+          `${item.campo1 || "Marketing"} - ${item.campo2 || "Prestador não informado"}`,
+          valor,
+          item.campo2 || "",
+          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`
+        )
+      );
+    });
+
+    efeitos.forEach((item) => {
+      const valor = valorNumerico(item.valor);
+      if (valor <= 0) return;
+
+      lancamentos.push(
+        criarLancamentoFinanceiro(
+          "Efeitos Especiais",
+          `${item.campo1 || "Fogos e Efeitos"} - ${item.campo2 || "Prestador não informado"}`,
+          valor,
+          item.campo2 || "",
+          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`
+        )
+      );
+    });
+
+    if (impostoCalculado > 0) {
+      lancamentos.push(
+        criarLancamentoFinanceiro(
+          "Impostos",
+          `Imposto estimado sobre nota fiscal de ${formatarMoeda(valorNumerico(valorNota))}`,
+          impostoCalculado,
+          "",
+          `Percentual informado: ${percentualImposto || "0"}%. Gerado pela Calculadora de Show.`
+        )
+      );
+    }
+
+    const valorCacheArtista = valorNumerico(cacheArtista);
+
+    if (valorCacheArtista > 0) {
+      lancamentos.push(
+        criarLancamentoFinanceiro(
+          "Cachê Artista",
+          "Cachê do artista",
+          valorCacheArtista,
+          nomeOrcamento || "",
+          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`
+        )
+      );
+    }
+
+    if (lancamentos.length === 0) {
+      alert("Nenhum custo com valor maior que zero foi encontrado para enviar.");
+      return;
+    }
+
+    const { error } = await supabase.from("finance").insert(lancamentos);
+
+    if (error) {
+      console.error("Erro ao enviar para financeiro:", error);
+      alert("Erro ao enviar lançamentos para o Financeiro.");
+      return;
+    }
+
+    alert(`${lancamentos.length} lançamento(s) enviado(s) para o Financeiro.`);
   }
 
   function exportarPDF() {
@@ -484,6 +659,7 @@ export default function CalculadoraShowPage() {
             titulo="Cachê - Músicos - Dançarinos - Equipe Técnica - Roadies"
             label1="Função"
             label2="Nome"
+            colaboradores={colaboradores}
             itens={caches}
             setItens={setCaches}
             atualizarItem={atualizarItem}
@@ -569,6 +745,19 @@ export default function CalculadoraShowPage() {
             <p>Lucro Líquido: {formatarMoeda(lucroLiquido)}</p>
             <p>Margem: {margem.toFixed(2)}%</p>
 
+            <div style={financeiroBoxStyle}>
+              <label style={{ color: "#d8d8ff", fontWeight: "bold" }}>
+                Data dos lançamentos no Financeiro
+              </label>
+
+              <input
+                type="date"
+                value={dataFinanceiro}
+                onChange={(e) => setDataFinanceiro(e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+
             <div style={acoesStyle}>
               <button onClick={salvarOrcamento} style={buttonStyle}>
                 Salvar Orçamento
@@ -576,6 +765,10 @@ export default function CalculadoraShowPage() {
 
               <button onClick={exportarPDF} style={buttonStyle}>
                 Exportar PDF
+              </button>
+
+              <button onClick={enviarParaFinanceiro} style={successButtonStyle}>
+                Enviar para Financeiro
               </button>
 
               <button onClick={limparCalculadora} style={secondaryButtonStyle}>
@@ -593,6 +786,7 @@ function TabelaDinamica({
   titulo,
   label1,
   label2,
+  colaboradores,
   itens,
   setItens,
   atualizarItem,
@@ -615,14 +809,52 @@ function TabelaDinamica({
             style={inputStyle}
           />
 
-          <input
-            value={item.campo2}
-            onChange={(e) =>
-              atualizarItem(itens, setItens, item.id, "campo2", e.target.value)
-            }
-            placeholder={label2}
-            style={inputStyle}
-          />
+          {titulo.includes("Cachê") ? (
+  <select
+    value={item.campo2}
+    onChange={(e) =>
+      atualizarItem(
+        itens,
+        setItens,
+        item.id,
+        "campo2",
+        e.target.value
+      )
+    }
+    style={inputStyle}
+  >
+    <option value="">
+      Selecione o colaborador
+    </option>
+
+    {colaboradores.map((colaborador: Colaborador) => (
+      <option
+        key={colaborador.id}
+        value={colaborador.nome}
+      >
+        {colaborador.nome}
+        {colaborador.role
+          ? ` - ${colaborador.role}`
+          : ""}
+      </option>
+    ))}
+  </select>
+) : (
+  <input
+    value={item.campo2}
+    onChange={(e) =>
+      atualizarItem(
+        itens,
+        setItens,
+        item.id,
+        "campo2",
+        e.target.value
+      )
+    }
+    placeholder={label2}
+    style={inputStyle}
+  />
+)}
 
           <input
             value={item.valor}
@@ -710,6 +942,11 @@ const buttonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
+const successButtonStyle: React.CSSProperties = {
+  ...buttonStyle,
+  background: "linear-gradient(90deg, #16a34a, #22c55e)",
+};
+
 const secondaryButtonStyle: React.CSSProperties = {
   ...buttonStyle,
   background: "rgba(255,255,255,0.10)",
@@ -760,4 +997,10 @@ const smallButtonStyle: React.CSSProperties = {
 const smallRemoveButtonStyle: React.CSSProperties = {
   ...smallButtonStyle,
   background: "#ef4444",
+};
+
+const financeiroBoxStyle: React.CSSProperties = {
+  display: "grid",
+  gap: "8px",
+  marginTop: "18px",
 };
