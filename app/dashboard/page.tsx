@@ -49,18 +49,56 @@ export default function DashboardPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [financeiro, setFinanceiro] = useState<Financeiro[]>([]);
 
+  async function obterUsuarioLogado() {
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error || !data.user) {
+      alert("Usuário não autenticado.");
+      window.location.href = "/login";
+      return null;
+    }
+
+    return data.user;
+  }
+
   async function carregarDados() {
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
     const eventosRes = await supabase
       .from("events")
       .select("*")
+      .eq("user_id", user.id)
       .order("event_date", { ascending: true });
 
     const clientesRes = await supabase
       .from("clients")
       .select("*")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
-    const financeiroRes = await supabase.from("finance").select("*");
+    const financeiroRes = await supabase
+      .from("finance")
+      .select("*")
+      .eq("user_id", user.id);
+
+    if (eventosRes.error) {
+      console.error("Erro ao carregar eventos do dashboard:", eventosRes.error);
+      alert("Erro ao carregar eventos do dashboard.");
+      return;
+    }
+
+    if (clientesRes.error) {
+      console.error("Erro ao carregar clientes do dashboard:", clientesRes.error);
+      alert("Erro ao carregar clientes do dashboard.");
+      return;
+    }
+
+    if (financeiroRes.error) {
+      console.error("Erro ao carregar financeiro do dashboard:", financeiroRes.error);
+      alert("Erro ao carregar financeiro do dashboard.");
+      return;
+    }
 
     setEventos(eventosRes.data || []);
     setClientes(clientesRes.data || []);

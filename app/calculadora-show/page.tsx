@@ -23,6 +23,7 @@ type Colaborador = {
 type OrcamentoSalvo = {
   id: string;
   nome: string;
+  user_id?: string;
   created_at?: string;
   criadoEm?: string;
   valorShow?: string;
@@ -86,15 +87,31 @@ export default function CalculadoraShowPage() {
   const [marketing, setMarketing] = useState<Item[]>(marketingPadrao);
   const [efeitos, setEfeitos] = useState<Item[]>(efeitosPadrao);
 
+  async function obterUsuarioLogado() {
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error || !data.user) {
+      alert("Usuário não autenticado.");
+      window.location.href = "/login";
+      return null;
+    }
+
+    return data.user;
+  }
+
   useEffect(() => {
   carregarOrcamentos();
   carregarColaboradores();
 }, []);
 
   async function carregarOrcamentos() {
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
     const { data, error } = await supabase
       .from("show_calculations")
       .select("*")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -204,10 +221,20 @@ export default function CalculadoraShowPage() {
       : 0;
 
 async function carregarColaboradores() {
-  const { data } = await supabase
+  const user = await obterUsuarioLogado();
+  if (!user) return;
+
+  const { data, error } = await supabase
     .from("collaborators")
     .select("*")
+    .eq("user_id", user.id)
     .order("nome", { ascending: true });
+
+  if (error) {
+    console.error("Erro ao carregar colaboradores:", error);
+    alert("Erro ao carregar colaboradores.");
+    return;
+  }
 
   setColaboradores(data || []);
 }    
@@ -229,10 +256,14 @@ async function carregarColaboradores() {
   }
 
   async function salvarOrcamento() {
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
     const dados = montarOrcamentoAtual();
 
     const payload = {
       nome: dados.nome,
+      user_id: user.id,
       valor_show: valorNumerico(valorShow),
       valor_nota: valorNumerico(valorNota),
       percentual_imposto: valorNumerico(percentualImposto),
@@ -252,7 +283,8 @@ async function carregarColaboradores() {
       const { error } = await supabase
         .from("show_calculations")
         .update(payload)
-        .eq("id", orcamentoEditandoId);
+        .eq("id", orcamentoEditandoId)
+        .eq("user_id", user.id);
 
       if (error) {
         console.error("Erro ao atualizar orçamento:", error);
@@ -305,10 +337,14 @@ async function carregarColaboradores() {
 
     if (!confirmar) return;
 
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
     const { error } = await supabase
       .from("show_calculations")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("user_id", user.id);
 
     if (error) {
       console.error("Erro ao excluir orçamento:", error);
@@ -349,11 +385,13 @@ async function carregarColaboradores() {
     description: string,
     amount: number,
     clientName: string,
-    notes: string
+    notes: string,
+    userId: string
   ) {
     const dataPagamento = new Date(dataFinanceiro + "T00:00:00");
 
     return {
+      user_id: userId,
       type: "Saída",
       category,
       description,
@@ -370,6 +408,9 @@ async function carregarColaboradores() {
   }
 
   async function enviarParaFinanceiro() {
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
     if (!dataFinanceiro) {
       alert("Informe a data dos lançamentos financeiros.");
       return;
@@ -393,7 +434,8 @@ async function carregarColaboradores() {
           `${item.campo1 || "Função não informada"} - ${item.campo2 || "Nome não informado"}`,
           valor,
           item.campo2 || "",
-          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`
+          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`,
+          user.id
         )
       );
     });
@@ -418,7 +460,8 @@ async function carregarColaboradores() {
           `${tipo} - ${item.campo2 || "Prestador não informado"}`,
           valor,
           item.campo2 || "",
-          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`
+          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`,
+          user.id
         )
       );
     });
@@ -433,7 +476,8 @@ async function carregarColaboradores() {
           `${item.campo1 || "Marketing"} - ${item.campo2 || "Prestador não informado"}`,
           valor,
           item.campo2 || "",
-          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`
+          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`,
+          user.id
         )
       );
     });
@@ -448,7 +492,8 @@ async function carregarColaboradores() {
           `${item.campo1 || "Fogos e Efeitos"} - ${item.campo2 || "Prestador não informado"}`,
           valor,
           item.campo2 || "",
-          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`
+          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`,
+          user.id
         )
       );
     });
@@ -460,7 +505,8 @@ async function carregarColaboradores() {
           `Imposto estimado sobre nota fiscal de ${formatarMoeda(valorNumerico(valorNota))}`,
           impostoCalculado,
           "",
-          `Percentual informado: ${percentualImposto || "0"}%. Gerado pela Calculadora de Show.`
+          `Percentual informado: ${percentualImposto || "0"}%. Gerado pela Calculadora de Show.`,
+          user.id
         )
       );
     }
@@ -474,7 +520,8 @@ async function carregarColaboradores() {
           "Cachê do artista",
           valorCacheArtista,
           nomeOrcamento || "",
-          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`
+          `Gerado pela Calculadora de Show. Orçamento: ${nomeOrcamento || "-"}`,
+          user.id
         )
       );
     }

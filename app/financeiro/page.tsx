@@ -21,6 +21,7 @@ type Vinculo = {
 
 type Colaborador = {
   id: string;
+  user_id?: string;
   nome?: string;
   name?: string;
   role?: string;
@@ -29,6 +30,7 @@ type Colaborador = {
 
 type Financeiro = {
   id: string;
+  user_id?: string;
   type: string;
   category: string;
   description: string;
@@ -53,6 +55,7 @@ export default function FinanceiroPage() {
 
   const [movimentacoes, setMovimentacoes] = useState<Financeiro[]>([]);
   const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [carregando, setCarregando] = useState(true);
 
   const [mesFiltro, setMesFiltro] = useState(hoje.getMonth() + 1);
   const [anoFiltro, setAnoFiltro] = useState(hoje.getFullYear());
@@ -83,35 +86,139 @@ export default function FinanceiroPage() {
     "Transporte",
     "Alimentação",
     "Produção",
+    "Marketing",
+    "Impostos",
+    "Cachê Artista",
+    "Efeitos Especiais",
     "Outros",
   ];
 
+  async function obterUsuarioLogado() {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error) {
+      console.error("Erro ao buscar usuário logado:", error);
+      return null;
+    }
+
+    return user;
+  }
+
   async function carregarEventos() {
-    const { data } = await supabase
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      setEventos([]);
+      return;
+    }
+
+    const { data, error } = await supabase
       .from("events")
       .select("id, title, client_name, event_date, fee")
+      .eq("user_id", user.id)
       .order("event_date", { ascending: false });
+
+    if (error) {
+      console.error("Erro ao carregar eventos:", error);
+      setEventos([]);
+      return;
+    }
 
     setEventos(data || []);
   }
 
   async function carregarColaboradores() {
-    const { data } = await supabase.from("collaborators").select("*");
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      setColaboradores([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("collaborators")
+      .select("*")
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Erro ao carregar colaboradores:", error);
+      setColaboradores([]);
+      return;
+    }
+
     setColaboradores(data || []);
   }
 
   async function carregarVinculos() {
-    const { data } = await supabase.from("event_collaborators").select("*");
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      setVinculos([]);
+      return;
+    }
+
+    const { data: eventosDoUsuario, error: eventosError } = await supabase
+      .from("events")
+      .select("id")
+      .eq("user_id", user.id);
+
+    if (eventosError) {
+      console.error("Erro ao buscar eventos para vínculos:", eventosError);
+      setVinculos([]);
+      return;
+    }
+
+    const eventIds = (eventosDoUsuario || []).map((evento) => evento.id);
+
+    if (eventIds.length === 0) {
+      setVinculos([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("event_collaborators")
+      .select("*")
+      .in("event_id", eventIds);
+
+    if (error) {
+      console.error("Erro ao carregar vínculos:", error);
+      setVinculos([]);
+      return;
+    }
+
     setVinculos(data || []);
   }
 
   async function carregarFinanceiro() {
-    const { data } = await supabase
+    setCarregando(true);
+
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      setMovimentacoes([]);
+      setCarregando(false);
+      return;
+    }
+
+    const { data, error } = await supabase
       .from("finance")
       .select("*")
+      .eq("user_id", user.id)
       .order("payment_date", { ascending: false });
 
+    if (error) {
+      console.error("Erro ao carregar financeiro:", error);
+      alert("Erro ao carregar financeiro.");
+      setMovimentacoes([]);
+      setCarregando(false);
+      return;
+    }
+
     setMovimentacoes(data || []);
+    setCarregando(false);
   }
 
   function nomeColaborador(colaborador: Colaborador) {
@@ -139,11 +246,15 @@ export default function FinanceiroPage() {
     if (type === "Entrada") {
       setClientName(evento.client_name || "");
       setAmount(String(evento.fee || ""));
-      setDescription(`Pagamento referente ao evento: ${evento.title || evento.client_name}`);
+      setDescription(
+        `Pagamento referente ao evento: ${evento.title || evento.client_name}`
+      );
     } else {
       setClientName("");
       setAmount("");
-      setDescription(`Despesa referente ao evento: ${evento.title || evento.client_name}`);
+      setDescription(
+        `Despesa referente ao evento: ${evento.title || evento.client_name}`
+      );
     }
   }
 
@@ -165,12 +276,24 @@ export default function FinanceiroPage() {
   async function salvarMovimentacao(e: React.FormEvent) {
     e.preventDefault();
 
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      alert("Usuário não encontrado. Faça login novamente.");
+      return;
+    }
+
     if (!amount || !paymentDate) {
       alert("Preencha valor e data.");
       return;
     }
 
-    if (type === "Saída" && eventId && category === "Colaboradores" && !colaboradorSelecionado) {
+    if (
+      type === "Saída" &&
+      eventId &&
+      category === "Colaboradores" &&
+      !colaboradorSelecionado
+    ) {
       alert("Selecione o colaborador vinculado ao evento.");
       return;
     }
@@ -183,6 +306,7 @@ export default function FinanceiroPage() {
         : description;
 
     const dados = {
+      user_id: user.id,
       type,
       category,
       description: descricaoFinal,
@@ -201,9 +325,11 @@ export default function FinanceiroPage() {
       const { error } = await supabase
         .from("finance")
         .update(dados)
-        .eq("id", editandoId);
+        .eq("id", editandoId)
+        .eq("user_id", user.id);
 
       if (error) {
+        console.error("Erro ao atualizar lançamento:", error);
         alert("Erro ao atualizar lançamento.");
         return;
       }
@@ -211,6 +337,7 @@ export default function FinanceiroPage() {
       const { error } = await supabase.from("finance").insert(dados);
 
       if (error) {
+        console.error("Erro ao salvar lançamento:", error);
         alert("Erro ao salvar lançamento.");
         return;
       }
@@ -245,9 +372,21 @@ export default function FinanceiroPage() {
     const confirmar = confirm("Deseja excluir este lançamento?");
     if (!confirmar) return;
 
-    const { error } = await supabase.from("finance").delete().eq("id", id);
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      alert("Usuário não encontrado. Faça login novamente.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("finance")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
 
     if (error) {
+      console.error("Erro ao excluir lançamento:", error);
       alert("Erro ao excluir lançamento.");
       return;
     }
@@ -316,12 +455,16 @@ export default function FinanceiroPage() {
         if (type === "Entrada") {
           setClientName(evento.client_name || "");
           setAmount(String(evento.fee || ""));
-          setDescription(`Pagamento referente ao evento: ${evento.title || evento.client_name}`);
+          setDescription(
+            `Pagamento referente ao evento: ${evento.title || evento.client_name}`
+          );
           setColaboradorSelecionado("");
         } else {
           setClientName("");
           setAmount("");
-          setDescription(`Despesa referente ao evento: ${evento.title || evento.client_name}`);
+          setDescription(
+            `Despesa referente ao evento: ${evento.title || evento.client_name}`
+          );
         }
       }
     }
@@ -518,49 +661,69 @@ export default function FinanceiroPage() {
             <section style={panelStyle}>
               <h2 style={{ marginTop: 0 }}>Movimentações do Mês</h2>
 
-              <div style={{ marginTop: "18px", display: "grid", gap: "12px" }}>
-                {movimentacoesMes.map((item) => (
-                  <div key={item.id} style={movementCard}>
-                    <div>
-                      <strong>{item.description || item.category}</strong>
+              {carregando ? (
+                <p style={textoMuted}>Carregando movimentações...</p>
+              ) : movimentacoesMes.length === 0 ? (
+                <p style={textoMuted}>Nenhuma movimentação encontrada neste mês.</p>
+              ) : (
+                <div style={movimentacoesScroll}>
+                  {movimentacoesMes.map((item) => (
+                    <div key={item.id} style={movimentacaoCard}>
+                      <div>
+                        <strong
+                          style={{
+                            color: item.type === "Entrada" ? "#37e884" : "#ff5b8a",
+                          }}
+                        >
+                          {item.type} - {item.category}
+                        </strong>
 
-                      <p style={textoMuted}>
-                        {item.type} • {item.category} • {item.payment_date}
-                      </p>
+                        <p style={textoMuted}>{item.description || "-"}</p>
 
-                      <p style={textoMuted}>
-                        {item.client_name || "-"} {item.event_name ? `| ${item.event_name}` : ""}
-                      </p>
-                    </div>
+                        <p style={textoMuted}>
+                          {item.payment_date} • {item.payment_method}
+                        </p>
 
-                    <div style={{ textAlign: "right" }}>
-                      <strong
-                        style={{
-                          color: item.type === "Entrada" ? "#37e884" : "#ff5b8a",
-                        }}
-                      >
-                        R$ {Number(item.amount).toFixed(2)}
-                      </strong>
+                        {item.event_name && (
+                          <p style={textoMuted}>Evento: {item.event_name}</p>
+                        )}
 
-                      <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-                        <button onClick={() => editarMovimentacao(item)} style={botaoEditar}>
+                        {item.client_name && (
+                          <p style={textoMuted}>
+                            {item.type === "Entrada" ? "Cliente" : "Colaborador"}:{" "}
+                            {item.client_name}
+                          </p>
+                        )}
+                      </div>
+
+                      <div style={movimentacaoActions}>
+                        <strong style={{ fontSize: "18px" }}>
+                          {Number(item.amount || 0).toLocaleString("pt-BR", {
+                            style: "currency",
+                            currency: "BRL",
+                          })}
+                        </strong>
+
+                        <button
+                          type="button"
+                          onClick={() => editarMovimentacao(item)}
+                          style={botaoEditar}
+                        >
                           Editar
                         </button>
 
-                        <button onClick={() => excluirMovimentacao(item.id)} style={botaoExcluir}>
+                        <button
+                          type="button"
+                          onClick={() => excluirMovimentacao(item.id)}
+                          style={botaoExcluir}
+                        >
                           Excluir
                         </button>
                       </div>
                     </div>
-                  </div>
-                ))}
-
-                {movimentacoesMes.length === 0 && (
-                  <p style={{ color: "#b8b8d8" }}>
-                    Nenhuma movimentação neste mês.
-                  </p>
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </section>
           </div>
         </div>
@@ -569,13 +732,24 @@ export default function FinanceiroPage() {
   );
 }
 
-function Card({ titulo, valor, cor }: { titulo: string; valor: number; cor: string }) {
+function Card({
+  titulo,
+  valor,
+  cor,
+}: {
+  titulo: string;
+  valor: number;
+  cor: string;
+}) {
   return (
     <div style={cardStyle}>
       <p style={{ color: "#b8b8d8", margin: 0 }}>{titulo}</p>
 
-      <h2 style={{ color: cor, margin: "12px 0 0" }}>
-        R$ {valor.toFixed(2)}
+      <h2 style={{ color: cor, margin: "10px 0 0" }}>
+        {Number(valor || 0).toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        })}
       </h2>
     </div>
   );
@@ -585,12 +759,12 @@ const filterBar: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "160px 160px",
   gap: "12px",
-  marginBottom: "20px",
+  marginBottom: "24px",
 };
 
 const cardsGrid: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(3, 1fr)",
+  gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
   gap: "16px",
   marginBottom: "24px",
 };
@@ -650,35 +824,53 @@ const botaoSecundario: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const movementCard: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "16px",
-  padding: "16px",
-  borderRadius: "18px",
-  background: "rgba(0,0,0,0.25)",
-  border: "1px solid rgba(255,255,255,0.10)",
-};
-
 const textoMuted: React.CSSProperties = {
   color: "#b8b8d8",
   margin: "6px 0",
 };
 
+const movimentacoesScroll: React.CSSProperties = {
+  display: "grid",
+  gap: "14px",
+  maxHeight: "720px",
+  overflowY: "auto",
+  paddingRight: "8px",
+};
+
+const movimentacaoCard: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "16px",
+  padding: "18px",
+  borderRadius: "18px",
+  background: "rgba(0,0,0,0.25)",
+  border: "1px solid rgba(255,255,255,0.10)",
+};
+
+const movimentacaoActions: React.CSSProperties = {
+  display: "grid",
+  gap: "8px",
+  justifyItems: "end",
+  alignContent: "start",
+  minWidth: "140px",
+};
+
 const botaoEditar: React.CSSProperties = {
-  padding: "8px 12px",
+  padding: "9px 14px",
   borderRadius: "10px",
   border: "none",
   background: "rgba(0,170,255,0.18)",
   color: "#38bdf8",
   cursor: "pointer",
+  fontWeight: "bold",
 };
 
 const botaoExcluir: React.CSSProperties = {
-  padding: "8px 12px",
+  padding: "9px 14px",
   borderRadius: "10px",
   border: "none",
   background: "rgba(255,91,138,0.18)",
   color: "#ff7aa2",
   cursor: "pointer",
+  fontWeight: "bold",
 };

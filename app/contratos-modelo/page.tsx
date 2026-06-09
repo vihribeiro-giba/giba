@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import AppLayout from "../../components/AppLayout";
+import ProtectedRoute from "../../components/ProtectedRoute";
 
 type ContractSettings = {
   id?: string;
+  user_id?: string;
   titulo: string;
   contratado_texto: string;
   objeto_base: string;
@@ -37,13 +39,33 @@ export default function ContratosModeloPage() {
     cidade_assinatura: "",
   });
 
+  async function obterUsuarioLogado() {
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error || !data.user) {
+      alert("Usuário não autenticado.");
+      window.location.href = "/login";
+      return null;
+    }
+
+    return data.user;
+  }
+
   async function carregarModelo() {
     try {
+      const user = await obterUsuarioLogado();
+
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("contract_settings")
         .select("*")
+        .eq("user_id", user.id)
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error(error);
@@ -77,23 +99,33 @@ export default function ContratosModeloPage() {
 
   async function salvarModelo() {
     try {
+      const user = await obterUsuarioLogado();
+
+      if (!user) {
+        return;
+      }
+
+      const dados = {
+        user_id: user.id,
+        titulo: form.titulo,
+        contratado_texto: form.contratado_texto,
+        objeto_base: form.objeto_base,
+        remuneracao_base: form.remuneracao_base,
+        obrigacao_contratado: form.obrigacao_contratado,
+        obrigacao_contratante: form.obrigacao_contratante,
+        multa_contratado: form.multa_contratado,
+        multa_contratante: form.multa_contratante,
+        foro: form.foro,
+        texto_final: form.texto_final,
+        cidade_assinatura: form.cidade_assinatura,
+      };
+
       if (form.id) {
         const { error } = await supabase
           .from("contract_settings")
-          .update({
-            titulo: form.titulo,
-            contratado_texto: form.contratado_texto,
-            objeto_base: form.objeto_base,
-            remuneracao_base: form.remuneracao_base,
-            obrigacao_contratado: form.obrigacao_contratado,
-            obrigacao_contratante: form.obrigacao_contratante,
-            multa_contratado: form.multa_contratado,
-            multa_contratante: form.multa_contratante,
-            foro: form.foro,
-            texto_final: form.texto_final,
-            cidade_assinatura: form.cidade_assinatura,
-          })
-          .eq("id", form.id);
+          .update(dados)
+          .eq("id", form.id)
+          .eq("user_id", user.id);
 
         if (error) {
           console.error(error);
@@ -101,14 +133,24 @@ export default function ContratosModeloPage() {
           return;
         }
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("contract_settings")
-          .insert([form]);
+          .insert([dados])
+          .select("id")
+          .single();
 
         if (error) {
           console.error(error);
           alert("Erro ao criar contrato.");
           return;
+        }
+
+        if (data?.id) {
+          setForm((formAtual) => ({
+            ...formAtual,
+            id: data.id,
+            user_id: user.id,
+          }));
         }
       }
 
@@ -124,8 +166,9 @@ export default function ContratosModeloPage() {
   }, []);
 
   return (
-    <AppLayout>
-      <div className="min-h-screen bg-[#0b0f1a] text-white p-8">
+    <ProtectedRoute adminOnly>
+      <AppLayout>
+        <div className="min-h-screen bg-[#0b0f1a] text-white p-8">
         <div className="max-w-6xl mx-auto">
 
           <div className="flex items-center justify-between mb-8">
@@ -372,7 +415,8 @@ export default function ContratosModeloPage() {
             )}
           </div>
         </div>
-      </div>
-    </AppLayout>
+        </div>
+      </AppLayout>
+    </ProtectedRoute>
   );
 }

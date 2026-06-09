@@ -14,6 +14,18 @@ export default function ProtectedRoute({
 
   useEffect(() => {
     async function verificarAcesso() {
+      const colaboradorSession = localStorage.getItem("giba_colaborador_session");
+
+      if (colaboradorSession) {
+        if (adminOnly) {
+          window.location.href = "/agenda-colaborador";
+          return;
+        }
+
+        setLiberado(true);
+        return;
+      }
+
       const { data } = await supabase.auth.getUser();
 
       const email = data.user?.email;
@@ -29,6 +41,20 @@ export default function ProtectedRoute({
         .eq("email", email)
         .eq("status", "Ativo")
         .maybeSingle();
+
+      if (colaborador) {
+        localStorage.setItem(
+          "giba_colaborador_session",
+          JSON.stringify({
+            id: colaborador.id,
+            nome: colaborador.nome,
+            email: colaborador.email,
+            funcao: colaborador.funcao,
+            user_id: colaborador.user_id,
+            tipo: "colaborador",
+          })
+        );
+      }
 
       if (adminOnly && colaborador) {
         window.location.href = "/agenda-colaborador";

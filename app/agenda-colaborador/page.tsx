@@ -11,6 +11,7 @@ import {
 
 type Evento = {
   id: string;
+  user_id?: string;
   event_type: string;
   show_format: string;
   client_name: string;
@@ -23,9 +24,11 @@ type Evento = {
 
 type Colaborador = {
   id: string;
+  user_id?: string;
   nome: string;
   funcao: string;
   status: string;
+  email?: string;
 };
 
 type Vinculo = {
@@ -33,52 +36,243 @@ type Vinculo = {
   collaborator_id: string;
 };
 
+type ColaboradorSession = {
+  id: string;
+  nome: string;
+  email: string;
+  funcao?: string;
+  user_id: string;
+  tipo: string;
+};
+
 export default function AgendaColaboradorPage() {
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
   const [vinculos, setVinculos] = useState<Vinculo[]>([]);
   const [colaboradorSelecionado, setColaboradorSelecionado] = useState("");
+  const [carregando, setCarregando] = useState(true);
+
+  function formatarDataBR(data: string) {
+    if (!data) return "Não informado";
+
+    const partes = data.split("-");
+
+    if (partes.length === 3) {
+      const [ano, mes, dia] = partes;
+      return `${dia}/${mes}/${ano}`;
+    }
+
+    const dataObj = new Date(data);
+
+    if (Number.isNaN(dataObj.getTime())) return data;
+
+    return dataObj.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  }
+
+  function obterSessaoColaboradorLocal(): ColaboradorSession | null {
+    if (typeof window === "undefined") return null;
+
+    const sessao = localStorage.getItem("giba_colaborador_session");
+
+    if (!sessao) return null;
+
+    try {
+      const colaborador = JSON.parse(sessao) as ColaboradorSession;
+
+      if (!colaborador?.id || !colaborador?.user_id || colaborador?.tipo !== "colaborador") {
+        localStorage.removeItem("giba_colaborador_session");
+        return null;
+      }
+
+      return colaborador;
+    } catch (error) {
+      console.error("Erro ao ler sessão do colaborador:", error);
+      localStorage.removeItem("giba_colaborador_session");
+      return null;
+    }
+  }
+
+  async function obterColaboradorLogado() {
+    const sessaoLocal = obterSessaoColaboradorLocal();
+
+    if (sessaoLocal) {
+      const { data, error } = await supabase
+        .from("collaborators")
+        .select("*")
+        .eq("id", sessaoLocal.id)
+        .eq("user_id", sessaoLocal.user_id)
+        .eq("status", "Ativo")
+        .maybeSingle();
+
+      if (error) {
+        console.error("Erro ao validar colaborador:", error);
+        alert("Erro ao validar acesso do colaborador.");
+        window.location.href = "/login";
+        return null;
+      }
+
+      if (!data) {
+        localStorage.removeItem("giba_colaborador_session");
+        alert("Acesso do colaborador não encontrado ou inativo.");
+        window.location.href = "/login";
+        return null;
+      }
+
+      return data as Colaborador;
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user?.email) {
+      window.location.href = "/login";
+      return null;
+    }
+
+    const { data: colaborador, error } = await supabase
+      .from("collaborators")
+      .select("*")
+      .eq("email", user.email)
+      .eq("status", "Ativo")
+      .maybeSingle();
+
+    if (error) {
+      console.error("Erro ao buscar colaborador autenticado:", error);
+      alert("Erro ao validar acesso do colaborador.");
+      window.location.href = "/login";
+      return null;
+    }
+
+    if (!colaborador?.id || !colaborador?.user_id) {
+      alert("Este usuário não está cadastrado como colaborador ativo.");
+      window.location.href = "/dashboard";
+      return null;
+    }
+
+    localStorage.setItem(
+      "giba_colaborador_session",
+      JSON.stringify({
+        id: colaborador.id,
+        nome: colaborador.nome,
+        email: colaborador.email,
+        funcao: colaborador.funcao,
+        user_id: colaborador.user_id,
+        tipo: "colaborador",
+      })
+    );
+
+    return colaborador as Colaborador;
+  }
 
   async function carregarDados() {
-    const {
-  data: { user },
-} = await supabase.auth.getUser();
+    setCarregando(true);
 
-if (!user?.email) return;
+    const colaborador = await obterColaboradorLogado();
 
-const { data: colaborador } = await supabase
-  .from("collaborators")
-  .select("*")
-  .eq("email", user.email)
-  .single();
+    if (!colaborador?.id || !colaborador?.user_id) {
+      setEventos([]);
+      setColaboradores([]);
+      setVinculos([]);
+      setColaboradorSelecionado("");
+      setCarregando(false);
+      return;
+    }
 
-if (!colaborador) {
-  setEventos([]);
-  return;
-}
+    const { data: vinculosColaborador, error: erroVinculosColaborador } = await supabase
+      .from("event_collaborators")
+      .select("*")
+      .eq("collaborator_id", colaborador.id);
 
-const { data: vinculosRes } = await supabase
-  .from("event_collaborators")
-  .select("*")
-  .eq("collaborator_id", colaborador.id);
+    if (erroVinculosColaborador) {
+      console.error("Erro ao carregar vínculos do colaborador:", erroVinculosColaborador);
+      alert("Erro ao carregar agenda do colaborador.");
+      setCarregando(false);
+      return;
+    }
 
-const idsEventos =
-  vinculosRes?.map((item) => item.event_id) || [];
+    const idsEventos = vinculosColaborador?.map((item) => item.event_id) || [];
 
-if (idsEventos.length === 0) {
-  setEventos([]);
-  return;
-}
+    if (idsEventos.length === 0) {
+      setEventos([]);
+      setColaboradores([colaborador]);
+      setVinculos([]);
+      setColaboradorSelecionado(colaborador.id);
+      setCarregando(false);
+      return;
+    }
 
-const eventosRes = await supabase
-  .from("events")
-  .select("*")
-  .in("id", idsEventos)
-  .order("event_date", { ascending: true });
+    const { data: eventosRes, error: erroEventos } = await supabase
+      .from("events")
+      .select("*")
+      .eq("user_id", colaborador.user_id)
+      .in("id", idsEventos)
+      .order("event_date", { ascending: true });
 
-setEventos(eventosRes.data || []);
-setColaboradores([colaborador]);
-setVinculos(vinculosRes || []);
+    if (erroEventos) {
+      console.error("Erro ao carregar eventos do colaborador:", erroEventos);
+      alert("Erro ao carregar eventos do colaborador.");
+      setCarregando(false);
+      return;
+    }
+
+    const idsEventosPermitidos = (eventosRes || []).map((evento) => evento.id);
+
+    if (idsEventosPermitidos.length === 0) {
+      setEventos([]);
+      setColaboradores([colaborador]);
+      setVinculos([]);
+      setColaboradorSelecionado(colaborador.id);
+      setCarregando(false);
+      return;
+    }
+
+    const { data: todosVinculos, error: erroTodosVinculos } = await supabase
+      .from("event_collaborators")
+      .select("*")
+      .in("event_id", idsEventosPermitidos);
+
+    if (erroTodosVinculos) {
+      console.error("Erro ao carregar equipe dos eventos:", erroTodosVinculos);
+      alert("Erro ao carregar equipe dos eventos.");
+      setCarregando(false);
+      return;
+    }
+
+    const idsColaboradoresEquipe = Array.from(
+      new Set((todosVinculos || []).map((item) => item.collaborator_id))
+    );
+
+    let colaboradoresEquipe: Colaborador[] = [colaborador];
+
+    if (idsColaboradoresEquipe.length > 0) {
+      const { data: colaboradoresRes, error: erroColaboradores } = await supabase
+        .from("collaborators")
+        .select("*")
+        .eq("user_id", colaborador.user_id)
+        .eq("status", "Ativo")
+        .in("id", idsColaboradoresEquipe)
+        .order("nome", { ascending: true });
+
+      if (erroColaboradores) {
+        console.error("Erro ao carregar colaboradores da equipe:", erroColaboradores);
+        alert("Erro ao carregar equipe escalada.");
+        setCarregando(false);
+        return;
+      }
+
+      colaboradoresEquipe = (colaboradoresRes || []) as Colaborador[];
+    }
+
+    setEventos((eventosRes || []) as Evento[]);
+    setColaboradores(colaboradoresEquipe);
+    setVinculos((todosVinculos || []) as Vinculo[]);
+    setColaboradorSelecionado(colaborador.id);
+    setCarregando(false);
   }
 
   const eventosDoColaborador = useMemo(() => {
@@ -99,19 +293,7 @@ setVinculos(vinculosRes || []);
     return colaboradores.filter((colaborador) => ids.includes(colaborador.id));
   }
 
-  const [userEmail, setUserEmail] = useState("");
   useEffect(() => {
-    const carregarUsuario = async () => {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user?.email) {
-    setUserEmail(user.email);
-  }
-};
-
-carregarUsuario();
     carregarDados();
   }, []);
 
@@ -127,21 +309,24 @@ carregarUsuario();
         </p>
 
         <section style={panelStyle}>
-          <h2 style={{ marginTop: 0 }}>Selecionar colaborador</h2>
+          <h2 style={{ marginTop: 0 }}>Colaborador</h2>
 
           <select
             style={inputStyle}
             value={colaboradorSelecionado}
             onChange={(e) => setColaboradorSelecionado(e.target.value)}
+            disabled
           >
-            <option value="">Selecione um colaborador</option>
+            <option value="">Carregando colaborador...</option>
 
-            {colaboradores.map((colaborador) => (
-              <option key={colaborador.id} value={colaborador.id}>
-                {colaborador.nome}
-                {colaborador.funcao ? ` — ${colaborador.funcao}` : ""}
-              </option>
-            ))}
+            {colaboradores
+              .filter((colaborador) => colaborador.id === colaboradorSelecionado)
+              .map((colaborador) => (
+                <option key={colaborador.id} value={colaborador.id}>
+                  {colaborador.nome}
+                  {colaborador.funcao ? ` — ${colaborador.funcao}` : ""}
+                </option>
+              ))}
           </select>
         </section>
 
@@ -149,90 +334,103 @@ carregarUsuario();
           <h2 style={{ marginTop: 0 }}>Eventos escalados</h2>
 
           <div style={{ display: "grid", gap: "16px", marginTop: "20px" }}>
-            {!colaboradorSelecionado && (
+            {carregando && (
               <p style={{ color: "#b8b8d8" }}>
-                Selecione um colaborador para visualizar a agenda.
+                Carregando agenda do colaborador...
               </p>
             )}
 
-            {colaboradorSelecionado && eventosDoColaborador.length === 0 && (
+            {!carregando && !colaboradorSelecionado && (
+              <p style={{ color: "#b8b8d8" }}>
+                Não foi possível identificar o colaborador logado.
+              </p>
+            )}
+
+            {!carregando && colaboradorSelecionado && eventosDoColaborador.length === 0 && (
               <p style={{ color: "#b8b8d8" }}>
                 Nenhum evento escalado para este colaborador.
               </p>
             )}
 
-            {eventosDoColaborador
-  .filter(
-    (evento) =>
-      getEventStatus(evento.event_date) !== "realizado"
-  )
-  .map((evento) => (
-              <div key={evento.id} style={eventCard}>
-                <div>
-                  <h3 style={{ margin: "0 0 10px" }}>
-                    {evento.event_type} — {evento.show_format}
-                  </h3>
-                  {(() => {
-  const status = getEventStatus(evento.event_date);
+            {!carregando &&
+              eventosDoColaborador
+                .filter(
+                  (evento) =>
+                    getEventStatus(evento.event_date) !== "realizado"
+                )
+                .map((evento) => (
+                  <div key={evento.id} style={eventCard}>
+                    <div>
+                      <h3 style={{ margin: "0 0 10px" }}>
+                        {evento.event_type} — {evento.show_format}
+                      </h3>
+                      {(() => {
+                        const status = getEventStatus(evento.event_date);
 
-  return (
-    <span
-      style={{
-        padding: "4px 10px",
-        borderRadius: "999px",
-        fontSize: "12px",
-        fontWeight: "bold",
-        background: getEventStatusColor(status),
-        color: "#fff",
-        display: "inline-block",
-        marginTop: "8px",
-      }}
-    >
-      {getEventStatusLabel(status)}
-    </span>
-  );
-})()}
-                  <p style={textoMuted}>
-                    <strong>Contratante:</strong>{" "}
-                    {evento.client_name || "Não informado"}
-                  </p>
-
-                  <p style={textoMuted}>
-                    <strong>Data:</strong> {evento.event_date}
-                  </p>
-
-                  <p style={textoMuted}>
-                    <strong>Horário:</strong>{" "}
-                    {evento.event_time || "Não informado"}
-                  </p>
-
-                  <p style={textoMuted}>
-                    <strong>Tempo de show:</strong>{" "}
-                    {evento.show_duration || "Não informado"}
-                  </p>
-
-                  <p style={textoMuted}>
-                    <strong>Endereço:</strong>{" "}
-                    {evento.location || "Não informado"}
-                  </p>
-
-                  <p style={textoMuted}>
-                    <strong>Observações:</strong> {evento.notes || "-"}
-                  </p>
-
-                  <div style={teamBox}>
-                    <strong>Equipe escalada:</strong>
-
-                    {equipeDoEvento(evento.id).map((colaborador) => (
-                      <p key={colaborador.id} style={{ margin: "6px 0", color: "#b8b8d8" }}>
-                        {colaborador.nome}
-                        {colaborador.funcao ? ` — ${colaborador.funcao}` : ""}
+                        return (
+                          <span
+                            style={{
+                              padding: "4px 10px",
+                              borderRadius: "999px",
+                              fontSize: "12px",
+                              fontWeight: "bold",
+                              background: getEventStatusColor(status),
+                              color: "#fff",
+                              display: "inline-block",
+                              marginTop: "8px",
+                            }}
+                          >
+                            {getEventStatusLabel(status)}
+                          </span>
+                        );
+                      })()}
+                      <p style={textoMuted}>
+                        <strong>Contratante:</strong>{" "}
+                        {evento.client_name || "Não informado"}
                       </p>
-                    ))}
+
+                      <p style={textoMuted}>
+                        <strong>Data:</strong> {formatarDataBR(evento.event_date)}
+                      </p>
+
+                      <p style={textoMuted}>
+                        <strong>Horário:</strong>{" "}
+                        {evento.event_time || "Não informado"}
+                      </p>
+
+                      <p style={textoMuted}>
+                        <strong>Tempo de show:</strong>{" "}
+                        {evento.show_duration || "Não informado"}
+                      </p>
+
+                      <p style={textoMuted}>
+                        <strong>Endereço:</strong>{" "}
+                        {evento.location || "Não informado"}
+                      </p>
+
+                      <p style={textoMuted}>
+                        <strong>Observações:</strong> {evento.notes || "-"}
+                      </p>
+
+                      <div style={teamBox}>
+                        <strong>Equipe escalada:</strong>
+
+                        {equipeDoEvento(evento.id).length === 0 && (
+                          <p style={{ margin: "6px 0", color: "#b8b8d8" }}>
+                            Nenhuma equipe informada.
+                          </p>
+                        )}
+
+                        {equipeDoEvento(evento.id).map((colaborador) => (
+                          <p key={colaborador.id} style={{ margin: "6px 0", color: "#b8b8d8" }}>
+                            {colaborador.nome}
+                            {colaborador.funcao ? ` — ${colaborador.funcao}` : ""}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                ))}
           </div>
         </section>
       </div>

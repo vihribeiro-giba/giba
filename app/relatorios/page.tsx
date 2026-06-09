@@ -14,6 +14,7 @@ type Evento = {
   event_date: string;
   show_format: string;
   client_name: string;
+  user_id?: string;
 };
 
 type Financeiro = {
@@ -22,6 +23,7 @@ type Financeiro = {
   category: string;
   amount: number;
   payment_date: string;
+  user_id?: string;
 };
 
 export default function RelatoriosPage() {
@@ -37,19 +39,54 @@ export default function RelatoriosPage() {
     carregarDados();
   }, []);
 
+  async function obterUsuarioLogado() {
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error || !data.user) {
+      alert("Usuário não autenticado.");
+      window.location.href = "/login";
+      return null;
+    }
+
+    return data.user;
+  }
+
   async function carregarDados() {
     setCarregando(true);
 
-    const eventosRes = await supabase.from("events").select("*");
-    const financeRes = await supabase.from("finance").select("*");
+    const user = await obterUsuarioLogado();
 
-    if (eventosRes.data) {
-      setEventos(eventosRes.data);
+    if (!user) {
+      setCarregando(false);
+      return;
     }
 
-    if (financeRes.data) {
-      setFinanceiro(financeRes.data);
+    const eventosRes = await supabase
+      .from("events")
+      .select("*")
+      .eq("user_id", user.id);
+
+    const financeRes = await supabase
+      .from("finance")
+      .select("*")
+      .eq("user_id", user.id);
+
+    if (eventosRes.error) {
+      console.error("Erro ao carregar eventos dos relatórios:", eventosRes.error);
+      alert("Erro ao carregar eventos dos relatórios.");
+      setCarregando(false);
+      return;
     }
+
+    if (financeRes.error) {
+      console.error("Erro ao carregar financeiro dos relatórios:", financeRes.error);
+      alert("Erro ao carregar financeiro dos relatórios.");
+      setCarregando(false);
+      return;
+    }
+
+    setEventos((eventosRes.data || []) as Evento[]);
+    setFinanceiro((financeRes.data || []) as Financeiro[]);
 
     setCarregando(false);
   }

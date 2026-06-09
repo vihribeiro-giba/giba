@@ -15,34 +15,82 @@ export default function LoginPage() {
     setErro("");
     setCarregando(true);
 
+    const emailTratado = email.trim().toLowerCase();
+
+    localStorage.removeItem("giba_colaborador_session");
+
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: emailTratado,
       password: senha,
     });
 
-    if (error) {
+    if (!error) {
+      const userEmail = data.user?.email;
+
+      const { data: colaborador } = await supabase
+        .from("collaborators")
+        .select("*")
+        .eq("email", userEmail)
+        .eq("status", "Ativo")
+        .maybeSingle();
+
       setCarregando(false);
-      setErro("E-mail ou senha inválidos.");
+
+      if (colaborador) {
+        localStorage.setItem(
+          "giba_colaborador_session",
+          JSON.stringify({
+            id: colaborador.id,
+            nome: colaborador.nome,
+            email: colaborador.email,
+            funcao: colaborador.funcao,
+            user_id: colaborador.user_id,
+            tipo: "colaborador",
+          })
+        );
+
+        window.location.href = "/agenda-colaborador";
+        return;
+      }
+
+      window.location.href = "/dashboard";
       return;
     }
 
-    const userEmail = data.user?.email;
-
-    const { data: colaborador } = await supabase
+    const { data: colaborador, error: erroColaborador } = await supabase
       .from("collaborators")
       .select("*")
-      .eq("email", userEmail)
+      .eq("email", emailTratado)
+      .eq("senha", senha)
       .eq("status", "Ativo")
       .maybeSingle();
 
     setCarregando(false);
 
-    if (colaborador) {
-      window.location.href = "/agenda-colaborador";
+    if (erroColaborador) {
+      console.error("Erro ao buscar colaborador:", erroColaborador);
+      setErro("Erro ao validar colaborador.");
       return;
     }
 
-    window.location.href = "/dashboard";
+    if (!colaborador) {
+      setErro("E-mail ou senha inválidos.");
+      return;
+    }
+
+    localStorage.setItem(
+      "giba_colaborador_session",
+      JSON.stringify({
+        id: colaborador.id,
+        nome: colaborador.nome,
+        email: colaborador.email,
+        funcao: colaborador.funcao,
+        user_id: colaborador.user_id,
+        tipo: "colaborador",
+      })
+    );
+
+    window.location.href = "/agenda-colaborador";
   }
 
   return (

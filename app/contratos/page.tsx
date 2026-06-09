@@ -10,6 +10,7 @@ import Link from "next/link";
 
 type Evento = {
   id: string;
+  user_id?: string;
   event_type: string;
   show_format: string;
   location: string;
@@ -23,12 +24,14 @@ type Evento = {
 
 type Cliente = {
   id: string;
+  user_id?: string;
   nome: string;
   cpf_cnpj: string;
   endereco_completo: string;
 };
 
 type Empresa = {
+  user_id?: string;
   nome_artistico: string;
   razao_social: string;
   cnpj: string;
@@ -98,19 +101,43 @@ function ContratosContent() {
   const [textoContrato, setTextoContrato] = useState("");
   const [carregando, setCarregando] = useState(true);
 
+  async function obterUsuarioLogado() {
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error || !data.user) {
+      alert("Usuário não autenticado.");
+      window.location.href = "/login";
+      return null;
+    }
+
+    return data.user;
+  }
+
   async function carregarDados() {
     setCarregando(true);
+
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      setCarregando(false);
+      return;
+    }
 
     const eventosRes = await supabase
       .from("events")
       .select("*")
+      .eq("user_id", user.id)
       .order("event_date", { ascending: true });
 
-    const clientesRes = await supabase.from("clients").select("*");
+    const clientesRes = await supabase
+      .from("clients")
+      .select("*")
+      .eq("user_id", user.id);
 
     const empresaRes = await supabase
       .from("company_settings")
       .select("*")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -118,6 +145,7 @@ function ContratosContent() {
     const modeloRes = await supabase
       .from("contract_settings")
       .select("*")
+      .eq("user_id", user.id)
       .limit(1)
       .maybeSingle();
 

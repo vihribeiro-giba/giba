@@ -7,6 +7,7 @@ import { supabase } from "../../lib/supabase";
 
 type Empresa = {
   id: string;
+  user_id?: string;
   nome_artistico: string;
   razao_social: string;
   cnpj: string;
@@ -42,13 +43,35 @@ export default function ConfiguracoesPage() {
   const [observacoes, setObservacoes] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
 
+  async function obterUsuarioLogado() {
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error || !data.user) {
+      alert("Usuário não autenticado.");
+      window.location.href = "/login";
+      return null;
+    }
+
+    return data.user;
+  }
+
   async function carregarEmpresa() {
-    const { data } = await supabase
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
+    const { data, error } = await supabase
       .from("company_settings")
       .select("*")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
+
+    if (error) {
+      console.error("Erro ao carregar dados da empresa:", error);
+      alert("Erro ao carregar dados da empresa.");
+      return;
+    }
 
     if (!data) return;
 
@@ -72,8 +95,11 @@ export default function ConfiguracoesPage() {
   }
 
   async function uploadLogo(file: File) {
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
     const extensao = file.name.split(".").pop();
-    const nomeArquivo = `logo-${Date.now()}.${extensao}`;
+    const nomeArquivo = `${user.id}/logo-${Date.now()}.${extensao}`;
 
     const { error } = await supabase.storage
       .from("company-logos")
@@ -98,7 +124,15 @@ export default function ConfiguracoesPage() {
     e.preventDefault();
     setCarregando(true);
 
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      setCarregando(false);
+      return;
+    }
+
     const dados = {
+      user_id: user.id,
       nome_artistico: nomeArtistico,
       razao_social: razaoSocial,
       cnpj,
@@ -119,7 +153,8 @@ export default function ConfiguracoesPage() {
       const { error } = await supabase
         .from("company_settings")
         .update(dados)
-        .eq("id", empresaId);
+        .eq("id", empresaId)
+        .eq("user_id", user.id);
 
       setCarregando(false);
 

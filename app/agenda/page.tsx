@@ -34,6 +34,7 @@ type EventCollaborator = {
 
 type Evento = {
   id: string;
+  user_id?: string;
   title: string;
   event_type: string;
   show_format: string;
@@ -78,8 +79,18 @@ export default function AgendaPage() {
   const [notes, setNotes] = useState("");
 
   const meses = [
-    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
   ];
 
   const diasSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -96,6 +107,20 @@ export default function AgendaPage() {
     return dias;
   }, [mesAtual, anoAtual]);
 
+  async function obterUsuarioLogado() {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error) {
+      console.error("Erro ao buscar usuário logado:", error);
+      return null;
+    }
+
+    return user;
+  }
+
   function formatarData(dia: number) {
     const mes = String(mesAtual + 1).padStart(2, "0");
     const diaFormatado = String(dia).padStart(2, "0");
@@ -103,48 +128,136 @@ export default function AgendaPage() {
   }
 
   async function carregarClientes() {
-    const { data } = await supabase
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      setClientes([]);
+      return;
+    }
+
+    const { data, error } = await supabase
       .from("clients")
       .select("id, nome")
+      .eq("user_id", user.id)
       .order("nome", { ascending: true });
+
+    if (error) {
+      console.error("Erro ao carregar clientes:", error);
+      setClientes([]);
+      return;
+    }
 
     setClientes(data || []);
   }
 
   async function carregarFormatos() {
-    const { data } = await supabase
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      setFormatos([]);
+      return;
+    }
+
+    const { data, error } = await supabase
       .from("show_formats")
       .select("id, nome")
+      .eq("user_id", user.id)
       .order("nome", { ascending: true });
+
+    if (error) {
+      console.error("Erro ao carregar formatos:", error);
+      setFormatos([]);
+      return;
+    }
 
     setFormatos(data || []);
   }
 
   async function carregarColaboradores() {
-    const { data } = await supabase
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      setColaboradores([]);
+      return;
+    }
+
+    const { data, error } = await supabase
       .from("collaborators")
       .select("id, nome, funcao, status")
+      .eq("user_id", user.id)
       .eq("status", "Ativo")
       .order("nome", { ascending: true });
+
+    if (error) {
+      console.error("Erro ao carregar colaboradores:", error);
+      setColaboradores([]);
+      return;
+    }
 
     setColaboradores(data || []);
   }
 
-  async function carregarVinculos() {
-    const { data } = await supabase
-      .from("event_collaborators")
-      .select("event_id, collaborator_id");
-
-    setEventCollaborators(data || []);
-  }
-
   async function carregarEventos() {
-    const { data } = await supabase
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      setEventos([]);
+      return;
+    }
+
+    const { data, error } = await supabase
       .from("events")
       .select("*")
+      .eq("user_id", user.id)
       .order("event_date", { ascending: true });
 
+    if (error) {
+      console.error("Erro ao carregar eventos:", error);
+      setEventos([]);
+      return;
+    }
+
     setEventos(data || []);
+  }
+
+  async function carregarVinculos() {
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      setEventCollaborators([]);
+      return;
+    }
+
+    const { data: eventosDoUsuario, error: eventosError } = await supabase
+      .from("events")
+      .select("id")
+      .eq("user_id", user.id);
+
+    if (eventosError) {
+      console.error("Erro ao buscar eventos para vínculos:", eventosError);
+      setEventCollaborators([]);
+      return;
+    }
+
+    const eventIds = (eventosDoUsuario || []).map((evento) => evento.id);
+
+    if (eventIds.length === 0) {
+      setEventCollaborators([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("event_collaborators")
+      .select("event_id, collaborator_id")
+      .in("event_id", eventIds);
+
+    if (error) {
+      console.error("Erro ao carregar vínculos:", error);
+      setEventCollaborators([]);
+      return;
+    }
+
+    setEventCollaborators(data || []);
   }
 
   function limparFormulario() {
@@ -178,10 +291,7 @@ export default function AgendaPage() {
   }
 
   async function salvarVinculosEvento(eventId: string) {
-    await supabase
-      .from("event_collaborators")
-      .delete()
-      .eq("event_id", eventId);
+    await supabase.from("event_collaborators").delete().eq("event_id", eventId);
 
     if (colaboradoresSelecionados.length > 0) {
       const vinculos = colaboradoresSelecionados.map((collaboratorId) => ({
@@ -196,6 +306,13 @@ export default function AgendaPage() {
   async function salvarEvento(e: React.FormEvent) {
     e.preventDefault();
 
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      alert("Usuário não encontrado. Faça login novamente.");
+      return;
+    }
+
     if (!diaSelecionado) {
       alert("Selecione uma data no calendário.");
       return;
@@ -207,6 +324,7 @@ export default function AgendaPage() {
     }
 
     const dados = {
+      user_id: user.id,
       title: `${eventType} - ${clientName}`,
       event_type: eventType,
       show_format: showFormat,
@@ -225,9 +343,11 @@ export default function AgendaPage() {
       const { error } = await supabase
         .from("events")
         .update(dados)
-        .eq("id", editandoId);
+        .eq("id", editandoId)
+        .eq("user_id", user.id);
 
       if (error) {
+        console.error("Erro ao atualizar evento:", error);
         alert("Erro ao atualizar evento.");
         return;
       }
@@ -241,6 +361,7 @@ export default function AgendaPage() {
         .single();
 
       if (error || !data) {
+        console.error("Erro ao cadastrar evento:", error);
         alert("Erro ao cadastrar evento.");
         return;
       }
@@ -301,11 +422,23 @@ export default function AgendaPage() {
     const confirmar = confirm("Deseja excluir este evento?");
     if (!confirmar) return;
 
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      alert("Usuário não encontrado. Faça login novamente.");
+      return;
+    }
+
     await supabase.from("event_collaborators").delete().eq("event_id", id);
 
-    const { error } = await supabase.from("events").delete().eq("id", id);
+    const { error } = await supabase
+      .from("events")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
 
     if (error) {
+      console.error("Erro ao excluir evento:", error);
       alert("Erro ao excluir evento.");
       return;
     }
@@ -357,7 +490,10 @@ export default function AgendaPage() {
 
               <div style={weekGridStyle}>
                 {diasSemana.map((dia) => (
-                  <div key={dia} style={{ textAlign: "center", color: "#b8b8d8" }}>
+                  <div
+                    key={dia}
+                    style={{ textAlign: "center", color: "#b8b8d8" }}
+                  >
                     {dia}
                   </div>
                 ))}
@@ -406,26 +542,27 @@ export default function AgendaPage() {
                           <span style={{ color: "#e4e4ff" }}>
                             {evento.show_format || "Formato não informado"}
                           </span>
-                          {(() => {
-  const status = getEventStatus(evento.event_date);
 
-  return (
-    <span
-      style={{
-        padding: "4px 10px",
-        borderRadius: "999px",
-        fontSize: "12px",
-        fontWeight: "bold",
-        background: getEventStatusColor(status),
-        color: "#fff",
-        display: "inline-block",
-        marginTop: "8px",
-      }}
-    >
-      {getEventStatusLabel(status)}
-    </span>
-  );
-})()}
+                          {(() => {
+                            const status = getEventStatus(evento.event_date);
+
+                            return (
+                              <span
+                                style={{
+                                  padding: "4px 10px",
+                                  borderRadius: "999px",
+                                  fontSize: "12px",
+                                  fontWeight: "bold",
+                                  background: getEventStatusColor(status),
+                                  color: "#fff",
+                                  display: "inline-block",
+                                  marginTop: "8px",
+                                }}
+                              >
+                                {getEventStatusLabel(status)}
+                              </span>
+                            );
+                          })()}
                         </div>
                       ))}
                     </div>
@@ -446,8 +583,15 @@ export default function AgendaPage() {
                 </strong>
               </p>
 
-              <form onSubmit={salvarEvento} style={{ display: "grid", gap: "12px" }}>
-                <select style={inputStyle} value={clientName} onChange={(e) => setClientName(e.target.value)}>
+              <form
+                onSubmit={salvarEvento}
+                style={{ display: "grid", gap: "12px" }}
+              >
+                <select
+                  style={inputStyle}
+                  value={clientName}
+                  onChange={(e) => setClientName(e.target.value)}
+                >
                   <option value="">Selecione o cliente</option>
                   {clientes.map((cliente) => (
                     <option key={cliente.id} value={cliente.nome}>
@@ -456,7 +600,11 @@ export default function AgendaPage() {
                   ))}
                 </select>
 
-                <select style={inputStyle} value={eventType} onChange={(e) => setEventType(e.target.value)}>
+                <select
+                  style={inputStyle}
+                  value={eventType}
+                  onChange={(e) => setEventType(e.target.value)}
+                >
                   <option>Show</option>
                   <option>Ensaio</option>
                   <option>Reunião</option>
@@ -464,7 +612,11 @@ export default function AgendaPage() {
                   <option>Bloqueio de Data</option>
                 </select>
 
-                <select style={inputStyle} value={showFormat} onChange={(e) => setShowFormat(e.target.value)}>
+                <select
+                  style={inputStyle}
+                  value={showFormat}
+                  onChange={(e) => setShowFormat(e.target.value)}
+                >
                   <option value="">Selecione o formato</option>
                   {formatos.map((formato) => (
                     <option key={formato.id} value={formato.nome}>
@@ -473,12 +625,40 @@ export default function AgendaPage() {
                   ))}
                 </select>
 
-                <input style={inputStyle} placeholder="Endereço do Evento" value={location} onChange={(e) => setLocation(e.target.value)} />
-                <input style={inputStyle} type="time" value={eventTime} onChange={(e) => setEventTime(e.target.value)} />
-                <input style={inputStyle} placeholder="Tempo de Show. Ex: 2 horas" value={showDuration} onChange={(e) => setShowDuration(e.target.value)} />
-                <input style={inputStyle} type="number" placeholder="Valor do Cachê" value={fee} onChange={(e) => setFee(e.target.value)} />
+                <input
+                  style={inputStyle}
+                  placeholder="Endereço do Evento"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                />
 
-                <select style={inputStyle} value={paymentFormat} onChange={(e) => setPaymentFormat(e.target.value)}>
+                <input
+                  style={inputStyle}
+                  type="time"
+                  value={eventTime}
+                  onChange={(e) => setEventTime(e.target.value)}
+                />
+
+                <input
+                  style={inputStyle}
+                  placeholder="Tempo de Show. Ex: 2 horas"
+                  value={showDuration}
+                  onChange={(e) => setShowDuration(e.target.value)}
+                />
+
+                <input
+                  style={inputStyle}
+                  type="number"
+                  placeholder="Valor do Cachê"
+                  value={fee}
+                  onChange={(e) => setFee(e.target.value)}
+                />
+
+                <select
+                  style={inputStyle}
+                  value={paymentFormat}
+                  onChange={(e) => setPaymentFormat(e.target.value)}
+                >
                   <option>Sinal de 50% e o restante na data do evento</option>
                   <option>Pagamento Integral</option>
                 </select>
@@ -520,7 +700,11 @@ export default function AgendaPage() {
                 </button>
 
                 {editandoId && (
-                  <button type="button" onClick={limparFormulario} style={botaoSecundario}>
+                  <button
+                    type="button"
+                    onClick={limparFormulario}
+                    style={botaoSecundario}
+                  >
                     Cancelar edição
                   </button>
                 )}
@@ -533,15 +717,33 @@ export default function AgendaPage() {
               <div style={modalBox} onClick={(e) => e.stopPropagation()}>
                 <h2>{eventoSelecionado.client_name}</h2>
 
-                <p><strong>Data:</strong> {eventoSelecionado.event_date}</p>
-                <p><strong>Tipo de Evento:</strong> {eventoSelecionado.event_type}</p>
-                <p><strong>Formato de Show:</strong> {eventoSelecionado.show_format}</p>
-                <p><strong>Endereço:</strong> {eventoSelecionado.location}</p>
-                <p><strong>Horário:</strong> {eventoSelecionado.event_time}</p>
-                <p><strong>Tempo de Show:</strong> {eventoSelecionado.show_duration}</p>
-                <p><strong>Cachê:</strong> R$ {Number(eventoSelecionado.fee).toFixed(2)}</p>
-                <p><strong>Pagamento:</strong> {eventoSelecionado.payment_format}</p>
-                <p><strong>Observações:</strong> {eventoSelecionado.notes || "-"}</p>
+                <p>
+                  <strong>Data:</strong> {eventoSelecionado.event_date}
+                </p>
+                <p>
+                  <strong>Tipo de Evento:</strong> {eventoSelecionado.event_type}
+                </p>
+                <p>
+                  <strong>Formato de Show:</strong> {eventoSelecionado.show_format}
+                </p>
+                <p>
+                  <strong>Endereço:</strong> {eventoSelecionado.location}
+                </p>
+                <p>
+                  <strong>Horário:</strong> {eventoSelecionado.event_time}
+                </p>
+                <p>
+                  <strong>Tempo de Show:</strong> {eventoSelecionado.show_duration}
+                </p>
+                <p>
+                  <strong>Cachê:</strong> R$ {Number(eventoSelecionado.fee).toFixed(2)}
+                </p>
+                <p>
+                  <strong>Pagamento:</strong> {eventoSelecionado.payment_format}
+                </p>
+                <p>
+                  <strong>Observações:</strong> {eventoSelecionado.notes || "-"}
+                </p>
 
                 <div style={teamBox}>
                   <strong>Equipe escalada:</strong>
@@ -554,7 +756,9 @@ export default function AgendaPage() {
                       </p>
                     ))
                   ) : (
-                    <p style={{ color: "#b8b8d8" }}>Nenhum colaborador escalado.</p>
+                    <p style={{ color: "#b8b8d8" }}>
+                      Nenhum colaborador escalado.
+                    </p>
                   )}
                 </div>
 

@@ -12,6 +12,7 @@ type FormatoShow = {
   duracao_padrao: string;
   formacao: string;
   observacoes: string;
+  user_id?: string;
 };
 
 export default function FormatosPage() {
@@ -24,11 +25,33 @@ export default function FormatosPage() {
   const [formacao, setFormacao] = useState("");
   const [observacoes, setObservacoes] = useState("");
 
+  async function obterUsuarioLogado() {
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error || !data.user) {
+      alert("Usuário não autenticado.");
+      window.location.href = "/login";
+      return null;
+    }
+
+    return data.user;
+  }
+
   async function carregarFormatos() {
-    const { data } = await supabase
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
+    const { data, error } = await supabase
       .from("show_formats")
       .select("*")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Erro ao carregar formatos:", error);
+      alert("Erro ao carregar formatos.");
+      return;
+    }
 
     setFormatos(data || []);
   }
@@ -36,18 +59,38 @@ export default function FormatosPage() {
   async function salvarFormato(e: React.FormEvent) {
     e.preventDefault();
 
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
     const dados = {
       nome,
       descricao,
       duracao_padrao: duracaoPadrao,
       formacao,
       observacoes,
+      user_id: user.id,
     };
 
     if (editandoId) {
-      await supabase.from("show_formats").update(dados).eq("id", editandoId);
+      const { error } = await supabase
+        .from("show_formats")
+        .update(dados)
+        .eq("id", editandoId)
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("Erro ao atualizar formato:", error);
+        alert("Erro ao atualizar formato.");
+        return;
+      }
     } else {
-      await supabase.from("show_formats").insert(dados);
+      const { error } = await supabase.from("show_formats").insert(dados);
+
+      if (error) {
+        console.error("Erro ao cadastrar formato:", error);
+        alert("Erro ao cadastrar formato.");
+        return;
+      }
     }
 
     limparFormulario();
@@ -67,7 +110,21 @@ export default function FormatosPage() {
     const confirmar = confirm("Deseja excluir este formato de show?");
     if (!confirmar) return;
 
-    await supabase.from("show_formats").delete().eq("id", id);
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("show_formats")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Erro ao excluir formato:", error);
+      alert("Erro ao excluir formato.");
+      return;
+    }
+
     carregarFormatos();
   }
 

@@ -7,10 +7,12 @@ import { supabase } from "../../lib/supabase";
 
 type Colaborador = {
   id: string;
+  user_id?: string;
   nome: string;
   funcao: string;
   celular: string;
   email: string;
+  senha?: string;
   status: string;
 };
 
@@ -22,13 +24,38 @@ export default function ColaboradoresPage() {
   const [funcao, setFuncao] = useState("");
   const [celular, setCelular] = useState("");
   const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
   const [status, setStatus] = useState("Ativo");
 
+  async function obterUsuarioLogado() {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error || !user) {
+      alert("Usuário não autenticado. Faça login novamente.");
+      return null;
+    }
+
+    return user;
+  }
+
   async function carregarColaboradores() {
-    const { data } = await supabase
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
+    const { data, error } = await supabase
       .from("collaborators")
       .select("*")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Erro ao carregar colaboradores:", error);
+      alert("Erro ao carregar colaboradores.");
+      return;
+    }
 
     setColaboradores(data || []);
   }
@@ -36,7 +63,23 @@ export default function ColaboradoresPage() {
   async function salvarColaborador(e: React.FormEvent) {
     e.preventDefault();
 
-    const dados = {
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
+    if (!editandoId && !senha.trim()) {
+      alert("Informe uma senha para o colaborador.");
+      return;
+    }
+
+    const dados: {
+      user_id?: string;
+      nome: string;
+      funcao: string;
+      celular: string;
+      email: string;
+      senha?: string;
+      status: string;
+    } = {
       nome,
       funcao,
       celular,
@@ -44,20 +87,30 @@ export default function ColaboradoresPage() {
       status,
     };
 
+    if (senha.trim()) {
+      dados.senha = senha;
+    }
+
     if (editandoId) {
       const { error } = await supabase
         .from("collaborators")
         .update(dados)
-        .eq("id", editandoId);
+        .eq("id", editandoId)
+        .eq("user_id", user.id);
 
       if (error) {
+        console.error("Erro ao atualizar colaborador:", error);
         alert("Erro ao atualizar colaborador.");
         return;
       }
     } else {
-      const { error } = await supabase.from("collaborators").insert(dados);
+      const { error } = await supabase.from("collaborators").insert({
+        ...dados,
+        user_id: user.id,
+      });
 
       if (error) {
+        console.error("Erro ao cadastrar colaborador:", error);
         alert("Erro ao cadastrar colaborador.");
         return;
       }
@@ -73,6 +126,7 @@ export default function ColaboradoresPage() {
     setFuncao(colaborador.funcao || "");
     setCelular(colaborador.celular || "");
     setEmail(colaborador.email || "");
+    setSenha("");
     setStatus(colaborador.status || "Ativo");
   }
 
@@ -80,12 +134,17 @@ export default function ColaboradoresPage() {
     const confirmar = confirm("Deseja excluir este colaborador?");
     if (!confirmar) return;
 
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
     const { error } = await supabase
       .from("collaborators")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("user_id", user.id);
 
     if (error) {
+      console.error("Erro ao excluir colaborador:", error);
       alert("Erro ao excluir colaborador.");
       return;
     }
@@ -99,6 +158,7 @@ export default function ColaboradoresPage() {
     setFuncao("");
     setCelular("");
     setEmail("");
+    setSenha("");
     setStatus("Ativo");
   }
 
@@ -166,6 +226,19 @@ export default function ColaboradoresPage() {
                 onChange={(e) => setEmail(e.target.value)}
               />
 
+              <input
+                style={inputStyle}
+                placeholder={
+                  editandoId
+                    ? "Nova senha do colaborador (opcional)"
+                    : "Senha de acesso do colaborador"
+                }
+                type="password"
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                required={!editandoId}
+              />
+
               <select
                 style={inputStyle}
                 value={status}
@@ -230,6 +303,10 @@ export default function ColaboradoresPage() {
 
                     <p style={textoMuted}>
                       <strong>E-mail:</strong> {colaborador.email || "-"}
+                    </p>
+
+                    <p style={textoMuted}>
+                      <strong>Acesso:</strong> {colaborador.senha ? "Senha cadastrada" : "Sem senha cadastrada"}
                     </p>
                   </div>
 

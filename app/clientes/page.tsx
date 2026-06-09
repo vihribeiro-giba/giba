@@ -7,6 +7,7 @@ import { supabase } from "../../lib/supabase";
 
 type Cliente = {
   id: string;
+  user_id?: string;
   nome: string;
   cpf_cnpj: string;
   celular: string;
@@ -18,6 +19,7 @@ export default function ClientesPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [buscaCliente, setBuscaCliente] = useState("");
+  const [carregando, setCarregando] = useState(true);
 
   const [nome, setNome] = useState("");
   const [cpfCnpj, setCpfCnpj] = useState("");
@@ -25,17 +27,57 @@ export default function ClientesPage() {
   const [email, setEmail] = useState("");
   const [enderecoCompleto, setEnderecoCompleto] = useState("");
 
+  async function obterUsuarioLogado() {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+
+    if (error) {
+      console.error("Erro ao buscar usuário:", error);
+      return null;
+    }
+
+    return user;
+  }
+
   async function carregarClientes() {
-    const { data } = await supabase
+    setCarregando(true);
+
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      setClientes([]);
+      setCarregando(false);
+      return;
+    }
+
+    const { data, error } = await supabase
       .from("clients")
       .select("*")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
+    if (error) {
+      console.error("Erro ao carregar clientes:", error);
+      alert("Erro ao carregar clientes.");
+      setCarregando(false);
+      return;
+    }
+
     setClientes(data || []);
+    setCarregando(false);
   }
 
   async function salvarCliente(e: React.FormEvent) {
     e.preventDefault();
+
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      alert("Usuário não encontrado. Faça login novamente.");
+      return;
+    }
 
     const dados = {
       nome,
@@ -43,12 +85,29 @@ export default function ClientesPage() {
       celular,
       email,
       endereco_completo: enderecoCompleto,
+      user_id: user.id,
     };
 
     if (editandoId) {
-      await supabase.from("clients").update(dados).eq("id", editandoId);
+      const { error } = await supabase
+        .from("clients")
+        .update(dados)
+        .eq("id", editandoId)
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("Erro ao atualizar cliente:", error);
+        alert("Erro ao atualizar cliente.");
+        return;
+      }
     } else {
-      await supabase.from("clients").insert(dados);
+      const { error } = await supabase.from("clients").insert(dados);
+
+      if (error) {
+        console.error("Erro ao cadastrar cliente:", error);
+        alert("Erro ao cadastrar cliente.");
+        return;
+      }
     }
 
     limparFormulario();
@@ -69,7 +128,25 @@ export default function ClientesPage() {
 
     if (!confirmar) return;
 
-    await supabase.from("clients").delete().eq("id", id);
+    const user = await obterUsuarioLogado();
+
+    if (!user) {
+      alert("Usuário não encontrado. Faça login novamente.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("clients")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Erro ao excluir cliente:", error);
+      alert("Erro ao excluir cliente.");
+      return;
+    }
+
     carregarClientes();
   }
 
@@ -87,152 +164,172 @@ export default function ClientesPage() {
   }, []);
 
   const clientesFiltrados = clientes.filter((cliente) => {
-  const termo = buscaCliente.toLowerCase();
+    const termo = buscaCliente.toLowerCase();
+
+    return (
+      cliente.nome?.toLowerCase().includes(termo) ||
+      cliente.cpf_cnpj?.toLowerCase().includes(termo) ||
+      cliente.celular?.toLowerCase().includes(termo) ||
+      cliente.email?.toLowerCase().includes(termo)
+    );
+  });
 
   return (
-    cliente.nome?.toLowerCase().includes(termo) ||
-    cliente.cpf_cnpj?.toLowerCase().includes(termo) ||
-    cliente.celular?.toLowerCase().includes(termo) ||
-    cliente.email?.toLowerCase().includes(termo)
-  );
-});
+    <ProtectedRoute adminOnly>
+      <AppLayout>
+        <div>
+          <h1 style={{ fontSize: "36px", marginBottom: "8px" }}>
+            Clientes GIBA
+          </h1>
 
-  return (
-  <ProtectedRoute adminOnly>
-    <AppLayout>
-      <div>
-        <h1 style={{ fontSize: "36px", marginBottom: "8px" }}>
-          Clientes GIBA
-        </h1>
+          <p style={{ color: "#b8b8d8", marginBottom: "28px" }}>
+            Cadastre e gerencie seus contratantes.
+          </p>
 
-        <p style={{ color: "#b8b8d8", marginBottom: "28px" }}>
-          Cadastre e gerencie seus contratantes.
-        </p>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "420px 1fr",
+              gap: "24px",
+            }}
+          >
+            <section style={panelStyle}>
+              <h2 style={{ marginTop: 0 }}>Cadastro Cliente</h2>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "420px 1fr",
-            gap: "24px",
-          }}
-        >
-          <section style={panelStyle}>
-            <h2 style={{ marginTop: 0 }}>Cadastro Cliente</h2>
+              <form
+                onSubmit={salvarCliente}
+                style={{ display: "grid", gap: "14px", marginTop: "20px" }}
+              >
+                <input
+                  style={inputStyle}
+                  placeholder="Nome completo"
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                  required
+                />
 
-            <form
-              onSubmit={salvarCliente}
-              style={{ display: "grid", gap: "14px", marginTop: "20px" }}
-            >
-              <input
-                style={inputStyle}
-                placeholder="Nome completo"
-                value={nome}
-                onChange={(e) => setNome(e.target.value)}
-                required
-              />
+                <input
+                  style={inputStyle}
+                  placeholder="CPF/CNPJ"
+                  value={cpfCnpj}
+                  onChange={(e) => setCpfCnpj(e.target.value)}
+                />
 
-              <input
-                style={inputStyle}
-                placeholder="CPF/CNPJ"
-                value={cpfCnpj}
-                onChange={(e) => setCpfCnpj(e.target.value)}
-              />
+                <input
+                  style={inputStyle}
+                  placeholder="Celular"
+                  value={celular}
+                  onChange={(e) => setCelular(e.target.value)}
+                />
 
-              <input
-                style={inputStyle}
-                placeholder="Celular"
-                value={celular}
-                onChange={(e) => setCelular(e.target.value)}
-              />
+                <input
+                  style={inputStyle}
+                  placeholder="E-mail"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
 
-              <input
-                style={inputStyle}
-                placeholder="E-mail"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+                <textarea
+                  style={{ ...inputStyle, minHeight: "100px" }}
+                  placeholder="Endereço completo"
+                  value={enderecoCompleto}
+                  onChange={(e) => setEnderecoCompleto(e.target.value)}
+                />
 
-              <textarea
-                style={{ ...inputStyle, minHeight: "100px" }}
-                placeholder="Endereço completo"
-                value={enderecoCompleto}
-                onChange={(e) => setEnderecoCompleto(e.target.value)}
-              />
-
-              <button type="submit" style={botaoPrincipal}>
-                {editandoId ? "Salvar Alterações" : "Cadastrar Cliente"}
-              </button>
-
-              {editandoId && (
-                <button
-                  type="button"
-                  onClick={limparFormulario}
-                  style={botaoSecundario}
-                >
-                  Cancelar edição
+                <button type="submit" style={botaoPrincipal}>
+                  {editandoId ? "Salvar Alterações" : "Cadastrar Cliente"}
                 </button>
-              )}
-            </form>
-          </section>
 
-          <section style={panelStyle}>
-            <h2 style={{ marginTop: 0 }}>Clientes Cadastrados</h2>
+                {editandoId && (
+                  <button
+                    type="button"
+                    onClick={limparFormulario}
+                    style={botaoSecundario}
+                  >
+                    Cancelar edição
+                  </button>
+                )}
+              </form>
+            </section>
 
-            <input
-  type="text"
-  placeholder="Buscar cliente por nome, CPF/CNPJ, telefone ou e-mail..."
-  value={buscaCliente}
-  onChange={(e) => setBuscaCliente(e.target.value)}
-  style={inputStyle}
-/>
+            <section style={panelStyle}>
+              <h2 style={{ marginTop: 0 }}>Clientes Cadastrados</h2>
 
-            <div style={{ marginTop: "20px", display: "grid", gap: "14px" }}>
-              <div style={clientesScrollStyle}>
-  {clientesFiltrados.map((cliente) => (
-                <div key={cliente.id} style={cardCliente}>
-                  <div>
-                    <h3 style={{ margin: "0 0 8px" }}>{cliente.nome}</h3>
+              <input
+                type="text"
+                placeholder="Buscar cliente por nome, CPF/CNPJ, telefone ou e-mail..."
+                value={buscaCliente}
+                onChange={(e) => setBuscaCliente(e.target.value)}
+                style={inputStyle}
+              />
 
-                    <p style={textoMuted}>CPF/CNPJ: {cliente.cpf_cnpj || "-"}</p>
-                    <p style={textoMuted}>Celular: {cliente.celular || "-"}</p>
-                    <p style={textoMuted}>E-mail: {cliente.email || "-"}</p>
-                    <p style={textoMuted}>
-                      Endereço: {cliente.endereco_completo || "-"}
-                    </p>
-                  </div>
+              <div style={{ marginTop: "20px", display: "grid", gap: "14px" }}>
+                {carregando ? (
+                  <p style={{ color: "#b8b8d8" }}>Carregando clientes...</p>
+                ) : (
+                  <>
+                    <div style={clientesScrollStyle}>
+                      {clientesFiltrados.map((cliente) => (
+                        <div key={cliente.id} style={cardCliente}>
+                          <div>
+                            <h3 style={{ margin: "0 0 8px" }}>
+                              {cliente.nome}
+                            </h3>
 
-                  <div style={{ display: "flex", gap: "10px" }}>
-                    <button
-                      onClick={() => editarCliente(cliente)}
-                      style={botaoEditar}
-                    >
-                      Editar
-                    </button>
+                            <p style={textoMuted}>
+                              CPF/CNPJ: {cliente.cpf_cnpj || "-"}
+                            </p>
+                            <p style={textoMuted}>
+                              Celular: {cliente.celular || "-"}
+                            </p>
+                            <p style={textoMuted}>
+                              E-mail: {cliente.email || "-"}
+                            </p>
+                            <p style={textoMuted}>
+                              Endereço: {cliente.endereco_completo || "-"}
+                            </p>
+                          </div>
 
-                    <button
-                      onClick={() => excluirCliente(cliente.id)}
-                      style={botaoExcluir}
-                    >
-                      Excluir
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                          <div style={{ display: "flex", gap: "10px" }}>
+                            <button
+                              onClick={() => editarCliente(cliente)}
+                              style={botaoEditar}
+                            >
+                              Editar
+                            </button>
 
-              {clientes.length === 0 && (
-                <p style={{ color: "#b8b8d8" }}>
-                  Nenhum cliente cadastrado ainda.
-                </p>
-              )}
-            </div>
-          </section>
+                            <button
+                              onClick={() => excluirCliente(cliente.id)}
+                              style={botaoExcluir}
+                            >
+                              Excluir
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {clientes.length === 0 && (
+                      <p style={{ color: "#b8b8d8" }}>
+                        Nenhum cliente cadastrado ainda.
+                      </p>
+                    )}
+
+                    {clientes.length > 0 && clientesFiltrados.length === 0 && (
+                      <p style={{ color: "#b8b8d8" }}>
+                        Nenhum cliente encontrado na busca.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            </section>
+          </div>
         </div>
-      </div>
-        </AppLayout>
-  </ProtectedRoute>
-);
+      </AppLayout>
+    </ProtectedRoute>
+  );
 }
 
 const panelStyle: React.CSSProperties = {
