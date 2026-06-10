@@ -5,6 +5,7 @@ import jsPDF from "jspdf";
 
 import AppLayout from "../../components/AppLayout";
 import ProtectedRoute from "../../components/ProtectedRoute";
+import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import { supabase } from "../../lib/supabase";
 import { getEventStatus } from "../../lib/eventStatus";
 
@@ -362,7 +363,8 @@ export default function RelatoriosPage() {
 
   return (
     <ProtectedRoute adminOnly>
-      <AppLayout>
+      <PlanProtectedRoute modulo="relatorios">
+        <AppLayout>
         <div style={{ color: "#fff" }}>
           <h1 style={{ fontSize: "34px" }}>Relatórios</h1>
 
@@ -580,7 +582,8 @@ export default function RelatoriosPage() {
             </>
           )}
         </div>
-      </AppLayout>
+        </AppLayout>
+      </PlanProtectedRoute>
     </ProtectedRoute>
   );
 }

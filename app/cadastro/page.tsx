@@ -4,94 +4,121 @@ import { useState } from "react";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 
-export default function LoginPage() {
+export default function CadastroPage() {
+  const [nomeArtistico, setNomeArtistico] = useState("");
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
+  const [confirmarSenha, setConfirmarSenha] = useState("");
   const [erro, setErro] = useState("");
+  const [sucesso, setSucesso] = useState("");
   const [carregando, setCarregando] = useState(false);
 
-  async function fazerLogin(e: React.FormEvent) {
+  async function criarConta(e: React.FormEvent) {
     e.preventDefault();
 
     setErro("");
-    setCarregando(true);
+    setSucesso("");
 
     const emailTratado = email.trim().toLowerCase();
+    const nomeTratado = nomeArtistico.trim();
 
-    localStorage.removeItem("giba_colaborador_session");
+    if (!nomeTratado) {
+      setErro("Informe o nome artístico ou nome da empresa.");
+      return;
+    }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    if (!emailTratado) {
+      setErro("Informe um e-mail válido.");
+      return;
+    }
+
+    if (senha.length < 6) {
+      setErro("A senha precisa ter pelo menos 6 caracteres.");
+      return;
+    }
+
+    if (senha !== confirmarSenha) {
+      setErro("As senhas não conferem.");
+      return;
+    }
+
+    setCarregando(true);
+
+    const { data, error } = await supabase.auth.signUp({
       email: emailTratado,
       password: senha,
+      options: {
+        data: {
+          nome_artistico: nomeTratado,
+        },
+      },
     });
 
-    if (!error) {
-      const userEmail = data.user?.email;
-
-      const { data: colaborador } = await supabase
-        .from("collaborators")
-        .select("*")
-        .eq("email", userEmail)
-        .eq("status", "Ativo")
-        .maybeSingle();
-
+    if (error) {
+      console.error("Erro ao criar usuário:", error);
+      setErro(error.message || "Erro ao criar conta.");
       setCarregando(false);
+      return;
+    }
 
-      if (colaborador) {
-        localStorage.setItem(
-          "giba_colaborador_session",
-          JSON.stringify({
-            id: colaborador.id,
-            nome: colaborador.nome,
-            email: colaborador.email,
-            funcao: colaborador.funcao,
-            user_id: colaborador.user_id,
-            tipo: "colaborador",
-          })
-        );
+    const user = data.user;
 
-        window.location.href = "/agenda-colaborador";
-        return;
-      }
+    if (!user) {
+      setErro("Não foi possível criar o usuário.");
+      setCarregando(false);
+      return;
+    }
 
+    const { error: erroEmpresa } = await supabase
+      .from("company_settings")
+      .insert({
+        user_id: user.id,
+        nome_artistico: nomeTratado,
+        razao_social: "",
+        cnpj: "",
+        responsavel: "",
+        cpf: "",
+        email: emailTratado,
+        telefone: "",
+        endereco_completo: "",
+        cidade: "",
+        estado: "",
+        pix: "",
+        banco: "",
+        observacoes: "",
+        logo_url: "",
+      });
+
+    if (erroEmpresa) {
+      console.error("Erro ao criar configurações iniciais:", erroEmpresa);
+      setErro("Conta criada, mas houve erro ao criar as configurações iniciais.");
+      setCarregando(false);
+      return;
+    }
+
+    const { error: erroAssinatura } = await supabase
+      .from("subscriptions")
+      .insert({
+        user_id: user.id,
+        plano: "teste",
+        status: "ativo",
+        data_inicio: new Date().toISOString(),
+        data_fim: null,
+        mercadopago_subscription_id: null,
+      });
+
+    if (erroAssinatura) {
+      console.error("Erro ao criar assinatura inicial:", erroAssinatura);
+      setErro("Conta criada, mas houve erro ao criar a assinatura inicial.");
+      setCarregando(false);
+      return;
+    }
+
+    setSucesso("Conta criada com sucesso. Redirecionando...");
+
+    setTimeout(() => {
       window.location.href = "/dashboard";
-      return;
-    }
-
-    const { data: colaborador, error: erroColaborador } = await supabase
-      .from("collaborators")
-      .select("*")
-      .eq("email", emailTratado)
-      .eq("senha", senha)
-      .eq("status", "Ativo")
-      .maybeSingle();
-
-    setCarregando(false);
-
-    if (erroColaborador) {
-      console.error("Erro ao buscar colaborador:", erroColaborador);
-      setErro("Erro ao validar colaborador.");
-      return;
-    }
-
-    if (!colaborador) {
-      setErro("E-mail ou senha inválidos.");
-      return;
-    }
-
-    localStorage.setItem(
-      "giba_colaborador_session",
-      JSON.stringify({
-        id: colaborador.id,
-        nome: colaborador.nome,
-        email: colaborador.email,
-        funcao: colaborador.funcao,
-        user_id: colaborador.user_id,
-        tipo: "colaborador",
-      })
-    );
-
-    window.location.href = "/agenda-colaborador";
+    }, 1000);
   }
 
   return (
@@ -99,7 +126,7 @@ export default function LoginPage() {
       <div style={backgroundGlowOne} />
       <div style={backgroundGlowTwo} />
 
-      <section style={loginCard}>
+      <section style={cadastroCard}>
         <div style={logoArea}>
           <img
             src="/logo-giba-horizontal.png"
@@ -112,11 +139,23 @@ export default function LoginPage() {
           />
 
           <p style={subtitle}>
-            Gestão Inteligente para Bandas e Artistas
+            Crie sua conta na Gestão Inteligente para Bandas e Artistas
           </p>
         </div>
 
-        <form onSubmit={fazerLogin} style={{ display: "grid", gap: "16px" }}>
+        <form onSubmit={criarConta} style={{ display: "grid", gap: "16px" }}>
+          <div>
+            <label style={labelStyle}>Nome artístico ou empresa</label>
+            <input
+              type="text"
+              placeholder="Ex: Banda GIBA, Vih Ribeiro..."
+              value={nomeArtistico}
+              onChange={(e) => setNomeArtistico(e.target.value)}
+              style={inputStyle}
+              required
+            />
+          </div>
+
           <div>
             <label style={labelStyle}>E-mail</label>
             <input
@@ -133,7 +172,7 @@ export default function LoginPage() {
             <label style={labelStyle}>Senha</label>
             <input
               type="password"
-              placeholder="Digite sua senha"
+              placeholder="Mínimo de 6 caracteres"
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
               style={inputStyle}
@@ -141,20 +180,33 @@ export default function LoginPage() {
             />
           </div>
 
+          <div>
+            <label style={labelStyle}>Confirmar senha</label>
+            <input
+              type="password"
+              placeholder="Digite a senha novamente"
+              value={confirmarSenha}
+              onChange={(e) => setConfirmarSenha(e.target.value)}
+              style={inputStyle}
+              required
+            />
+          </div>
+
           {erro && <p style={errorStyle}>{erro}</p>}
+          {sucesso && <p style={successStyle}>{sucesso}</p>}
 
           <button type="submit" disabled={carregando} style={buttonStyle}>
-            {carregando ? "Entrando..." : "Entrar no GIBA"}
+            {carregando ? "Criando conta..." : "Criar conta no GIBA"}
           </button>
         </form>
 
-        <div style={cadastroBoxStyle}>
+        <div style={loginBoxStyle}>
           <span style={{ color: "#b8b8d8", fontSize: "14px" }}>
-            Ainda não tem conta?
+            Já tem conta?
           </span>
 
-          <Link href="/cadastro" style={cadastroLinkStyle}>
-            Criar conta no GIBA
+          <Link href="/login" style={loginLinkStyle}>
+            Entrar no GIBA
           </Link>
         </div>
 
@@ -201,9 +253,9 @@ const backgroundGlowTwo: React.CSSProperties = {
   right: "-100px",
 };
 
-const loginCard: React.CSSProperties = {
+const cadastroCard: React.CSSProperties = {
   width: "100%",
-  maxWidth: "460px",
+  maxWidth: "500px",
   background: "rgba(255,255,255,0.08)",
   border: "1px solid rgba(255,255,255,0.16)",
   borderRadius: "28px",
@@ -263,7 +315,13 @@ const errorStyle: React.CSSProperties = {
   margin: 0,
 };
 
-const cadastroBoxStyle: React.CSSProperties = {
+const successStyle: React.CSSProperties = {
+  color: "#37e884",
+  fontSize: "14px",
+  margin: 0,
+};
+
+const loginBoxStyle: React.CSSProperties = {
   marginTop: "22px",
   paddingTop: "20px",
   borderTop: "1px solid rgba(255,255,255,0.12)",
@@ -274,7 +332,7 @@ const cadastroBoxStyle: React.CSSProperties = {
   flexWrap: "wrap",
 };
 
-const cadastroLinkStyle: React.CSSProperties = {
+const loginLinkStyle: React.CSSProperties = {
   color: "#38bdf8",
   fontSize: "14px",
   fontWeight: "bold",

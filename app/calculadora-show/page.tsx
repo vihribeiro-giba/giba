@@ -5,6 +5,7 @@ import jsPDF from "jspdf";
 
 import AppLayout from "../../components/AppLayout";
 import ProtectedRoute from "../../components/ProtectedRoute";
+import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import { supabase } from "../../lib/supabase";
 
 type Item = {
@@ -620,7 +621,8 @@ async function carregarColaboradores() {
 
   return (
     <ProtectedRoute adminOnly>
-      <AppLayout>
+      <PlanProtectedRoute modulo="calculadora-show">
+        <AppLayout>
         <div style={{ color: "#fff" }}>
           <h1 style={{ fontSize: "34px", marginBottom: "8px" }}>
             Calculadora de Show
@@ -824,7 +826,8 @@ async function carregarColaboradores() {
             </div>
           </section>
         </div>
-      </AppLayout>
+        </AppLayout>
+      </PlanProtectedRoute>
     </ProtectedRoute>
   );
 }
