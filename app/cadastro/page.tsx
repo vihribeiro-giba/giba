@@ -96,14 +96,20 @@ export default function CadastroPage() {
       return;
     }
 
+    const dataInicioTrial = new Date();
+    const dataFimTrial = new Date();
+    dataFimTrial.setDate(dataFimTrial.getDate() + 7);
+
     const { error: erroAssinatura } = await supabase
       .from("subscriptions")
       .insert({
         user_id: user.id,
         plano: "teste",
         status: "ativo",
-        data_inicio: new Date().toISOString(),
-        data_fim: null,
+        data_inicio: dataInicioTrial.toISOString(),
+        data_fim: dataFimTrial.toISOString(),
+        trial_dias: 7,
+        trial_finalizado: false,
         mercadopago_subscription_id: null,
       });
 

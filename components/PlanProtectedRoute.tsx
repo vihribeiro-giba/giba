@@ -15,6 +15,8 @@ type Assinatura = {
   status: string;
   data_inicio?: string | null;
   data_fim?: string | null;
+  trial_dias?: number | null;
+  trial_finalizado?: boolean | null;
 };
 
 type RecursoPlano = {
@@ -76,37 +78,27 @@ export default function PlanProtectedRoute({
 
     const assinaturaAtual = assinatura as Assinatura;
 
+    const plano = assinaturaAtual.plano || "teste";
+
     if (assinaturaAtual.data_fim) {
       const dataFim = new Date(assinaturaAtual.data_fim);
       const agora = new Date();
 
       if (dataFim < agora) {
-        setMensagem("Sua assinatura expirou. Regularize seu plano para continuar.");
+        if (plano === "teste") {
+          setMensagem("Seu período de teste gratuito expirou. Escolha um plano para continuar usando o GIBA.");
+        } else {
+          setMensagem("Sua assinatura expirou. Regularize seu plano para continuar.");
+        }
+
         setLiberado(false);
         setCarregando(false);
         return;
       }
     }
 
-    const plano = assinaturaAtual.plano || "teste";
-
     if (plano === "teste") {
-      const modulosLiberadosNoTeste = [
-        "dashboard",
-        "clientes",
-        "agenda",
-        "financeiro",
-        "configuracoes",
-      ];
-
-      if (modulosLiberadosNoTeste.includes(modulo)) {
-        setLiberado(true);
-        setCarregando(false);
-        return;
-      }
-
-      setMensagem("Este módulo não está disponível no plano de teste.");
-      setLiberado(false);
+      setLiberado(true);
       setCarregando(false);
       return;
     }
@@ -171,10 +163,10 @@ export default function PlanProtectedRoute({
 
           <button
             type="button"
-            onClick={() => (window.location.href = "/dashboard")}
+            onClick={() => (window.location.href = "/assinatura")}
             style={buttonStyle}
           >
-            Voltar para o Dashboard
+            Ver Planos
           </button>
         </div>
       </div>

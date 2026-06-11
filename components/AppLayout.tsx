@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
 
 import {
   LayoutDashboard,
@@ -14,11 +15,18 @@ import {
   Music,
   UserCog,
   Settings,
+  CreditCard,
   LogOut,
   Menu,
   X,
   FileText,
 } from "lucide-react";
+
+type AssinaturaResumo = {
+  plano: string;
+  status: string;
+  data_fim?: string | null;
+};
 
 export default function AppLayout({
   children,
@@ -29,6 +37,7 @@ export default function AppLayout({
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [assinatura, setAssinatura] = useState<AssinaturaResumo | null>(null);
 
   useEffect(() => {
     const verificarTela = () => {
@@ -44,6 +53,49 @@ export default function AppLayout({
     };
   }, []);
 
+  useEffect(() => {
+    carregarAssinaturaResumo();
+  }, []);
+
+  async function carregarAssinaturaResumo() {
+    const { data: authData } = await supabase.auth.getUser();
+
+    if (!authData.user) return;
+
+    const { data, error } = await supabase
+      .from("subscriptions")
+      .select("plano,status,data_fim")
+      .eq("user_id", authData.user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Erro ao carregar resumo da assinatura:", error);
+      return;
+    }
+
+    if (data) {
+      setAssinatura(data as AssinaturaResumo);
+    }
+  }
+
+  function formatarData(data?: string | null) {
+    if (!data) return "-";
+
+    return new Date(data).toLocaleDateString("pt-BR");
+  }
+
+  function nomePlano(plano?: string) {
+    if (!plano) return "Sem plano";
+
+    if (plano === "teste") return "Teste";
+    if (plano === "essencial") return "Essencial";
+    if (plano === "profissional") return "Profissional";
+
+    return plano;
+  }
+
   const menu = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { label: "Agenda", href: "/agenda", icon: CalendarDays },
@@ -55,6 +107,7 @@ export default function AppLayout({
     { label: "Colaboradores", href: "/colaboradores", icon: UserCog },
     { label: "Contratos", href: "/contratos", icon: FileText },
     { label: "Configurações", href: "/configuracoes", icon: Settings },
+    { label: "Assinatura", href: "/assinatura", icon: CreditCard },
   ];
 
   return (
@@ -118,8 +171,11 @@ export default function AppLayout({
           borderRight: "1px solid rgba(255,255,255,0.10)",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "space-between",
+          justifyContent: "flex-start",
+          gap: "18px",
           boxSizing: "border-box",
+          overflowY: "auto",
+          overflowX: "hidden",
 
           position: isMobile ? "fixed" : "relative",
           left: isMobile
@@ -135,7 +191,7 @@ export default function AppLayout({
           backdropFilter: "blur(12px)",
         }}
       >
-        <div>
+        <div style={{ flexShrink: 0 }}>
           {/* TOPO */}
           <div
             style={{
@@ -183,7 +239,8 @@ export default function AppLayout({
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: "14px",
+              gap: "12px",
+              paddingBottom: "4px",
             }}
           >
             {menu.map((item) => {
@@ -230,11 +287,17 @@ export default function AppLayout({
         </div>
 
         {/* RODAPÉ */}
-        <div>
+        <div
+          style={{
+            marginTop: "8px",
+            paddingTop: "8px",
+            flexShrink: 0,
+          }}
+        >
           <div
             style={{
-              marginBottom: "18px",
-              padding: "16px",
+              marginBottom: "12px",
+              padding: "14px",
               borderRadius: "18px",
               background: "rgba(255,255,255,0.06)",
               border: "1px solid rgba(255,255,255,0.10)",
@@ -254,6 +317,36 @@ export default function AppLayout({
             >
               Administrador
             </p>
+
+            <div
+              style={{
+                marginTop: "12px",
+                paddingTop: "10px",
+                borderTop: "1px solid rgba(255,255,255,0.10)",
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  color: "#dbeafe",
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                }}
+              >
+                Plano: {nomePlano(assinatura?.plano)}
+              </p>
+
+              <p
+                style={{
+                  marginTop: "5px",
+                  marginBottom: 0,
+                  color: "#b8b8d8",
+                  fontSize: "12px",
+                }}
+              >
+                Vencimento: {formatarData(assinatura?.data_fim)}
+              </p>
+            </div>
           </div>
 
           <Link
