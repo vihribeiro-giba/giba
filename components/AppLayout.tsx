@@ -28,6 +28,12 @@ type AssinaturaResumo = {
   data_fim?: string | null;
 };
 
+type EmpresaResumo = {
+  nome_artistico?: string | null;
+  razao_social?: string | null;
+  responsavel?: string | null;
+};
+
 export default function AppLayout({
   children,
 }: {
@@ -38,6 +44,7 @@ export default function AppLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [assinatura, setAssinatura] = useState<AssinaturaResumo | null>(null);
+  const [empresa, setEmpresa] = useState<EmpresaResumo | null>(null);
 
   useEffect(() => {
     const verificarTela = () => {
@@ -55,6 +62,7 @@ export default function AppLayout({
 
   useEffect(() => {
     carregarAssinaturaResumo();
+    carregarEmpresaResumo();
   }, []);
 
   async function carregarAssinaturaResumo() {
@@ -78,6 +86,38 @@ export default function AppLayout({
     if (data) {
       setAssinatura(data as AssinaturaResumo);
     }
+  }
+
+  async function carregarEmpresaResumo() {
+    const { data: authData } = await supabase.auth.getUser();
+
+    if (!authData.user) return;
+
+    const { data, error } = await supabase
+      .from("company_settings")
+      .select("nome_artistico,razao_social,responsavel")
+      .eq("user_id", authData.user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Erro ao carregar resumo da empresa:", error);
+      return;
+    }
+
+    if (data) {
+      setEmpresa(data as EmpresaResumo);
+    }
+  }
+
+  function nomeUsuarioSidebar() {
+    return (
+      empresa?.nome_artistico?.trim() ||
+      empresa?.razao_social?.trim() ||
+      empresa?.responsavel?.trim() ||
+      "Usuário GIBA"
+    );
   }
 
   function formatarData(data?: string | null) {
@@ -304,7 +344,7 @@ export default function AppLayout({
             }}
           >
             <p style={{ margin: 0, fontWeight: "bold" }}>
-              Vinícius Ribeiro
+              {nomeUsuarioSidebar()}
             </p>
 
             <p
