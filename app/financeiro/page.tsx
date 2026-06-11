@@ -1,6 +1,7 @@
 "use client";
 
 import ProtectedRoute from "../../components/ProtectedRoute";
+import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
@@ -474,7 +475,8 @@ export default function FinanceiroPage() {
 
   return (
     <ProtectedRoute adminOnly>
-      <AppLayout>
+      <PlanProtectedRoute modulo="financeiro">
+        <AppLayout>
         <div>
           <h1 style={{ fontSize: "36px", marginBottom: "8px" }}>
             Financeiro GIBA
@@ -727,7 +729,8 @@ export default function FinanceiroPage() {
             </section>
           </div>
         </div>
-      </AppLayout>
+        </AppLayout>
+      </PlanProtectedRoute>
     </ProtectedRoute>
   );
 }

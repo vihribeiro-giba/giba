@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import AppLayout from "../../components/AppLayout";
 import ProtectedRoute from "../../components/ProtectedRoute";
+import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 
 type ContractSettings = {
   id?: string;
@@ -167,7 +168,8 @@ export default function ContratosModeloPage() {
 
   return (
     <ProtectedRoute adminOnly>
-      <AppLayout>
+      <PlanProtectedRoute modulo="contratos-modelo">
+        <AppLayout>
         <div className="min-h-screen bg-[#0b0f1a] text-white p-8">
         <div className="max-w-6xl mx-auto">
 
@@ -416,7 +418,8 @@ export default function ContratosModeloPage() {
           </div>
         </div>
         </div>
-      </AppLayout>
+        </AppLayout>
+      </PlanProtectedRoute>
     </ProtectedRoute>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import ProtectedRoute from "../../components/ProtectedRoute";
+import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
@@ -133,7 +134,8 @@ export default function DashboardPage() {
 
   return (
     <ProtectedRoute adminOnly>
-      <AppLayout>
+      <PlanProtectedRoute modulo="dashboard">
+        <AppLayout>
         <div style={{ color: "#fff" }}>
           <h1 style={{ fontSize: "36px", marginBottom: "6px" }}>
             Dashboard GIBA
@@ -309,7 +311,8 @@ export default function DashboardPage() {
             </div>
           </section>
         </div>
-      </AppLayout>
+        </AppLayout>
+      </PlanProtectedRoute>
     </ProtectedRoute>
   );
 }

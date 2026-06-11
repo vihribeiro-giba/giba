@@ -1,6 +1,7 @@
 "use client";
 
 import ProtectedRoute from "../../components/ProtectedRoute";
+import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
@@ -462,7 +463,8 @@ export default function AgendaPage() {
 
   return (
     <ProtectedRoute adminOnly>
-      <AppLayout>
+      <PlanProtectedRoute modulo="agenda">
+        <AppLayout>
         <div>
           <h1 style={{ fontSize: "36px", marginBottom: "8px" }}>
             Agenda GIBA
@@ -783,7 +785,8 @@ export default function AgendaPage() {
             </div>
           )}
         </div>
-      </AppLayout>
+        </AppLayout>
+      </PlanProtectedRoute>
     </ProtectedRoute>
   );
 }

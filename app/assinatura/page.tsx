@@ -85,7 +85,7 @@ export default function AssinaturaPage() {
     }
   }
 
-  async function assinarPlano(plano: "essencial" | "profissional") {
+  async function assinarPlano(plano: "essencial" | "profissional" | "expertise") {
     try {
       setProcessandoPlano(plano);
 
@@ -147,7 +147,7 @@ export default function AssinaturaPage() {
             <div style={planoCardStyle}>
               <h2>Plano Essencial</h2>
 
-              <h1 style={precoStyle}>R$ 49,90/mês</h1>
+              <h1 style={precoStyle}>R$ 109,90/mês</h1>
 
               <p style={descricaoPlanoStyle}>
                 Ideal para artistas que precisam organizar clientes, agenda,
@@ -173,7 +173,7 @@ export default function AssinaturaPage() {
             <div style={planoCardDestaqueStyle}>
               <h2>Plano Profissional</h2>
 
-              <h1 style={precoStyle}>R$ 99,90/mês</h1>
+              <h1 style={precoStyle}>R$ 209,90/mês</h1>
 
               <p style={descricaoPlanoStyle}>
                 Recomendado para bandas, produtores e equipes que precisam de
@@ -193,6 +193,32 @@ export default function AssinaturaPage() {
                 {processandoPlano === "profissional"
                   ? "Gerando checkout..."
                   : "Assinar Profissional"}
+              </button>
+            </div>
+
+            <div style={planoCardStyle}>
+              <h2>Plano Expertise</h2>
+
+              <h1 style={precoStyle}>R$ 359,90/mês</h1>
+
+              <p style={descricaoPlanoStyle}>
+                Todos os recursos do GIBA, incluindo módulos avançados,
+                CRM, gestão de eventos e futuras funcionalidades exclusivas.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => assinarPlano("expertise")}
+                disabled={!!processandoPlano}
+                style={{
+                  ...botaoPrincipal,
+                  width: "100%",
+                  opacity: processandoPlano ? 0.7 : 1,
+                }}
+              >
+                {processandoPlano === "expertise"
+                  ? "Gerando checkout..."
+                  : "Assinar Expertise"}
               </button>
             </div>
           </section>
@@ -277,6 +303,18 @@ export default function AssinaturaPage() {
                     }}
                   >
                     Assinar Profissional
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => assinarPlano("expertise")}
+                    disabled={!!processandoPlano}
+                    style={{
+                      ...botaoPrincipal,
+                      opacity: processandoPlano ? 0.7 : 1,
+                    }}
+                  >
+                    Assinar Expertise
                   </button>
 
                   <button style={botaoSecundario}>

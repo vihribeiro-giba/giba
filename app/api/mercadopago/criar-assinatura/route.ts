@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-type PlanoId = "essencial" | "profissional";
+type PlanoId = "essencial" | "profissional" | "expertise";
 
 type PlanoConfig = {
   nome: string;
@@ -11,11 +11,15 @@ type PlanoConfig = {
 const PLANOS: Record<PlanoId, PlanoConfig> = {
   essencial: {
     nome: "Plano Essencial - Plataforma GIBA",
-    valor: 49.9,
+    valor: 109.9,
   },
   profissional: {
     nome: "Plano Profissional - Plataforma GIBA",
-    valor: 99.9,
+    valor: 209.9,
+  },
+  expertise: {
+    nome: "Plano Expertise - Plataforma GIBA",
+    valor: 359.9,
   },
 };
 

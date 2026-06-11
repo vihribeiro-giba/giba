@@ -1,6 +1,7 @@
 "use client";
 
 import ProtectedRoute from "../../components/ProtectedRoute";
+import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
 import { Suspense, useEffect, useState } from "react";
@@ -726,7 +727,8 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
 
   return (
     <ProtectedRoute adminOnly>
-      <AppLayout>
+      <PlanProtectedRoute modulo="contratos">
+        <AppLayout>
         <div style={{ color: "#fff" }}>
           <h1 style={{ fontSize: "34px", marginBottom: "8px" }}>Contratos</h1>
 
@@ -784,7 +786,8 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
             </section>
           )}
         </div>
-      </AppLayout>
+        </AppLayout>
+      </PlanProtectedRoute>
     </ProtectedRoute>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import ProtectedRoute from "../../components/ProtectedRoute";
+import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import { useEffect, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
@@ -143,7 +144,8 @@ export default function FormatosPage() {
 
   return (
   <ProtectedRoute adminOnly>
-    <AppLayout>
+    <PlanProtectedRoute modulo="formatos">
+      <AppLayout>
       <div>
         <h1 style={{ fontSize: "36px", marginBottom: "8px" }}>
           Formatos de Show
@@ -277,7 +279,8 @@ export default function FormatosPage() {
           </section>
         </div>
       </div>
-        </AppLayout>
+      </AppLayout>
+    </PlanProtectedRoute>
   </ProtectedRoute>
 );
 }
@@ -357,3 +360,4 @@ const botaoExcluir: React.CSSProperties = {
   color: "#ff7aa2",
   cursor: "pointer",
 };
+

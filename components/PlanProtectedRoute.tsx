@@ -97,12 +97,6 @@ export default function PlanProtectedRoute({
       }
     }
 
-    if (plano === "teste") {
-      setLiberado(true);
-      setCarregando(false);
-      return;
-    }
-
     const { data: recurso, error: erroRecurso } = await supabase
       .from("plan_features")
       .select("*")

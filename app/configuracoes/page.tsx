@@ -1,6 +1,7 @@
 "use client";
 
 import ProtectedRoute from "../../components/ProtectedRoute";
+import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import { useEffect, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
@@ -190,7 +191,8 @@ export default function ConfiguracoesPage() {
 
   return (
   <ProtectedRoute adminOnly>
-    <AppLayout>
+    <PlanProtectedRoute modulo="configuracoes">
+      <AppLayout>
       <div>
         <h1 style={{ fontSize: "36px", marginBottom: "8px" }}>
           Configurações
@@ -295,7 +297,8 @@ export default function ConfiguracoesPage() {
           </section>
         </div>
       </div>
-        </AppLayout>
+      </AppLayout>
+    </PlanProtectedRoute>
   </ProtectedRoute>
 );
 }
