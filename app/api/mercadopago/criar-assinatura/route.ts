@@ -115,6 +115,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    /*
+      IMPORTANTE:
+      Esta rota NÃO deve alterar a tabela subscriptions antes do pagamento.
+
+      Motivo:
+      Se o usuário estiver em teste ativo e clicar para contratar um plano,
+      mas não finalizar o pagamento, ele não pode perder o acesso ao trial.
+
+      Fluxo correto:
+      1. Usuário clica em contratar.
+      2. Esta rota cria a assinatura/preapproval no Mercado Pago.
+      3. O usuário é redirecionado para pagamento.
+      4. Somente o webhook do Mercado Pago deve atualizar subscriptions
+         quando a assinatura/pagamento for aprovado.
+
+      Portanto, não fazemos update/insert em subscriptions aqui.
+    */
+
     const payloadMercadoPago = {
       reason: plano.nome,
       external_reference: `${user.id}:${planoRecebido}`,
@@ -167,51 +185,6 @@ export async function POST(request: NextRequest) {
         },
         { status: 500 }
       );
-    }
-
-    const assinaturaExistente = assinaturaAtualAntesCheckout;
-
-    if (assinaturaExistente?.id) {
-      const { error: erroAtualizarAssinatura } = await supabase
-        .from("subscriptions")
-        .update({
-          plano: planoRecebido,
-          status: "pendente",
-          mercadopago_subscription_id: mercadoPagoSubscriptionId,
-          data_inicio: new Date().toISOString(),
-          data_fim: null,
-        })
-        .eq("id", assinaturaExistente.id)
-        .eq("user_id", user.id);
-
-      if (erroAtualizarAssinatura) {
-        console.error("Erro ao atualizar assinatura:", erroAtualizarAssinatura);
-
-        return NextResponse.json(
-          { error: "Erro ao atualizar assinatura no GIBA." },
-          { status: 500 }
-        );
-      }
-    } else {
-      const { error: erroCriarAssinatura } = await supabase
-        .from("subscriptions")
-        .insert({
-          user_id: user.id,
-          plano: planoRecebido,
-          status: "pendente",
-          data_inicio: new Date().toISOString(),
-          data_fim: null,
-          mercadopago_subscription_id: mercadoPagoSubscriptionId,
-        });
-
-      if (erroCriarAssinatura) {
-        console.error("Erro ao criar assinatura:", erroCriarAssinatura);
-
-        return NextResponse.json(
-          { error: "Erro ao criar assinatura no GIBA." },
-          { status: 500 }
-        );
-      }
     }
 
     return NextResponse.json({

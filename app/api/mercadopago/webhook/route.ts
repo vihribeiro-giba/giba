@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+type PlanoId = "essencial" | "profissional" | "expertise";
+
 function normalizarStatusMercadoPago(status?: string) {
   if (status === "authorized") return "ativo";
   if (status === "paused") return "pausado";
@@ -14,17 +16,29 @@ function extrairUserId(externalReference?: string) {
   return externalReference.split(":")[0] || null;
 }
 
-function extrairPlano(externalReference?: string, reason?: string) {
+function extrairPlano(
+  externalReference?: string,
+  reason?: string
+): PlanoId | null {
   if (externalReference?.includes(":")) {
     const plano = externalReference.split(":")[1];
-    if (plano === "essencial" || plano === "profissional") return plano;
+
+    if (
+      plano === "essencial" ||
+      plano === "profissional" ||
+      plano === "expertise"
+    ) {
+      return plano;
+    }
   }
 
   const texto = `${reason || ""}`.toLowerCase();
+
+  if (texto.includes("expertise")) return "expertise";
   if (texto.includes("profissional")) return "profissional";
   if (texto.includes("essencial")) return "essencial";
 
-  return "teste";
+  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -37,7 +51,10 @@ export async function POST(request: NextRequest) {
       body = {};
     }
 
-    const tipo = String(body?.type || body?.topic || body?.action || "").toLowerCase();
+    const tipo = String(
+      body?.type || body?.topic || body?.action || ""
+    ).toLowerCase();
+
     const dataId = body?.data?.id;
 
     if (!tipo.includes("preapproval")) {
@@ -105,41 +122,161 @@ export async function POST(request: NextRequest) {
       assinaturaMp.reason
     );
 
+    if (!plano) {
+      return NextResponse.json({
+        success: true,
+        ignored: true,
+        reason: "Plano não identificado na assinatura.",
+      });
+    }
+
     const status = normalizarStatusMercadoPago(assinaturaMp.status);
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRole);
 
-    const { data: existente } = await supabaseAdmin
+    const { data: assinaturaAtual } = await supabaseAdmin
       .from("subscriptions")
-      .select("id")
-      .eq("mercadopago_subscription_id", assinaturaMp.id)
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    if (existente?.id) {
-      await supabaseAdmin
-        .from("subscriptions")
-        .update({
-          user_id: userId,
-          plano,
-          status,
-          data_inicio: assinaturaMp.date_created || new Date().toISOString(),
-          data_fim: assinaturaMp.next_payment_date || null,
-          mercadopago_subscription_id: assinaturaMp.id,
-        })
-        .eq("id", existente.id);
-    } else {
-      await supabaseAdmin.from("subscriptions").insert({
+    /*
+      PROTEÇÃO DA CONTA OWNER:
+      Nunca alteramos assinatura owner por webhook.
+    */
+    if (assinaturaAtual?.plano === "owner") {
+      return NextResponse.json({
+        success: true,
+        ignored: true,
+        reason: "Conta owner ignorada pelo webhook.",
+      });
+    }
+
+    /*
+      REGRA CRÍTICA:
+      Não gravar assinatura pendente na tabela subscriptions.
+
+      Motivo:
+      Se o usuário está em teste ativo e apenas clica no checkout,
+      o Mercado Pago pode disparar webhook pending antes do pagamento.
+      Se gravarmos pending, o usuário perde o acesso ao trial.
+
+      Portanto:
+      - pending: ignorar
+      - authorized: ativar plano
+      - paused/cancelled: atualizar somente se já existir assinatura ativa
+        vinculada ao mesmo mercadopago_subscription_id
+    */
+    if (status === "pendente") {
+      return NextResponse.json({
+        success: true,
+        ignored: true,
+        reason: "Status pendente ignorado para não bloquear trial/acesso atual.",
         user_id: userId,
         plano,
         status,
-        data_inicio: assinaturaMp.date_created || new Date().toISOString(),
-        data_fim: assinaturaMp.next_payment_date || null,
-        mercadopago_subscription_id: assinaturaMp.id,
+      });
+    }
+
+    const { data: assinaturaPorMercadoPagoId } = await supabaseAdmin
+      .from("subscriptions")
+      .select("*")
+      .eq("mercadopago_subscription_id", assinaturaMp.id)
+      .maybeSingle();
+
+    if (status === "ativo") {
+      if (assinaturaAtual?.id) {
+        const { error } = await supabaseAdmin
+          .from("subscriptions")
+          .update({
+            plano,
+            status: "ativo",
+            data_inicio:
+              assinaturaMp.date_created ||
+              assinaturaAtual.data_inicio ||
+              new Date().toISOString(),
+            data_fim: assinaturaMp.next_payment_date || null,
+            mercadopago_subscription_id: assinaturaMp.id,
+          })
+          .eq("id", assinaturaAtual.id);
+
+        if (error) {
+          console.error("Erro ao ativar assinatura existente:", error);
+
+          return NextResponse.json({
+            success: false,
+            error: "Erro ao ativar assinatura existente.",
+          });
+        }
+      } else {
+        const { error } = await supabaseAdmin.from("subscriptions").insert({
+          user_id: userId,
+          plano,
+          status: "ativo",
+          data_inicio: assinaturaMp.date_created || new Date().toISOString(),
+          data_fim: assinaturaMp.next_payment_date || null,
+          mercadopago_subscription_id: assinaturaMp.id,
+        });
+
+        if (error) {
+          console.error("Erro ao criar assinatura ativa:", error);
+
+          return NextResponse.json({
+            success: false,
+            error: "Erro ao criar assinatura ativa.",
+          });
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        user_id: userId,
+        plano,
+        status: "ativo",
+      });
+    }
+
+    /*
+      Cancelamento ou pausa:
+      Só altera se a assinatura do Mercado Pago já estiver vinculada no GIBA.
+      Isso evita cancelar/bloquear uma conta por uma tentativa não finalizada.
+    */
+    if (
+      (status === "cancelado" || status === "pausado") &&
+      assinaturaPorMercadoPagoId?.id
+    ) {
+      const { error } = await supabaseAdmin
+        .from("subscriptions")
+        .update({
+          status,
+          data_fim: assinaturaMp.next_payment_date || new Date().toISOString(),
+        })
+        .eq("id", assinaturaPorMercadoPagoId.id);
+
+      if (error) {
+        console.error("Erro ao atualizar assinatura cancelada/pausada:", error);
+
+        return NextResponse.json({
+          success: false,
+          error: "Erro ao atualizar status da assinatura.",
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        user_id: userId,
+        plano,
+        status,
       });
     }
 
     return NextResponse.json({
       success: true,
+      ignored: true,
+      reason:
+        "Evento não exigiu alteração. Status não ativo ou assinatura ainda não vinculada.",
       user_id: userId,
       plano,
       status,
