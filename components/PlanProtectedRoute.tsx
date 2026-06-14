@@ -80,6 +80,12 @@ export default function PlanProtectedRoute({
 
     const plano = assinaturaAtual.plano || "teste";
 
+    if (plano === "owner") {
+      setLiberado(true);
+      setCarregando(false);
+      return;
+    }
+
     if (assinaturaAtual.data_fim) {
       const dataFim = new Date(assinaturaAtual.data_fim);
       const agora = new Date();

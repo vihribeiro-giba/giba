@@ -88,6 +88,33 @@ export async function POST(request: NextRequest) {
 
     const plano = PLANOS[planoRecebido];
 
+    const { data: assinaturaAtualAntesCheckout, error: erroAssinaturaAtual } =
+      await supabase
+        .from("subscriptions")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (erroAssinaturaAtual) {
+      console.error("Erro ao buscar assinatura atual:", erroAssinaturaAtual);
+
+      return NextResponse.json(
+        { error: "Erro ao validar assinatura atual." },
+        { status: 500 }
+      );
+    }
+
+    if (assinaturaAtualAntesCheckout?.plano === "owner") {
+      return NextResponse.json(
+        {
+          error: "Conta master não pode contratar plano pelo checkout.",
+        },
+        { status: 403 }
+      );
+    }
+
     const payloadMercadoPago = {
       reason: plano.nome,
       external_reference: `${user.id}:${planoRecebido}`,
@@ -142,23 +169,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: assinaturaExistente, error: erroBuscarAssinatura } =
-      await supabase
-        .from("subscriptions")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-    if (erroBuscarAssinatura) {
-      console.error("Erro ao buscar assinatura:", erroBuscarAssinatura);
-
-      return NextResponse.json(
-        { error: "Erro ao buscar assinatura atual." },
-        { status: 500 }
-      );
-    }
+    const assinaturaExistente = assinaturaAtualAntesCheckout;
 
     if (assinaturaExistente?.id) {
       const { error: erroAtualizarAssinatura } = await supabase

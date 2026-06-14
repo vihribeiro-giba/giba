@@ -85,6 +85,20 @@ export default function AssinaturaPage() {
     }
   }
 
+  function nomePlano(plano?: string) {
+    if (!plano) return "Sem plano";
+
+    if (plano === "teste") return "Teste";
+    if (plano === "essencial") return "Essencial";
+    if (plano === "profissional") return "Profissional";
+    if (plano === "expertise") return "Expertise";
+    if (plano === "owner") return "Acesso Master";
+
+    return plano;
+  }
+
+  const contaMaster = assinatura?.plano === "owner";
+
   async function assinarPlano(plano: "essencial" | "profissional" | "expertise") {
     try {
       setProcessandoPlano(plano);
@@ -143,6 +157,7 @@ export default function AssinaturaPage() {
             Gerencie seu plano e acompanhe sua assinatura.
           </p>
 
+          {!contaMaster && (
           <section style={planosGridStyle}>
             <div style={planoCardStyle}>
               <h2>Plano Essencial</h2>
@@ -222,6 +237,18 @@ export default function AssinaturaPage() {
               </button>
             </div>
           </section>
+          )}
+
+          {contaMaster && (
+            <section style={masterCardStyle}>
+              <h2>Acesso Master liberado</h2>
+
+              <p style={{ color: "#b8b8d8", lineHeight: 1.6 }}>
+                Esta conta possui acesso interno completo ao GIBA e não precisa
+                contratar planos pelo checkout.
+              </p>
+            </section>
+          )}
 
           {carregando ? (
             <p>Carregando...</p>
@@ -245,7 +272,7 @@ export default function AssinaturaPage() {
                     textTransform: "capitalize",
                   }}
                 >
-                  {assinatura.plano}
+                  {nomePlano(assinatura.plano)}
                 </h1>
 
                 <span
@@ -277,61 +304,72 @@ export default function AssinaturaPage() {
                 </div>
               </div>
 
-              <div style={cardStyle}>
-                <h2>Gerenciamento</h2>
+              {!contaMaster ? (
+                <div style={cardStyle}>
+                  <h2>Gerenciamento</h2>
 
-                <div style={acoesStyle}>
-                  <button
-                    type="button"
-                    onClick={() => assinarPlano("essencial")}
-                    disabled={!!processandoPlano}
+                  <div style={acoesStyle}>
+                    <button
+                      type="button"
+                      onClick={() => assinarPlano("essencial")}
+                      disabled={!!processandoPlano}
+                      style={{
+                        ...botaoPrincipal,
+                        opacity: processandoPlano ? 0.7 : 1,
+                      }}
+                    >
+                      Assinar Essencial
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => assinarPlano("profissional")}
+                      disabled={!!processandoPlano}
+                      style={{
+                        ...botaoPrincipal,
+                        opacity: processandoPlano ? 0.7 : 1,
+                      }}
+                    >
+                      Assinar Profissional
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => assinarPlano("expertise")}
+                      disabled={!!processandoPlano}
+                      style={{
+                        ...botaoPrincipal,
+                        opacity: processandoPlano ? 0.7 : 1,
+                      }}
+                    >
+                      Assinar Expertise
+                    </button>
+
+                    <button style={botaoSecundario}>
+                      Cancelar Assinatura
+                    </button>
+                  </div>
+
+                  <p
                     style={{
-                      ...botaoPrincipal,
-                      opacity: processandoPlano ? 0.7 : 1,
+                      color: "#94a3b8",
+                      marginTop: "20px",
                     }}
                   >
-                    Assinar Essencial
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => assinarPlano("profissional")}
-                    disabled={!!processandoPlano}
-                    style={{
-                      ...botaoPrincipal,
-                      opacity: processandoPlano ? 0.7 : 1,
-                    }}
-                  >
-                    Assinar Profissional
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => assinarPlano("expertise")}
-                    disabled={!!processandoPlano}
-                    style={{
-                      ...botaoPrincipal,
-                      opacity: processandoPlano ? 0.7 : 1,
-                    }}
-                  >
-                    Assinar Expertise
-                  </button>
-
-                  <button style={botaoSecundario}>
-                    Cancelar Assinatura
-                  </button>
+                    Os botões de assinatura já estão conectados ao Mercado Pago
+                    em ambiente de teste.
+                  </p>
                 </div>
+              ) : (
+                <div style={cardStyle}>
+                  <h2>Gerenciamento</h2>
 
-                <p
-                  style={{
-                    color: "#94a3b8",
-                    marginTop: "20px",
-                  }}
-                >
-                  Os botões de assinatura já estão conectados ao Mercado Pago
-                  em ambiente de teste.
-                </p>
-              </div>
+                  <p style={{ color: "#b8b8d8", lineHeight: 1.6 }}>
+                    Esta conta é uma conta master interna. O plano não pode ser
+                    alterado por checkout e possui acesso completo permanente.
+                  </p>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -339,6 +377,15 @@ export default function AssinaturaPage() {
     </ProtectedRoute>
   );
 }
+
+const masterCardStyle: React.CSSProperties = {
+  background: "rgba(34,197,94,0.10)",
+  border: "1px solid rgba(34,197,94,0.35)",
+  borderRadius: "24px",
+  padding: "24px",
+  margin: "28px 0",
+  boxShadow: "0 0 35px rgba(34,197,94,0.12)",
+};
 
 const planosGridStyle: React.CSSProperties = {
   display: "grid",
