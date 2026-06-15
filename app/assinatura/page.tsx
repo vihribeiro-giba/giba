@@ -13,6 +13,7 @@ type Assinatura = {
   data_inicio: string;
   data_fim?: string | null;
   mercadopago_subscription_id?: string | null;
+  email_pagamento?: string | null;
 };
 
 type PlanoId = "essencial" | "profissional" | "expertise";
@@ -147,6 +148,7 @@ export default function AssinaturaPage() {
   const [assinatura, setAssinatura] = useState<Assinatura | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [processandoPlano, setProcessandoPlano] = useState<string | null>(null);
+  const [emailPagamento, setEmailPagamento] = useState("");
 
   useEffect(() => {
     carregarAssinatura();
@@ -189,6 +191,14 @@ export default function AssinaturaPage() {
     }
 
     setAssinatura(data);
+
+    const emailPadrao =
+      data?.email_pagamento?.trim() ||
+      user.email?.trim() ||
+      "";
+
+    setEmailPagamento(emailPadrao);
+
     setCarregando(false);
   }
 
@@ -235,6 +245,16 @@ export default function AssinaturaPage() {
       return;
     }
 
+    if (!emailPagamento.trim()) {
+      alert("Informe o e-mail que será usado no pagamento pelo Mercado Pago.");
+      return;
+    }
+
+    if (!emailPagamento.includes("@")) {
+      alert("Informe um e-mail de pagamento válido.");
+      return;
+    }
+
     try {
       setProcessandoPlano(plano);
 
@@ -255,6 +275,7 @@ export default function AssinaturaPage() {
         },
         body: JSON.stringify({
           plano,
+          email_pagamento: emailPagamento.trim(),
         }),
       });
 
@@ -369,6 +390,28 @@ export default function AssinaturaPage() {
 
           {!contaMaster && (
             <>
+              <section style={cardStyle}>
+                <h2 style={{ marginTop: 0 }}>E-mail para pagamento</h2>
+
+                <p style={{ color: "#b8b8d8", lineHeight: 1.6 }}>
+                  Informe o e-mail que será usado no checkout do Mercado Pago.
+                  Ele pode ser diferente do e-mail de login no GIBA. A ativação
+                  do plano continuará vinculada à conta correta do GIBA.
+                </p>
+
+                <label style={inputLabelStyle}>
+                  E-mail do Mercado Pago
+                </label>
+
+                <input
+                  type="email"
+                  value={emailPagamento}
+                  onChange={(event) => setEmailPagamento(event.target.value)}
+                  placeholder="financeiro@suaempresa.com.br"
+                  style={inputStyle}
+                />
+              </section>
+
               <section style={sectionHeaderStyle}>
                 <div>
                   <h2 style={sectionTitleStyle}>Escolha seu plano</h2>
@@ -648,6 +691,26 @@ const labelStyle: CSSProperties = {
   fontWeight: "bold",
   textTransform: "uppercase",
   letterSpacing: "0.06em",
+};
+
+const inputLabelStyle: CSSProperties = {
+  display: "block",
+  marginBottom: "8px",
+  color: "#dbeafe",
+  fontSize: "14px",
+  fontWeight: "bold",
+};
+
+const inputStyle: CSSProperties = {
+  width: "100%",
+  maxWidth: "520px",
+  padding: "14px",
+  borderRadius: "14px",
+  border: "1px solid rgba(255,255,255,0.14)",
+  background: "rgba(0,0,0,0.22)",
+  color: "#fff",
+  outline: "none",
+  boxSizing: "border-box",
 };
 
 

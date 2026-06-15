@@ -20,6 +20,7 @@ import {
   Menu,
   X,
   FileText,
+  Building2,
 } from "lucide-react";
 
 type AssinaturaResumo = {
@@ -132,6 +133,8 @@ export default function AppLayout({
     if (plano === "teste") return "Teste";
     if (plano === "essencial") return "Essencial";
     if (plano === "profissional") return "Profissional";
+    if (plano === "expertise") return "Expertise";
+    if (plano === "owner") return "Acesso Master";
 
     return plano;
   }
@@ -143,6 +146,7 @@ export default function AppLayout({
     { label: "Calculadora", href: "/calculadora-show", icon: Calculator },
     { label: "Financeiro", href: "/financeiro", icon: DollarSign },
     { label: "Relatórios", href: "/relatorios", icon: BarChart3 },
+    { label: "CRM", href: "/crm", icon: Building2 },
     { label: "Formatos", href: "/formatos", icon: Music },
     { label: "Colaboradores", href: "/colaboradores", icon: UserCog },
     { label: "Contratos", href: "/contratos", icon: FileText },

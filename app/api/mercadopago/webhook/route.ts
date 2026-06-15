@@ -16,6 +16,21 @@ function extrairUserId(externalReference?: string) {
   return externalReference.split(":")[0] || null;
 }
 
+function extrairEmailPagamento(externalReference?: string, payerEmail?: string) {
+  const partes = externalReference?.split(":") || [];
+  const emailReference = partes[2];
+
+  if (emailReference) {
+    try {
+      return decodeURIComponent(emailReference).trim().toLowerCase();
+    } catch {
+      return emailReference.trim().toLowerCase();
+    }
+  }
+
+  return payerEmail?.trim().toLowerCase() || null;
+}
+
 function extrairPlano(
   externalReference?: string,
   reason?: string
@@ -132,6 +147,11 @@ export async function POST(request: NextRequest) {
 
     const status = normalizarStatusMercadoPago(assinaturaMp.status);
 
+    const emailPagamento = extrairEmailPagamento(
+      assinaturaMp.external_reference,
+      assinaturaMp.payer_email
+    );
+
     const supabaseAdmin = createClient(supabaseUrl, serviceRole);
 
     const { data: assinaturaAtual } = await supabaseAdmin
@@ -177,6 +197,7 @@ export async function POST(request: NextRequest) {
         user_id: userId,
         plano,
         status,
+        email_pagamento: emailPagamento,
       });
     }
 
@@ -199,6 +220,7 @@ export async function POST(request: NextRequest) {
               new Date().toISOString(),
             data_fim: assinaturaMp.next_payment_date || null,
             mercadopago_subscription_id: assinaturaMp.id,
+            email_pagamento: emailPagamento,
           })
           .eq("id", assinaturaAtual.id);
 
@@ -218,6 +240,7 @@ export async function POST(request: NextRequest) {
           data_inicio: assinaturaMp.date_created || new Date().toISOString(),
           data_fim: assinaturaMp.next_payment_date || null,
           mercadopago_subscription_id: assinaturaMp.id,
+          email_pagamento: emailPagamento,
         });
 
         if (error) {
@@ -235,6 +258,7 @@ export async function POST(request: NextRequest) {
         user_id: userId,
         plano,
         status: "ativo",
+        email_pagamento: emailPagamento,
       });
     }
 
@@ -252,6 +276,7 @@ export async function POST(request: NextRequest) {
         .update({
           status,
           data_fim: assinaturaMp.next_payment_date || new Date().toISOString(),
+          email_pagamento: emailPagamento,
         })
         .eq("id", assinaturaPorMercadoPagoId.id);
 
@@ -280,6 +305,7 @@ export async function POST(request: NextRequest) {
       user_id: userId,
       plano,
       status,
+      email_pagamento: emailPagamento,
     });
   } catch (error) {
     console.error("Webhook erro capturado:", error);

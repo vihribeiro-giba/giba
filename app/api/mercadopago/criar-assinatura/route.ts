@@ -78,10 +78,22 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const planoRecebido = String(body?.plano || "").toLowerCase() as PlanoId;
+    const emailPagamento = String(
+      body?.email_pagamento || user.email || ""
+    )
+      .trim()
+      .toLowerCase();
 
     if (!planoRecebido || !PLANOS[planoRecebido]) {
       return NextResponse.json(
         { error: "Plano inválido." },
+        { status: 400 }
+      );
+    }
+
+    if (!emailPagamento || !emailPagamento.includes("@")) {
+      return NextResponse.json(
+        { error: "E-mail de pagamento inválido." },
         { status: 400 }
       );
     }
@@ -135,8 +147,10 @@ export async function POST(request: NextRequest) {
 
     const payloadMercadoPago = {
       reason: plano.nome,
-      external_reference: `${user.id}:${planoRecebido}`,
-      payer_email: user.email,
+      external_reference: `${user.id}:${planoRecebido}:${encodeURIComponent(
+        emailPagamento
+      )}`,
+      payer_email: emailPagamento,
       back_url: `${appUrl}/assinatura`,
       status: "pending",
       auto_recurring: {
@@ -191,6 +205,7 @@ export async function POST(request: NextRequest) {
       success: true,
       plano: planoRecebido,
       mercadopago_subscription_id: mercadoPagoSubscriptionId,
+      email_pagamento: emailPagamento,
       init_point: initPoint,
     });
   } catch (error) {
