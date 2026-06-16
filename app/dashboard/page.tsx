@@ -7,18 +7,27 @@ import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
 import {
   CalendarDays,
-  Users,
   DollarSign,
-  TrendingUp,
-  UserRound,
-  MapPin,
+  TrendingDown,
+  Trophy,
+  Users,
+  UserPlus,
+  Repeat,
   Clock,
+  CheckCircle2,
+  XCircle,
+  Search,
+  Bell,
+  Calendar,
 } from "lucide-react";
-import {
-  getEventStatus,
-  getEventStatusColor,
-  getEventStatusLabel,
-} from "../../lib/eventStatus";
+
+import MetricCard from "../../components/dashboard/MetricCard";
+import QuickActions from "../../components/dashboard/QuickActions";
+import UpcomingShows from "../../components/dashboard/UpcomingShows";
+import RevenueChart from "../../components/dashboard/RevenueChart";
+import GibaInsights from "../../components/dashboard/GibaInsights";
+import InfoListCard from "../../components/dashboard/InfoListCard";
+import { getEventStatus } from "../../lib/eventStatus";
 
 type Evento = {
   id: string;
@@ -43,12 +52,35 @@ type Financeiro = {
   id: string;
   type: string;
   amount: number;
+  created_at?: string;
 };
+
+type EmpresaResumo = {
+  nome_artistico?: string | null;
+  razao_social?: string | null;
+  responsavel?: string | null;
+};
+
+function formatarMoeda(valor: number) {
+  return valor.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
+
+function saudacao() {
+  const hora = new Date().getHours();
+
+  if (hora >= 5 && hora < 12) return "Bom dia";
+  if (hora >= 12 && hora < 18) return "Boa tarde";
+  return "Boa noite";
+}
 
 export default function DashboardPage() {
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [financeiro, setFinanceiro] = useState<Financeiro[]>([]);
+  const [nomeUsuario, setNomeUsuario] = useState("Usuário GIBA");
 
   async function obterUsuarioLogado() {
     const { data, error } = await supabase.auth.getUser();
@@ -83,6 +115,14 @@ export default function DashboardPage() {
       .select("*")
       .eq("user_id", user.id);
 
+    const empresaRes = await supabase
+      .from("company_settings")
+      .select("nome_artistico,razao_social,responsavel")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
     if (eventosRes.error) {
       console.error("Erro ao carregar eventos do dashboard:", eventosRes.error);
       alert("Erro ao carregar eventos do dashboard.");
@@ -100,6 +140,20 @@ export default function DashboardPage() {
       alert("Erro ao carregar financeiro do dashboard.");
       return;
     }
+
+    if (empresaRes.error) {
+      console.error("Erro ao carregar dados da empresa no dashboard:", empresaRes.error);
+    }
+
+    const empresa = empresaRes.data as EmpresaResumo | null;
+
+    setNomeUsuario(
+      empresa?.nome_artistico?.trim() ||
+        empresa?.razao_social?.trim() ||
+        empresa?.responsavel?.trim() ||
+        user.email ||
+        "Usuário GIBA"
+    );
 
     setEventos(eventosRes.data || []);
     setClientes(clientesRes.data || []);
@@ -126,367 +180,254 @@ export default function DashboardPage() {
     };
   }, [financeiro]);
 
-  const percentualEntradas = useMemo(() => {
-    const total = resumo.entradas + resumo.saidas;
-    if (total === 0) return 0;
-    return Math.round((resumo.entradas / total) * 100);
-  }, [resumo]);
+  const proximosEventos = useMemo(() => {
+    return eventos.filter(
+      (evento) => getEventStatus(evento.event_date) !== "realizado"
+    );
+  }, [eventos]);
+
+  const eventosEstaSemana = useMemo(() => {
+    const hoje = new Date();
+    const daquiSeteDias = new Date();
+    daquiSeteDias.setDate(hoje.getDate() + 7);
+
+    return proximosEventos.filter((evento) => {
+      const dataEvento = new Date(`${evento.event_date}T00:00:00`);
+      return dataEvento >= hoje && dataEvento <= daquiSeteDias;
+    }).length;
+  }, [proximosEventos]);
+
+  const clientesNovosMes = useMemo(() => {
+    const hoje = new Date();
+
+    return clientes.filter((cliente) => {
+      if (!cliente.created_at) return false;
+      const data = new Date(cliente.created_at);
+      return data.getMonth() === hoje.getMonth() && data.getFullYear() === hoje.getFullYear();
+    }).length;
+  }, [clientes]);
+
+  const ticketMedio = eventos.length > 0 ? resumo.entradas / eventos.length : 0;
+  const contratosPendentes = proximosEventos.length;
+  const contratosAssinados = eventos.filter((evento) => getEventStatus(evento.event_date) === "realizado").length;
 
   return (
     <ProtectedRoute adminOnly>
       <PlanProtectedRoute modulo="dashboard">
         <AppLayout>
-        <div style={{ color: "#fff" }}>
-          <h1 style={{ fontSize: "36px", marginBottom: "6px" }}>
-            Dashboard GIBA
-          </h1>
-
-          <p style={{ color: "#b8b8d8", marginBottom: "28px" }}>
-            Visão geral do sistema.
-          </p>
-
-          <div style={topCardsGrid}>
-            <CardTop
-              icon={<CalendarDays size={28} />}
-              titulo="Eventos"
-              valor={eventos.length}
-              detalhe="Cadastrados"
-              cor="#8b35ff"
-            />
-
-            <CardTop
-              icon={<Users size={30} />}
-              titulo="Clientes"
-              valor={clientes.length}
-              detalhe="Cadastrados"
-              cor="#6d5cff"
-            />
-
-            <CardTop
-              icon={<DollarSign size={30} />}
-              titulo="Entradas"
-              valor={`R$ ${resumo.entradas.toFixed(2)}`}
-              detalhe="Financeiro real"
-              cor="#37e884"
-            />
-
-            <CardTop
-              icon={<TrendingUp size={30} />}
-              titulo="Saldo"
-              valor={`R$ ${resumo.saldo.toFixed(2)}`}
-              detalhe="Entradas - Saídas"
-              cor={resumo.saldo >= 0 ? "#38bdf8" : "#ff5b8a"}
-            />
-          </div>
-
-          <div style={middleGrid}>
-            <section style={panelStyle}>
-              <div style={panelHeader}>
-                <h2 style={panelTitle}>Próximos Eventos</h2>
+          <div style={pageStyle}>
+            <header style={headerStyle}>
+              <div>
+                <h1 style={titleStyle}>{saudacao()}, {nomeUsuario}! 👋</h1>
+                <p style={subtitleStyle}>Aqui está o resumo da sua operação hoje.</p>
               </div>
 
-              <div style={{ marginTop: "20px" }}>
-                {eventos
- .filter(
-  (evento) =>
-    getEventStatus(evento.event_date) !== "realizado"
-)
- .sort(
-    (a, b) =>
-      new Date(a.event_date).getTime() -
-      new Date(b.event_date).getTime()
-  )
-  .slice(0, 3)
-  .map((evento) => (
-                  <div key={evento.id} style={eventItemStyle}>
-                    <div>
-                      <strong>
-                        {evento.event_type || "Evento"} -{" "}
-                        {evento.client_name || "Contratante não informado"}
-                      </strong>
-
-                      <p style={mutedText}>
-                        <Clock size={14} /> {evento.event_date}
-                        {evento.event_time ? ` • ${evento.event_time}` : ""}
-                      </p>
-
-                      <p style={mutedText}>
-                        <MapPin size={14} />{" "}
-                        {evento.location || "Local não informado"}
-                      </p>
-                    </div>
-
-                    {(() => {
-  const status = getEventStatus(evento.event_date);
-
-  return (
-    <span
-      style={{
-        ...statusBadge(status),
-        background: getEventStatusColor(status),
-      }}
-    >
-      {getEventStatusLabel(status)}
-    </span>
-  );
-})()}
-                  </div>
-                ))}
-
-                {eventos.length === 0 && (
-                  <p style={mutedText}>Nenhum evento cadastrado.</p>
-                )}
+              <div style={headerActionsStyle}>
+                <button style={iconButtonStyle} aria-label="Buscar">
+                  <Search size={18} />
+                </button>
+                <button style={iconButtonStyle} aria-label="Notificações">
+                  <Bell size={18} />
+                </button>
+                <button style={dateButtonStyle}>
+                  <Calendar size={16} />
+                  {new Date().toLocaleDateString("pt-BR", {
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </button>
               </div>
+            </header>
+
+            <QuickActions />
+
+            <section style={metricsGridStyle}>
+              <MetricCard
+                icon={<CalendarDays size={24} />}
+                title="Próximos Shows"
+                value={proximosEventos.length}
+                detail={`${eventosEstaSemana} esta semana`}
+                color="#8B35FF"
+              />
+
+              <MetricCard
+                icon={<DollarSign size={24} />}
+                title="Receita Confirmada"
+                value={formatarMoeda(resumo.entradas)}
+                detail="Financeiro real"
+                color="#37E884"
+              />
+
+              <MetricCard
+                icon={<TrendingDown size={24} />}
+                title="Despesas"
+                value={formatarMoeda(resumo.saidas)}
+                detail="Saídas registradas"
+                color="#FF5B8A"
+                positive={false}
+              />
+
+              <MetricCard
+                icon={<Trophy size={24} />}
+                title="Lucro Atual"
+                value={formatarMoeda(resumo.saldo)}
+                detail="Entradas - Saídas"
+                color={resumo.saldo >= 0 ? "#00AAFF" : "#FF5B8A"}
+                positive={resumo.saldo >= 0}
+              />
             </section>
 
-            <section style={panelStyle}>
-              <div style={panelHeader}>
-                <h2 style={panelTitle}>Clientes Recentes</h2>
-              </div>
+            <section style={mainGridStyle}>
+              <UpcomingShows eventos={eventos} />
+              <RevenueChart financeiro={financeiro} />
+            </section>
 
-              <div style={{ marginTop: "20px" }}>
-                {clientes.slice(0, 4).map((cliente) => (
-                  <div key={cliente.id} style={clientItemStyle}>
-                    <div style={avatarStyle}>
-                      <UserRound size={20} />
-                    </div>
+            <section style={bottomGridStyle}>
+              <InfoListCard
+                title="Clientes"
+                actionHref="/clientes"
+                rows={[
+                  {
+                    label: "Total de clientes",
+                    value: clientes.length,
+                    icon: <Users size={20} />,
+                    color: "#8B35FF",
+                  },
+                  {
+                    label: "Novos este mês",
+                    value: clientesNovosMes,
+                    icon: <UserPlus size={20} />,
+                    color: "#00AAFF",
+                  },
+                  {
+                    label: "Clientes recorrentes",
+                    value: Math.max(0, clientes.length - clientesNovosMes),
+                    icon: <Repeat size={20} />,
+                    color: "#38BDF8",
+                  },
+                ]}
+              />
 
-                    <div>
-                      <strong>{cliente.nome}</strong>
-                      <p style={mutedText}>
-                        {cliente.cpf_cnpj || "Cpf/Cnpj não informado"}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+              <InfoListCard
+                title="Contratos"
+                actionHref="/contratos"
+                rows={[
+                  {
+                    label: "Pendentes",
+                    value: contratosPendentes,
+                    icon: <Clock size={20} />,
+                    color: "#F59E0B",
+                  },
+                  {
+                    label: "Assinados / realizados",
+                    value: contratosAssinados,
+                    icon: <CheckCircle2 size={20} />,
+                    color: "#37E884",
+                  },
+                  {
+                    label: "Vencidos",
+                    value: 0,
+                    icon: <XCircle size={20} />,
+                    color: "#FF5B8A",
+                  },
+                ]}
+              />
 
-                {clientes.length === 0 && (
-                  <p style={mutedText}>Nenhum cliente cadastrado.</p>
-                )}
-              </div>
+              <GibaInsights
+                ticketMedio={ticketMedio}
+                totalClientes={clientes.length}
+                totalEventos={eventos.length}
+                saldo={resumo.saldo}
+              />
             </section>
           </div>
-
-          <section style={panelStyle}>
-            <div style={panelHeader}>
-              <h2 style={panelTitle}>Resumo Financeiro</h2>
-            </div>
-
-            <div style={financeGrid}>
-              <ResumoItem
-                titulo="Entradas"
-                valor={resumo.entradas}
-                cor="#37e884"
-              />
-              <ResumoItem
-                titulo="Saídas"
-                valor={resumo.saidas}
-                cor="#ff5b8a"
-              />
-              <ResumoItem titulo="Saldo" valor={resumo.saldo} cor="#38bdf8" />
-
-              <div style={chartWrapper}>
-                <div
-                  style={{
-                    width: "120px",
-                    height: "120px",
-                    borderRadius: "50%",
-                    background:
-                      resumo.entradas + resumo.saidas === 0
-                        ? "rgba(255,255,255,0.08)"
-                        : `conic-gradient(#37e884 0 ${percentualEntradas}%, #ff5b8a ${percentualEntradas}% 100%)`,
-                    position: "relative",
-                  }}
-                >
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: "26px",
-                      borderRadius: "50%",
-                      background: "#07101f",
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
         </AppLayout>
       </PlanProtectedRoute>
     </ProtectedRoute>
   );
 }
 
-function CardTop({
-  icon,
-  titulo,
-  valor,
-  detalhe,
-  cor,
-}: {
-  icon: React.ReactNode;
-  titulo: string;
-  valor: string | number;
-  detalhe: string;
-  cor: string;
-}) {
-  return (
-    <div style={cardStyle}>
-      <div
-        style={{
-          width: "64px",
-          height: "64px",
-          borderRadius: "18px",
-          background: `${cor}25`,
-          color: cor,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: "18px",
-        }}
-      >
-        {icon}
-      </div>
+const pageStyle: React.CSSProperties = {
+  color: "#FFFFFF",
+  width: "100%",
+  maxWidth: "1440px",
+  margin: "0 auto",
+};
 
-      <p style={{ color: "#cbd5e1", margin: 0 }}>{titulo}</p>
+const headerStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "18px",
+  marginBottom: "22px",
+  flexWrap: "wrap",
+};
 
-      <h2 style={{ fontSize: "28px", margin: "8px 0", color: cor }}>
-        {valor}
-      </h2>
+const titleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "34px",
+  lineHeight: 1.1,
+  letterSpacing: "-0.04em",
+  color: "#FFFFFF",
+};
 
-      <small style={{ color: "#94a3b8" }}>{detalhe}</small>
-    </div>
-  );
-}
+const subtitleStyle: React.CSSProperties = {
+  margin: "9px 0 0",
+  color: "#94A3B8",
+  fontSize: "15px",
+};
 
-function ResumoItem({
-  titulo,
-  valor,
-  cor,
-}: {
-  titulo: string;
-  valor: number;
-  cor: string;
-}) {
-  return (
-    <div>
-      <p style={{ color: "#cbd5e1" }}>{titulo}</p>
-      <h2 style={{ color: cor, fontSize: "30px" }}>
-        R$ {valor.toFixed(2)}
-      </h2>
-    </div>
-  );
-}
+const headerActionsStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: "10px",
+  flexWrap: "wrap",
+};
 
-const topCardsGrid: React.CSSProperties = {
+const iconButtonStyle: React.CSSProperties = {
+  width: "42px",
+  height: "42px",
+  borderRadius: "14px",
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.05)",
+  color: "#CBD5E1",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const dateButtonStyle: React.CSSProperties = {
+  minHeight: "42px",
+  borderRadius: "14px",
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.05)",
+  color: "#FFFFFF",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  padding: "0 14px",
+  textTransform: "capitalize",
+};
+
+const metricsGridStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(4, 1fr)",
+  gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
   gap: "18px",
   marginBottom: "24px",
 };
 
-const middleGrid: React.CSSProperties = {
+const mainGridStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
+  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
   gap: "22px",
   marginBottom: "24px",
 };
 
-const financeGrid: React.CSSProperties = {
+const bottomGridStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr 1fr 220px",
-  gap: "24px",
-  alignItems: "center",
-  marginTop: "28px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+  gap: "22px",
 };
-
-const cardStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  borderRadius: "22px",
-  padding: "24px",
-  boxShadow: "0 0 30px rgba(0,0,0,0.25)",
-};
-
-const panelStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  borderRadius: "24px",
-  padding: "24px",
-  boxShadow: "0 0 35px rgba(0,0,0,0.25)",
-};
-
-const panelHeader: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-};
-
-const panelTitle: React.CSSProperties = {
-  margin: 0,
-  fontSize: "20px",
-};
-
-const eventItemStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "16px",
-  padding: "16px",
-  borderRadius: "16px",
-  background: "rgba(0,0,0,0.25)",
-  border: "1px solid rgba(255,255,255,0.08)",
-  marginBottom: "12px",
-};
-
-const clientItemStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "14px",
-  padding: "15px",
-  borderRadius: "16px",
-  background: "rgba(0,0,0,0.22)",
-  border: "1px solid rgba(255,255,255,0.08)",
-  marginBottom: "12px",
-};
-
-const avatarStyle: React.CSSProperties = {
-  width: "42px",
-  height: "42px",
-  borderRadius: "50%",
-  background: "linear-gradient(135deg, #8b35ff, #00aaff)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const mutedText: React.CSSProperties = {
-  color: "#94a3b8",
-  margin: "6px 0 0",
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-};
-
-const chartWrapper: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "center",
-};
-
-function statusBadge(status: string): React.CSSProperties {
-  const isConfirmado = status === "Confirmado";
-  const isPendente = status === "Pendente";
-
-  return {
-    padding: "8px 12px",
-    borderRadius: "999px",
-    fontSize: "13px",
-    whiteSpace: "nowrap",
-    color: isConfirmado ? "#60a5fa" : isPendente ? "#ff7aa2" : "#c084fc",
-    background: isConfirmado
-      ? "rgba(59,130,246,0.18)"
-      : isPendente
-      ? "rgba(255,91,138,0.18)"
-      : "rgba(139,53,255,0.18)",
-  };
-}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 import {
@@ -35,11 +35,7 @@ type EmpresaResumo = {
   responsavel?: string | null;
 };
 
-export default function AppLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -53,7 +49,6 @@ export default function AppLayout({
     };
 
     verificarTela();
-
     window.addEventListener("resize", verificarTela);
 
     return () => {
@@ -123,7 +118,6 @@ export default function AppLayout({
 
   function formatarData(data?: string | null) {
     if (!data) return "-";
-
     return new Date(data).toLocaleDateString("pt-BR");
   }
 
@@ -139,156 +133,72 @@ export default function AppLayout({
     return plano;
   }
 
-  const menu = [
-    { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { label: "Agenda", href: "/agenda", icon: CalendarDays },
-    { label: "Clientes", href: "/clientes", icon: Users },
-    { label: "Calculadora", href: "/calculadora-show", icon: Calculator },
-    { label: "Financeiro", href: "/financeiro", icon: DollarSign },
-    { label: "Relatórios", href: "/relatorios", icon: BarChart3 },
-    { label: "CRM", href: "/crm", icon: Building2 },
-    { label: "Formatos", href: "/formatos", icon: Music },
-    { label: "Colaboradores", href: "/colaboradores", icon: UserCog },
-    { label: "Contratos", href: "/contratos", icon: FileText },
-    { label: "Configurações", href: "/configuracoes", icon: Settings },
-    { label: "Assinatura", href: "/assinatura", icon: CreditCard },
-  ];
+  const menu = useMemo(
+    () => [
+      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      { label: "Agenda", href: "/agenda", icon: CalendarDays },
+      { label: "Clientes", href: "/clientes", icon: Users },
+      { label: "Calculadora", href: "/calculadora-show", icon: Calculator },
+      { label: "Financeiro", href: "/financeiro", icon: DollarSign },
+      { label: "Relatórios", href: "/relatorios", icon: BarChart3 },
+      { label: "CRM", href: "/crm", icon: Building2 },
+      { label: "Formatos", href: "/formatos", icon: Music },
+      { label: "Colaboradores", href: "/colaboradores", icon: UserCog },
+      { label: "Contratos", href: "/contratos", icon: FileText },
+      { label: "Configurações", href: "/configuracoes", icon: Settings },
+      { label: "Assinatura", href: "/assinatura", icon: CreditCard },
+    ],
+    []
+  );
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        background: "linear-gradient(135deg, #050510, #12001f, #00172f)",
-        color: "#fff",
-        fontFamily: "Arial, sans-serif",
-        overflow: "hidden",
-      }}
-    >
-      {/* BOTÃO MOBILE */}
+    <div style={appShellStyle}>
       {isMobile && (
         <button
           onClick={() => setMobileOpen(true)}
-          style={{
-            position: "fixed",
-            top: "18px",
-            left: "18px",
-            zIndex: 9999,
-            border: "none",
-            borderRadius: "12px",
-            background: "linear-gradient(90deg, #8b35ff, #00aaff)",
-            width: "48px",
-            height: "48px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#fff",
-            cursor: "pointer",
-            boxShadow: "0 0 20px rgba(0,0,0,0.35)",
-          }}
+          aria-label="Abrir menu"
+          style={mobileMenuButtonStyle}
         >
-          <Menu size={24} />
+          <Menu size={22} />
         </button>
       )}
 
-      {/* OVERLAY MOBILE */}
       {mobileOpen && isMobile && (
-        <div
-          onClick={() => setMobileOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.65)",
-            zIndex: 999,
-          }}
-        />
+        <div onClick={() => setMobileOpen(false)} style={mobileOverlayStyle} />
       )}
 
-      {/* SIDEBAR */}
       <aside
         style={{
-          width: "280px",
-          minWidth: "280px",
-          height: "100vh",
-          padding: "24px",
-          background: "rgba(0,0,0,0.42)",
-          borderRight: "1px solid rgba(255,255,255,0.10)",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "flex-start",
-          gap: "18px",
-          boxSizing: "border-box",
-          overflowY: "auto",
-          overflowX: "hidden",
-
-          position: isMobile ? "fixed" : "relative",
-          left: isMobile
-            ? mobileOpen
-              ? "0"
-              : "-320px"
-            : "0",
-
-          top: 0,
-          zIndex: 1000,
-
-          transition: "all 0.35s ease",
-          backdropFilter: "blur(12px)",
+          ...sidebarStyle,
+          position: "fixed",
+          left: isMobile ? (mobileOpen ? "0" : "-292px") : "0",
         }}
       >
-        <div style={{ flexShrink: 0 }}>
-          {/* TOPO */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "20px",
-            }}
-          >
-            <div
-              style={{
-                width: "100%",
-                display: "flex",
-                justifyContent: "center",
-              }}
-            >
+        <div style={sidebarInnerStyle}>
+          <div style={sidebarTopStyle}>
+            <div style={logoAreaStyle}>
               <img
                 src="/logo-giba-horizontal.png"
                 alt="Logo GIBA"
-                style={{
-                  width: "190px",
-                  height: "auto",
-                  objectFit: "contain",
-                }}
+                style={logoStyle}
               />
             </div>
 
             {isMobile && (
               <button
                 onClick={() => setMobileOpen(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#fff",
-                  cursor: "pointer",
-                }}
+                aria-label="Fechar menu"
+                style={closeButtonStyle}
               >
-                <X size={24} />
+                <X size={20} />
               </button>
             )}
           </div>
 
-          {/* MENU */}
-          <nav
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "12px",
-              paddingBottom: "4px",
-            }}
-          >
+          <nav style={navStyle}>
             {menu.map((item) => {
-              const ativo = pathname === item.href;
+              const ativo =
+                pathname === item.href || pathname.startsWith(`${item.href}/`);
               const Icon = item.icon;
 
               return (
@@ -297,130 +207,56 @@ export default function AppLayout({
                   href={item.href}
                   onClick={() => isMobile && setMobileOpen(false)}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "14px",
-                    padding: "16px",
-                    borderRadius: "16px",
-                    color: "#fff",
-                    textDecoration: "none",
-
-                    background: ativo
-                      ? "linear-gradient(90deg, #8b35ff, #00aaff)"
-                      : "rgba(255,255,255,0.06)",
-
-                    border: ativo
-                      ? "1px solid rgba(255,255,255,0.25)"
-                      : "1px solid rgba(255,255,255,0.10)",
-
-                    boxShadow: ativo
-                      ? "0 0 25px rgba(139,53,255,0.35)"
-                      : "none",
-
-                    fontWeight: ativo ? "bold" : "normal",
-
-                    transition: "0.25s",
+                    ...menuItemStyle,
+                    ...(ativo ? activeMenuItemStyle : inactiveMenuItemStyle),
                   }}
                 >
-                  <Icon size={22} />
-                  {item.label}
+                  <span
+                    style={{
+                      ...menuIconStyle,
+                      ...(ativo ? activeIconStyle : inactiveIconStyle),
+                    }}
+                  >
+                    <Icon size={18} />
+                  </span>
+
+                  <span style={menuLabelStyle}>{item.label}</span>
                 </Link>
               );
             })}
           </nav>
-        </div>
 
-        {/* RODAPÉ */}
-        <div
-          style={{
-            marginTop: "8px",
-            paddingTop: "8px",
-            flexShrink: 0,
-          }}
-        >
-          <div
-            style={{
-              marginBottom: "12px",
-              padding: "14px",
-              borderRadius: "18px",
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.10)",
-            }}
-          >
-            <p style={{ margin: 0, fontWeight: "bold" }}>
-              {nomeUsuarioSidebar()}
-            </p>
+          <div style={footerStyle}>
+            <div style={userCardStyle}>
+              <div style={userTopStyle}>
+                <div style={avatarStyle}>
+                  {nomeUsuarioSidebar().slice(0, 1).toUpperCase()}
+                </div>
 
-            <p
-              style={{
-                marginTop: "6px",
-                marginBottom: 0,
-                color: "#b8b8d8",
-                fontSize: "14px",
-              }}
-            >
-              Administrador
-            </p>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p style={userNameStyle}>{nomeUsuarioSidebar()}</p>
+                  <p style={userRoleStyle}>{nomePlano(assinatura?.plano)}</p>
+                </div>
+              </div>
 
-            <div
-              style={{
-                marginTop: "12px",
-                paddingTop: "10px",
-                borderTop: "1px solid rgba(255,255,255,0.10)",
-              }}
-            >
-              <p
-                style={{
-                  margin: 0,
-                  color: "#dbeafe",
-                  fontSize: "13px",
-                  fontWeight: "bold",
-                }}
-              >
-                Plano: {nomePlano(assinatura?.plano)}
-              </p>
-
-              <p
-                style={{
-                  marginTop: "5px",
-                  marginBottom: 0,
-                  color: "#b8b8d8",
-                  fontSize: "12px",
-                }}
-              >
+              <p style={renewTextStyle}>
                 Vencimento: {formatarData(assinatura?.data_fim)}
               </p>
+
+              <Link href="/login" style={logoutButtonStyle}>
+                <LogOut size={16} />
+                Sair do sistema
+              </Link>
             </div>
           </div>
-
-          <Link
-            href="/login"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              padding: "16px",
-              borderRadius: "16px",
-              color: "#ff9ea8",
-              textDecoration: "none",
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.10)",
-            }}
-          >
-            <LogOut size={20} />
-            Sair do sistema
-          </Link>
         </div>
       </aside>
 
-      {/* CONTEÚDO */}
       <main
         style={{
-          flex: 1,
-          padding: isMobile ? "90px 18px 18px 18px" : "32px",
-          overflowY: "auto",
-          width: "100%",
-          boxSizing: "border-box",
+          ...mainStyle,
+          marginLeft: isMobile ? "0" : "280px",
+          padding: isMobile ? "86px 16px 22px" : "30px",
         }}
       >
         {children}
@@ -428,3 +264,246 @@ export default function AppLayout({
     </div>
   );
 }
+
+const appShellStyle: React.CSSProperties = {
+  minHeight: "100vh",
+  display: "flex",
+  color: "#fff",
+  fontFamily:
+    'Inter, Arial, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  overflow: "hidden",
+  background:
+    "radial-gradient(circle at 15% 0%, rgba(139,53,255,0.18), transparent 32%), radial-gradient(circle at 85% 10%, rgba(0,170,255,0.14), transparent 34%), linear-gradient(135deg, #050510, #070B16 45%, #00172F)",
+};
+
+const mobileMenuButtonStyle: React.CSSProperties = {
+  position: "fixed",
+  top: "18px",
+  left: "18px",
+  zIndex: 9999,
+  border: "1px solid rgba(255,255,255,0.16)",
+  borderRadius: "14px",
+  background: "rgba(255,255,255,0.08)",
+  width: "46px",
+  height: "46px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#fff",
+  cursor: "pointer",
+  boxShadow: "0 16px 35px rgba(0,0,0,0.35)",
+  backdropFilter: "blur(14px)",
+};
+
+const mobileOverlayStyle: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.62)",
+  backdropFilter: "blur(4px)",
+  zIndex: 999,
+};
+
+const sidebarStyle: React.CSSProperties = {
+  width: "280px",
+  minWidth: "280px",
+  height: "100vh",
+  background: "rgba(7,11,22,0.82)",
+  borderRight: "1px solid rgba(255,255,255,0.10)",
+  top: 0,
+  zIndex: 1000,
+  transition: "all 0.32s ease",
+  backdropFilter: "blur(18px)",
+  boxShadow: "18px 0 55px rgba(0,0,0,0.25)",
+};
+
+const sidebarInnerStyle: React.CSSProperties = {
+  height: "100%",
+  display: "flex",
+  flexDirection: "column",
+  padding: "22px 14px 16px",
+  boxSizing: "border-box",
+};
+
+const sidebarTopStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "10px",
+  marginBottom: "18px",
+  padding: "0 4px",
+  flexShrink: 0,
+};
+
+const logoAreaStyle: React.CSSProperties = {
+  width: "100%",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+};
+
+const logoStyle: React.CSSProperties = {
+  width: "148px",
+  height: "auto",
+  objectFit: "contain",
+};
+
+const closeButtonStyle: React.CSSProperties = {
+  width: "38px",
+  height: "38px",
+  borderRadius: "12px",
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.06)",
+  color: "#fff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const navStyle: React.CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  display: "flex",
+  flexDirection: "column",
+  gap: "5px",
+  overflowY: "auto",
+  overflowX: "hidden",
+  padding: "0 0 12px",
+  scrollbarWidth: "none",
+  msOverflowStyle: "none",
+};
+
+const menuItemStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  padding: "10px 10px",
+  borderRadius: "14px",
+  color: "#fff",
+  textDecoration: "none",
+  fontSize: "14px",
+  transition: "0.22s ease",
+  border: "1px solid transparent",
+  minHeight: "43px",
+  boxSizing: "border-box",
+};
+
+const activeMenuItemStyle: React.CSSProperties = {
+  background: "linear-gradient(90deg, #8B35FF, #00AAFF)",
+  border: "1px solid rgba(255,255,255,0.22)",
+  boxShadow: "0 15px 32px rgba(139,53,255,0.25)",
+  fontWeight: 800,
+};
+
+const inactiveMenuItemStyle: React.CSSProperties = {
+  background: "transparent",
+  color: "#CBD5E1",
+  fontWeight: 600,
+};
+
+const menuIconStyle: React.CSSProperties = {
+  width: "30px",
+  height: "30px",
+  minWidth: "30px",
+  borderRadius: "11px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const activeIconStyle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.16)",
+  color: "#FFFFFF",
+};
+
+const inactiveIconStyle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.045)",
+  color: "#94A3B8",
+};
+
+const menuLabelStyle: React.CSSProperties = {
+  overflow: "hidden",
+  whiteSpace: "nowrap",
+  textOverflow: "ellipsis",
+};
+
+const footerStyle: React.CSSProperties = {
+  flexShrink: 0,
+  paddingTop: "12px",
+  borderTop: "1px solid rgba(255,255,255,0.08)",
+};
+
+const userCardStyle: React.CSSProperties = {
+  padding: "13px",
+  borderRadius: "20px",
+  background: "rgba(255,255,255,0.055)",
+  border: "1px solid rgba(255,255,255,0.10)",
+  boxShadow: "0 20px 45px rgba(0,0,0,0.18)",
+};
+
+const userTopStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: "11px",
+};
+
+const avatarStyle: React.CSSProperties = {
+  width: "42px",
+  height: "42px",
+  minWidth: "42px",
+  borderRadius: "16px",
+  background: "linear-gradient(135deg, #8B35FF, #00AAFF)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#FFFFFF",
+  fontWeight: 900,
+  boxShadow: "0 14px 28px rgba(0,170,255,0.16)",
+};
+
+const userNameStyle: React.CSSProperties = {
+  margin: 0,
+  color: "#FFFFFF",
+  fontSize: "14px",
+  fontWeight: 800,
+  overflow: "hidden",
+  whiteSpace: "nowrap",
+  textOverflow: "ellipsis",
+};
+
+const userRoleStyle: React.CSSProperties = {
+  margin: "3px 0 0",
+  color: "#94A3B8",
+  fontSize: "12px",
+};
+
+const renewTextStyle: React.CSSProperties = {
+  margin: "12px 0 0",
+  color: "#94A3B8",
+  fontSize: "11px",
+};
+
+const logoutButtonStyle: React.CSSProperties = {
+  marginTop: "12px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "9px",
+  padding: "10px",
+  borderRadius: "14px",
+  color: "#FFFFFF",
+  textDecoration: "none",
+  background: "rgba(255,255,255,0.065)",
+  border: "1px solid rgba(255,255,255,0.10)",
+  fontSize: "13px",
+  fontWeight: 800,
+};
+
+const mainStyle: React.CSSProperties = {
+  flex: 1,
+  height: "100vh",
+  overflowY: "auto",
+  width: "100%",
+  boxSizing: "border-box",
+};
