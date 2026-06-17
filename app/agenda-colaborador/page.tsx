@@ -61,6 +61,9 @@ type Financeiro = {
   amount: number | null;
   category: string | null;
   event_id: string | null;
+  client_name?: string | null;
+  description?: string | null;
+  payment_date?: string | null;
   status?: string | null;
 };
 
@@ -370,8 +373,10 @@ export default function AgendaColaboradorPage() {
 
     const { data: financeiroRes, error: erroFinanceiro } = await supabase
       .from("finance")
-      .select("id,user_id,type,amount,category,event_id,status")
+      .select("id,user_id,type,amount,category,event_id,client_name,description,payment_date,status")
       .eq("user_id", colaborador.user_id)
+      .eq("type", "Saída")
+      .eq("category", "Colaboradores")
       .in("event_id", idsEventosPermitidos);
 
     if (erroFinanceiro) {
@@ -457,19 +462,28 @@ export default function AgendaColaboradorPage() {
   }, [eventosDoColaborador]);
 
   const totalCachesLancados = useMemo(() => {
+    if (!colaboradorAtual?.nome) return 0;
+
     const idsEventosColaborador = new Set(eventosDoColaborador.map((evento) => evento.id));
+    const nomeColaboradorAtual = colaboradorAtual.nome.trim().toLowerCase();
 
     return financeiro
       .filter((item) => {
-        const tipoEhEntrada = String(item.type || "").toLowerCase() === "entrada";
         const eventoPertenceAoColaborador = item.event_id
           ? idsEventosColaborador.has(item.event_id)
           : false;
 
-        return tipoEhEntrada && eventoPertenceAoColaborador;
+        const favorecido = String(item.client_name || "").trim().toLowerCase();
+        const descricao = String(item.description || "").trim().toLowerCase();
+
+        const lancamentoEhDoColaborador =
+          favorecido === nomeColaboradorAtual ||
+          descricao.includes(nomeColaboradorAtual);
+
+        return eventoPertenceAoColaborador && lancamentoEhDoColaborador;
       })
       .reduce((total, item) => total + Number(item.amount || 0), 0);
-  }, [financeiro, eventosDoColaborador]);
+  }, [financeiro, eventosDoColaborador, colaboradorAtual]);
 
   const proximoEvento = useMemo(() => eventosProximos[0] || null, [eventosProximos]);
 
@@ -591,7 +605,7 @@ export default function AgendaColaboradorPage() {
             color="#F59E0B"
             label="Financeiro"
             value={formatarMoeda(totalCachesLancados)}
-            detail="Cachês lançados"
+            detail="Cachês recebidos"
             small
           />
           <ResumoCard
