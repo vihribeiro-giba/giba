@@ -176,10 +176,26 @@ export default function FinanceiroPage() {
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
-    const verificarTela = () => setIsMobile(window.innerWidth <= 768)
+    function verificarTela() {
+      const largura =
+        window.visualViewport?.width ||
+        window.innerWidth ||
+        document.documentElement.clientWidth
+
+      // No Safari/iPhone e no preview do Vercel, a largura útil pode ficar entre
+      // 769px e 900px. Por isso usamos 1100px para garantir o layout mobile
+      // antes que as colunas fiquem espremidas.
+      setIsMobile(largura <= 1100)
+    }
+
     verificarTela()
     window.addEventListener("resize", verificarTela)
-    return () => window.removeEventListener("resize", verificarTela)
+    window.visualViewport?.addEventListener("resize", verificarTela)
+
+    return () => {
+      window.removeEventListener("resize", verificarTela)
+      window.visualViewport?.removeEventListener("resize", verificarTela)
+    }
   }, [])
 
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([])
@@ -2262,10 +2278,12 @@ const modalCancelButtonStyle: React.CSSProperties = {
 
 
 const mobilePageStyle: React.CSSProperties = {
-  ...pageStyle,
   width: "100%",
   maxWidth: "100%",
+  minWidth: 0,
+  margin: "0 auto",
   overflowX: "hidden",
+  boxSizing: "border-box",
 }
 
 const mobileCardsGridStyle: React.CSSProperties = {
@@ -2276,15 +2294,22 @@ const mobileCardsGridStyle: React.CSSProperties = {
 
 const mobileOneColStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "1fr",
+  gridTemplateColumns: "minmax(0, 1fr)",
   gap: "18px",
   marginTop: "22px",
   alignItems: "start",
+  width: "100%",
+  minWidth: 0,
 }
 
 const mobileCardStyle: React.CSSProperties = {
   padding: "18px",
   borderRadius: "22px",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+  overflow: "hidden",
 }
 
 const mobileSearchWrapStyle: React.CSSProperties = {
