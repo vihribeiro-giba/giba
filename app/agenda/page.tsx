@@ -100,25 +100,59 @@ function normalizarTexto(valor: string) {
 function separarEnderecoNumero(endereco: string) {
   const texto = (endereco || "").trim()
 
-  const match = texto.match(/^(.*?)(?:,\s*(?:n[ºo°]?|numero|número)\s*\.?\s*:?\s*)([^,]+)$/i)
-
-  if (!match) {
-    return { enderecoBase: texto, numero: "" }
+  if (!texto) {
+    return { enderecoBase: "", numero: "" }
   }
 
+  const partes = texto
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  let numero = ""
+  const partesSemNumero: string[] = []
+
+  partes.forEach((parte) => {
+    const matchNumero = parte.match(/^(?:n[ºo°]?|numero|número)\s*\.?\s*:?\s*(.+)$/i)
+
+    if (matchNumero && !numero) {
+      numero = matchNumero[1].trim()
+      return
+    }
+
+    partesSemNumero.push(parte)
+  })
+
   return {
-    enderecoBase: match[1].trim().replace(/,\s*$/, ""),
-    numero: match[2].trim(),
+    enderecoBase: partesSemNumero.join(", "),
+    numero,
   }
 }
 
 function montarEnderecoCompleto(endereco: string, numero: string) {
-  const baseSemNumero = separarEnderecoNumero(endereco).enderecoBase || endereco.trim()
-  const numeroLimpo = numero.trim()
+  const enderecoSeparado = separarEnderecoNumero(endereco)
+  const enderecoBase = enderecoSeparado.enderecoBase || endereco.trim()
+  const numeroLimpo = (numero.trim() || enderecoSeparado.numero).trim()
 
-  if (!numeroLimpo) return endereco.trim()
+  if (!numeroLimpo) return enderecoBase
 
-  return `${baseSemNumero}, Nº ${numeroLimpo}`
+  const partes = enderecoBase
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+  if (partes.length === 0) {
+    return `Nº ${numeroLimpo}`
+  }
+
+  if (partes.length === 1) {
+    return `${partes[0]}, Nº ${numeroLimpo}`
+  }
+
+  const rua = partes[0]
+  const restante = partes.slice(1).join(", ")
+
+  return `${rua}, Nº ${numeroLimpo}, ${restante}`
 }
 
 
