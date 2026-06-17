@@ -121,6 +121,22 @@ function formatarData(data?: string | null) {
   return new Date(`${data}T00:00:00`).toLocaleDateString("pt-BR")
 }
 
+function parseValorBR(valor: string) {
+  const limpo = valor.trim()
+
+  if (!limpo) return 0
+
+  if (limpo.includes(",") && limpo.includes(".")) {
+    return Number(limpo.replace(/\./g, "").replace(",", "."))
+  }
+
+  if (limpo.includes(",")) {
+    return Number(limpo.replace(",", "."))
+  }
+
+  return Number(limpo)
+}
+
 function corCategoria(cat?: string | null) {
   if (!cat) return "#64748B"
   return CORES_CATEGORIA[cat] || "#8B35FF"
@@ -156,6 +172,15 @@ function tituloEventoPorId(eventos: Evento[], id?: string | null) {
 
 export default function FinanceiroPage() {
   const hoje = new Date()
+
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const verificarTela = () => setIsMobile(window.innerWidth <= 768)
+    verificarTela()
+    window.addEventListener("resize", verificarTela)
+    return () => window.removeEventListener("resize", verificarTela)
+  }, [])
 
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([])
   const [eventos, setEventos] = useState<Evento[]>([])
@@ -409,7 +434,7 @@ export default function FinanceiroPage() {
   /* ------------------------------- Ações --------------------------------- */
 
   async function salvarMovimentacao() {
-    const valorNum = Number(valor.replace(/\./g, "").replace(",", "."))
+    const valorNum = parseValorBR(valor)
 
     if (!descricao.trim() || !valorNum || valorNum <= 0) {
       alert("Informe ao menos a descrição e um valor válido.")
@@ -548,7 +573,7 @@ export default function FinanceiroPage() {
     <ProtectedRoute adminOnly>
       <PlanProtectedRoute modulo="financeiro">
         <AppLayout>
-          <div style={pageStyle}>
+          <div style={isMobile ? mobilePageStyle : pageStyle}>
             <style>{`.giba-scroll-hidden::-webkit-scrollbar{display:none}`}</style>
             {/* Cabeçalho */}
             <header style={headerStyle}>
@@ -604,7 +629,7 @@ export default function FinanceiroPage() {
             </header>
 
             {/* Cards de resumo */}
-            <section style={cardsGridStyle}>
+            <section style={isMobile ? mobileCardsGridStyle : cardsGridStyle}>
               <ResumoCard
                 rotulo="Entradas"
                 valor={formatarMoeda(resumo.entradas)}
@@ -638,7 +663,7 @@ export default function FinanceiroPage() {
             </section>
 
             {/* Insights da IA GIBA */}
-            <section style={{ ...cardStyle, marginBottom: "22px" }}>
+            <section style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), marginBottom: "22px" }}>
               <div style={cardHeaderStyle}>
                 <div style={iaHeaderStyle}>
                   <span style={iaIconStyle}>
@@ -679,15 +704,15 @@ export default function FinanceiroPage() {
             </section>
 
             {/* Movimentações + Nova movimentação */}
-            <section style={twoColStyle}>
+            <section style={isMobile ? mobileOneColStyle : twoColStyle}>
               {/* Lista de movimentações */}
-              <div style={{ ...cardStyle, ...movimentacoesCardStyle, minWidth: 0 }}>
+              <div style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), ...(isMobile ? mobileMovimentacoesCardStyle : movimentacoesCardStyle), minWidth: 0 }}>
                 <div style={cardHeaderStyle}>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <h2 style={cardTitleStyle}>Movimentações</h2>
                     <span style={badgeCountStyle}>{movsFiltradas.length}</span>
                   </div>
-                  <div style={searchWrapStyle}>
+                  <div style={isMobile ? mobileSearchWrapStyle : searchWrapStyle}>
                     <Search size={15} style={{ color: "#64748B" }} />
                     <input
                       value={busca}
@@ -698,15 +723,15 @@ export default function FinanceiroPage() {
                   </div>
                 </div>
 
-                <div style={tableWrapStyle} className="giba-scroll-hidden">
-                  <div style={tableHeadStyle}>
+                <div style={isMobile ? mobileTableWrapStyle : tableWrapStyle} className="giba-scroll-hidden">
+                  {!isMobile && <div style={tableHeadStyle}>
                     <span style={{ flex: "0 0 84px" }}>Data</span>
                     <span style={{ flex: 2 }}>Descrição</span>
                     <span style={{ flex: 1.3 }}>Categoria</span>
                     <span style={{ flex: "0 0 90px" }}>Tipo</span>
                     <span style={{ flex: "0 0 120px", textAlign: "right" }}>Valor</span>
                     <span style={{ flex: "0 0 30px" }} />
-                  </div>
+                  </div>}
 
                   {carregando ? (
                     <p style={vazioStyle}>Carregando movimentações...</p>
@@ -715,6 +740,63 @@ export default function FinanceiroPage() {
                   ) : (
                     movsFiltradas.map((m) => {
                       const entrada = m.type === "Entrada"
+
+                      if (isMobile) {
+                        return (
+                          <div key={m.id} style={mobileMovimentacaoItemStyle} onClick={() => setMovimentacaoSelecionada(m)} role="button" tabIndex={0}>
+                            <div style={mobileMovimentacaoTopStyle}>
+                              <span style={mobileMovimentacaoDateStyle}>
+                                {formatarData(m.payment_date) !== "-"
+                                  ? formatarData(m.payment_date)
+                                  : new Date(m.created_at).toLocaleDateString("pt-BR")}
+                              </span>
+                              <span
+                                style={{
+                                  ...typeTagStyle,
+                                  color: entrada ? "#37E884" : "#FF5B8A",
+                                  background: entrada ? "rgba(55,232,132,0.12)" : "rgba(255,91,138,0.12)",
+                                  border: `1px solid ${entrada ? "rgba(55,232,132,0.3)" : "rgba(255,91,138,0.3)"}`,
+                                }}
+                              >
+                                {m.type}
+                              </span>
+                            </div>
+
+                            <p style={mobileMovimentacaoTitleStyle}>{m.description || "—"}</p>
+                            <p style={mobileMovimentacaoSubStyle}>{m.client_name || m.payment_method || "Sem cliente informado"}</p>
+
+                            <div style={mobileMovimentacaoBottomStyle}>
+                              <span
+                                style={{
+                                  ...categoryTagStyle,
+                                  color: corCategoria(m.category),
+                                  background: `${corCategoria(m.category)}1A`,
+                                  border: `1px solid ${corCategoria(m.category)}40`,
+                                }}
+                              >
+                                {m.category || "Outros"}
+                              </span>
+
+                              <strong style={{ color: entrada ? "#37E884" : "#FF5B8A", fontSize: "15px" }}>
+                                {entrada ? "" : "-"}{formatarMoeda(Number(m.amount || 0))}
+                              </strong>
+                            </div>
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                excluirMovimentacao(m.id)
+                              }}
+                              style={mobileMovimentacaoDeleteStyle}
+                              aria-label="Excluir"
+                            >
+                              <Trash2 size={15} />
+                              Excluir
+                            </button>
+                          </div>
+                        )
+                      }
+
                       return (
                         <div key={m.id} style={tableRowStyle} onClick={() => setMovimentacaoSelecionada(m)} role="button" tabIndex={0}>
                           <span style={{ flex: "0 0 84px", ...cellMutedStyle }}>
@@ -783,7 +865,7 @@ export default function FinanceiroPage() {
               </div>
 
               {/* Nova movimentação */}
-              <div style={{ ...cardStyle, ...novaMovimentacaoCardStyle, minWidth: 0 }}>
+              <div style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), ...(isMobile ? mobileNovaMovimentacaoCardStyle : novaMovimentacaoCardStyle), minWidth: 0 }}>
                 <div style={cardHeaderStyle}>
                   <h2 style={cardTitleStyle}>Nova Movimentação</h2>
                   <div style={toggleStyle}>
@@ -826,7 +908,7 @@ export default function FinanceiroPage() {
                   </div>
                 </div>
 
-                <div style={formGridStyle}>
+                <div style={isMobile ? mobileFormGridStyle : formGridStyle}>
                   <Campo rotulo="Categoria">
                     <DropdownSearch
                       value={categoria}
@@ -976,8 +1058,8 @@ export default function FinanceiroPage() {
             </section>
 
             {/* Gráficos */}
-            <section style={threeColStyle}>
-              <div style={{ ...cardStyle, ...graficoCardCompactStyle, minWidth: 0 }} className="giba-scroll-hidden">
+            <section style={isMobile ? mobileOneColStyle : threeColStyle}>
+              <div style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), ...graficoCardCompactStyle, ...(isMobile ? mobileChartCardStyle : {}), minWidth: 0 }} className="giba-scroll-hidden">
                 <div style={cardHeaderStyle}>
                   <h2 style={cardTitleStyle}>
                     Fluxo de Caixa{" "}
@@ -987,14 +1069,14 @@ export default function FinanceiroPage() {
                 <FluxoCaixaChart dados={fluxoCaixa} />
               </div>
 
-              <div style={{ ...cardStyle, ...graficoCardCompactStyle, minWidth: 0 }} className="giba-scroll-hidden">
+              <div style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), ...graficoCardCompactStyle, ...(isMobile ? mobileChartCardStyle : {}), minWidth: 0 }} className="giba-scroll-hidden">
                 <div style={cardHeaderStyle}>
                   <h2 style={cardTitleStyle}>Despesas por Categoria</h2>
                 </div>
                 <DespesasDonut dados={despesasCategoria} />
               </div>
 
-              <div style={{ ...cardStyle, ...recebimentosCardStyle, minWidth: 0 }} className="giba-scroll-hidden">
+              <div style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), ...(isMobile ? mobileRecebimentosCardStyle : recebimentosCardStyle), minWidth: 0 }} className="giba-scroll-hidden">
                 <div style={cardHeaderStyle}>
                   <h2 style={cardTitleStyle}>Próximos Recebimentos</h2>
                 </div>
@@ -1033,7 +1115,7 @@ export default function FinanceiroPage() {
             </section>
 
             {/* Despesas recorrentes */}
-            <section style={{ ...cardStyle, marginTop: "22px" }}>
+            <section style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), marginTop: "22px" }}>
               <div style={cardHeaderStyle}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <span style={recIconStyle}>
@@ -1049,9 +1131,9 @@ export default function FinanceiroPage() {
                   vencimentos mensais.
                 </p>
               ) : (
-                <div style={recGridStyle}>
+                <div style={isMobile ? mobileRecGridStyle : recGridStyle}>
                   {recorrentes.map((r) => (
-                    <div key={r.id} style={recCardStyle}>
+                    <div key={r.id} style={isMobile ? mobileRecCardStyle : recCardStyle}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={recTopStyle}>
                           <span
@@ -1071,7 +1153,7 @@ export default function FinanceiroPage() {
                         <p style={recNameStyle}>{r.name}</p>
                         <p style={recAmountStyle}>{formatarMoeda(Number(r.amount || 0))}</p>
                       </div>
-                      <div style={recActionsStyle}>
+                      <div style={isMobile ? mobileRecActionsStyle : recActionsStyle}>
                         <button
                           onClick={() => alternarPagamentoRecorrente(r)}
                           style={{
@@ -1104,7 +1186,7 @@ export default function FinanceiroPage() {
 
           {movimentacaoSelecionada && (
             <div style={modalOverlayStyle} onClick={() => setMovimentacaoSelecionada(null)}>
-              <div style={modalCardStyle} onClick={(e) => e.stopPropagation()}>
+              <div style={isMobile ? mobileModalCardStyle : modalCardStyle} onClick={(e) => e.stopPropagation()}>
                 <div style={modalHeaderStyle}>
                   <div>
                     <span
@@ -1136,7 +1218,7 @@ export default function FinanceiroPage() {
                   </button>
                 </div>
 
-                <div style={modalInfoGridStyle}>
+                <div style={isMobile ? mobileModalInfoGridStyle : modalInfoGridStyle}>
                   <InfoDetalhe label="Valor" value={formatarMoeda(Number(movimentacaoSelecionada.amount || 0))} highlight={movimentacaoSelecionada.type === "Entrada" ? "#37E884" : "#FF5B8A"} />
                   <InfoDetalhe label="Categoria" value={movimentacaoSelecionada.category || "—"} />
                   <InfoDetalhe label="Forma de pagamento" value={movimentacaoSelecionada.payment_method || "—"} />
@@ -2176,4 +2258,168 @@ const modalCancelButtonStyle: React.CSSProperties = {
   color: "#fff",
   fontWeight: 800,
   cursor: "pointer",
+}
+
+
+const mobilePageStyle: React.CSSProperties = {
+  ...pageStyle,
+  width: "100%",
+  maxWidth: "100%",
+  overflowX: "hidden",
+}
+
+const mobileCardsGridStyle: React.CSSProperties = {
+  ...cardsGridStyle,
+  gridTemplateColumns: "1fr",
+  gap: "14px",
+}
+
+const mobileOneColStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: "18px",
+  marginTop: "22px",
+  alignItems: "start",
+}
+
+const mobileCardStyle: React.CSSProperties = {
+  padding: "18px",
+  borderRadius: "22px",
+}
+
+const mobileSearchWrapStyle: React.CSSProperties = {
+  ...searchWrapStyle,
+  width: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+}
+
+const mobileMovimentacoesCardStyle: React.CSSProperties = {
+  height: "auto",
+  maxHeight: "none",
+  display: "flex",
+  flexDirection: "column",
+}
+
+const mobileNovaMovimentacaoCardStyle: React.CSSProperties = {
+  height: "auto",
+  display: "flex",
+  flexDirection: "column",
+}
+
+const mobileFormGridStyle: React.CSSProperties = {
+  ...formGridStyle,
+  gridTemplateColumns: "1fr",
+}
+
+const mobileTableWrapStyle: React.CSSProperties = {
+  ...tableWrapStyle,
+  flex: "initial",
+  maxHeight: "520px",
+  gap: "12px",
+  paddingRight: 0,
+}
+
+const mobileMovimentacaoItemStyle: React.CSSProperties = {
+  padding: "14px",
+  borderRadius: "17px",
+  background: "rgba(255,255,255,0.035)",
+  border: "1px solid rgba(255,255,255,0.08)",
+  cursor: "pointer",
+}
+
+const mobileMovimentacaoTopStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "10px",
+  marginBottom: "10px",
+}
+
+const mobileMovimentacaoDateStyle: React.CSSProperties = {
+  fontSize: "12px",
+  color: "#94A3B8",
+  fontWeight: 700,
+}
+
+const mobileMovimentacaoTitleStyle: React.CSSProperties = {
+  margin: 0,
+  color: "#fff",
+  fontSize: "15px",
+  fontWeight: 800,
+  lineHeight: 1.35,
+}
+
+const mobileMovimentacaoSubStyle: React.CSSProperties = {
+  margin: "4px 0 0",
+  color: "#94A3B8",
+  fontSize: "13px",
+  lineHeight: 1.35,
+}
+
+const mobileMovimentacaoBottomStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  marginTop: "12px",
+  flexWrap: "wrap",
+}
+
+const mobileMovimentacaoDeleteStyle: React.CSSProperties = {
+  marginTop: "12px",
+  width: "100%",
+  height: "38px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "8px",
+  borderRadius: "12px",
+  color: "#FF8AAC",
+  background: "rgba(255,91,138,0.10)",
+  border: "1px solid rgba(255,91,138,0.24)",
+  fontSize: "12px",
+  fontWeight: 800,
+}
+
+const mobileChartCardStyle: React.CSSProperties = {
+  minHeight: "auto",
+  height: "auto",
+  overflow: "hidden",
+}
+
+const mobileRecebimentosCardStyle: React.CSSProperties = {
+  minHeight: "auto",
+  height: "auto",
+  maxHeight: "none",
+  overflowY: "visible",
+}
+
+const mobileRecGridStyle: React.CSSProperties = {
+  ...recGridStyle,
+  gridTemplateColumns: "1fr",
+}
+
+const mobileRecCardStyle: React.CSSProperties = {
+  ...recCardStyle,
+  alignItems: "stretch",
+  flexDirection: "column",
+}
+
+const mobileRecActionsStyle: React.CSSProperties = {
+  ...recActionsStyle,
+  justifyContent: "stretch",
+}
+
+const mobileModalCardStyle: React.CSSProperties = {
+  ...modalCardStyle,
+  maxHeight: "88vh",
+  overflowY: "auto",
+  padding: "18px",
+  borderRadius: "22px",
+}
+
+const mobileModalInfoGridStyle: React.CSSProperties = {
+  ...modalInfoGridStyle,
+  gridTemplateColumns: "1fr",
 }

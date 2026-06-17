@@ -1,15 +1,30 @@
 "use client"
 
+import { useEffect, useState } from "react"
+
 type Fatia = {
   label: string
   valor: number
   cor: string
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const verificarTela = () => setIsMobile(window.innerWidth <= 768)
+    verificarTela()
+    window.addEventListener("resize", verificarTela)
+    return () => window.removeEventListener("resize", verificarTela)
+  }, [])
+
+  return isMobile
+}
+
 export default function DespesasDonut({ dados }: { dados: Fatia[] }) {
+  const isMobile = useIsMobile()
   const total = dados.reduce((acc, d) => acc + d.valor, 0)
 
-  // Monta o conic-gradient acumulando as fatias.
   let acumulado = 0
   const segmentos = dados.map((d) => {
     const inicio = total > 0 ? (acumulado / total) * 100 : 0
@@ -24,12 +39,12 @@ export default function DespesasDonut({ dados }: { dados: Fatia[] }) {
       : "conic-gradient(rgba(255,255,255,0.08) 0% 100%)"
 
   return (
-    <div style={wrapStyle}>
+    <div style={isMobile ? mobileWrapStyle : wrapStyle}>
       <div style={donutWrapStyle}>
-        <div style={{ ...donutStyle, background: gradiente }}>
-          <div style={donutHoleStyle}>
+        <div style={{ ...(isMobile ? mobileDonutStyle : donutStyle), background: gradiente }}>
+          <div style={isMobile ? mobileDonutHoleStyle : donutHoleStyle}>
             <span style={holeLabelStyle}>Total</span>
-            <span style={holeValueStyle}>
+            <span style={isMobile ? mobileHoleValueStyle : holeValueStyle}>
               {total.toLocaleString("pt-BR", {
                 style: "currency",
                 currency: "BRL",
@@ -40,7 +55,7 @@ export default function DespesasDonut({ dados }: { dados: Fatia[] }) {
         </div>
       </div>
 
-      <div style={legendStyle}>
+      <div style={isMobile ? mobileLegendStyle : legendStyle}>
         {dados.map((d) => {
           const pct = total > 0 ? Math.round((d.valor / total) * 100) : 0
           return (
@@ -66,10 +81,21 @@ const wrapStyle: React.CSSProperties = {
   alignItems: "center",
   gap: "22px",
   flexWrap: "wrap",
+  maxWidth: "100%",
+  overflow: "hidden",
+}
+
+const mobileWrapStyle: React.CSSProperties = {
+  ...wrapStyle,
+  flexDirection: "column",
+  alignItems: "stretch",
+  gap: "16px",
 }
 
 const donutWrapStyle: React.CSSProperties = {
   flexShrink: 0,
+  display: "flex",
+  justifyContent: "center",
 }
 
 const donutStyle: React.CSSProperties = {
@@ -80,6 +106,12 @@ const donutStyle: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   boxShadow: "0 20px 45px rgba(0,0,0,0.30)",
+}
+
+const mobileDonutStyle: React.CSSProperties = {
+  ...donutStyle,
+  width: "138px",
+  height: "138px",
 }
 
 const donutHoleStyle: React.CSSProperties = {
@@ -94,6 +126,12 @@ const donutHoleStyle: React.CSSProperties = {
   gap: "2px",
 }
 
+const mobileDonutHoleStyle: React.CSSProperties = {
+  ...donutHoleStyle,
+  width: "84px",
+  height: "84px",
+}
+
 const holeLabelStyle: React.CSSProperties = {
   fontSize: "11px",
   color: "#94A3B8",
@@ -106,12 +144,23 @@ const holeValueStyle: React.CSSProperties = {
   fontWeight: 800,
 }
 
+const mobileHoleValueStyle: React.CSSProperties = {
+  ...holeValueStyle,
+  fontSize: "13px",
+}
+
 const legendStyle: React.CSSProperties = {
   flex: 1,
   minWidth: "160px",
   display: "flex",
   flexDirection: "column",
   gap: "11px",
+}
+
+const mobileLegendStyle: React.CSSProperties = {
+  ...legendStyle,
+  width: "100%",
+  minWidth: 0,
 }
 
 const legendItemStyle: React.CSSProperties = {
@@ -125,6 +174,7 @@ const legendLeftStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: "9px",
+  minWidth: 0,
 }
 
 const dotStyle: React.CSSProperties = {
@@ -132,18 +182,23 @@ const dotStyle: React.CSSProperties = {
   height: "11px",
   borderRadius: "4px",
   display: "inline-block",
+  flexShrink: 0,
 }
 
 const legendLabelStyle: React.CSSProperties = {
   fontSize: "13px",
   color: "#CBD5E1",
   fontWeight: 600,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
 }
 
 const legendPctStyle: React.CSSProperties = {
   fontSize: "13px",
   color: "#FFFFFF",
   fontWeight: 800,
+  flexShrink: 0,
 }
 
 const vazioStyle: React.CSSProperties = {

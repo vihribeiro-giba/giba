@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 type Ponto = {
   label: string
@@ -13,7 +13,22 @@ function formatarK(valor: number) {
   return String(Math.round(valor))
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const verificarTela = () => setIsMobile(window.innerWidth <= 768)
+    verificarTela()
+    window.addEventListener("resize", verificarTela)
+    return () => window.removeEventListener("resize", verificarTela)
+  }, [])
+
+  return isMobile
+}
+
 export default function FluxoCaixaChart({ dados }: { dados: Ponto[] }) {
+  const isMobile = useIsMobile()
+
   const maxValor = useMemo(() => {
     const todos = dados.flatMap((d) => [d.entradas, d.saidas])
     const max = Math.max(...todos, 1)
@@ -27,7 +42,7 @@ export default function FluxoCaixaChart({ dados }: { dados: Ponto[] }) {
 
   return (
     <div style={wrapStyle}>
-      <div style={legendStyle}>
+      <div style={isMobile ? mobileLegendStyle : legendStyle}>
         <span style={legendItemStyle}>
           <span style={{ ...legendDotStyle, background: "#37E884" }} />
           Entradas
@@ -38,7 +53,7 @@ export default function FluxoCaixaChart({ dados }: { dados: Ponto[] }) {
         </span>
       </div>
 
-      <div style={chartAreaStyle}>
+      <div style={isMobile ? mobileChartAreaStyle : chartAreaStyle}>
         <div style={yAxisStyle}>
           {marcadores.map((m, i) => (
             <span key={i} style={yLabelStyle}>
@@ -62,6 +77,7 @@ export default function FluxoCaixaChart({ dados }: { dados: Ponto[] }) {
                     title={`Entradas: ${d.entradas}`}
                     style={{
                       ...barStyle,
+                      width: isMobile ? "22%" : "26%",
                       height: `${(d.entradas / maxValor) * 100}%`,
                       background: "linear-gradient(180deg, #37E884, #18B866)",
                     }}
@@ -70,6 +86,7 @@ export default function FluxoCaixaChart({ dados }: { dados: Ponto[] }) {
                     title={`Saídas: ${d.saidas}`}
                     style={{
                       ...barStyle,
+                      width: isMobile ? "22%" : "26%",
                       height: `${(d.saidas / maxValor) * 100}%`,
                       background: "linear-gradient(180deg, #FF7BA3, #FF5B8A)",
                     }}
@@ -85,13 +102,25 @@ export default function FluxoCaixaChart({ dados }: { dados: Ponto[] }) {
   )
 }
 
-const wrapStyle: React.CSSProperties = { width: "100%" }
+const wrapStyle: React.CSSProperties = {
+  width: "100%",
+  maxWidth: "100%",
+  overflow: "hidden",
+  boxSizing: "border-box",
+}
 
 const legendStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "flex-end",
   gap: "18px",
   marginBottom: "14px",
+  flexWrap: "wrap",
+}
+
+const mobileLegendStyle: React.CSSProperties = {
+  ...legendStyle,
+  justifyContent: "flex-start",
+  gap: "14px",
 }
 
 const legendItemStyle: React.CSSProperties = {
@@ -114,6 +143,14 @@ const chartAreaStyle: React.CSSProperties = {
   display: "flex",
   gap: "10px",
   height: "210px",
+  width: "100%",
+  minWidth: 0,
+}
+
+const mobileChartAreaStyle: React.CSSProperties = {
+  ...chartAreaStyle,
+  height: "190px",
+  gap: "8px",
 }
 
 const yAxisStyle: React.CSSProperties = {
@@ -121,6 +158,7 @@ const yAxisStyle: React.CSSProperties = {
   flexDirection: "column",
   justifyContent: "space-between",
   paddingBottom: "22px",
+  flexShrink: 0,
 }
 
 const yLabelStyle: React.CSSProperties = {
@@ -132,6 +170,8 @@ const yLabelStyle: React.CSSProperties = {
 const barsAreaStyle: React.CSSProperties = {
   position: "relative",
   flex: 1,
+  minWidth: 0,
+  overflow: "hidden",
 }
 
 const gridLinesStyle: React.CSSProperties = {
@@ -153,11 +193,12 @@ const groupsStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "flex-end",
   justifyContent: "space-around",
-  gap: "8px",
+  gap: "5px",
 }
 
 const groupStyle: React.CSSProperties = {
   flex: 1,
+  minWidth: 0,
   height: "100%",
   display: "flex",
   flexDirection: "column",
@@ -171,13 +212,13 @@ const barPairStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "flex-end",
   justifyContent: "center",
-  gap: "5px",
+  gap: "4px",
   paddingBottom: "6px",
+  overflow: "hidden",
 }
 
 const barStyle: React.CSSProperties = {
-  width: "26%",
-  maxWidth: "20px",
+  maxWidth: "18px",
   minHeight: "3px",
   borderRadius: "6px 6px 3px 3px",
   transition: "height 0.4s ease",

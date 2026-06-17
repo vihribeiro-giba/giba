@@ -153,7 +153,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div style={appShellStyle}>
-      {isMobile && (
+      {isMobile && !mobileOpen && (
         <button
           onClick={() => setMobileOpen(true)}
           aria-label="Abrir menu"
@@ -256,7 +256,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         style={{
           ...mainStyle,
           marginLeft: isMobile ? "0" : "280px",
-          padding: isMobile ? "86px 16px 22px" : "30px",
+          padding: isMobile ? "88px 16px 24px" : "30px",
+          overflowX: "hidden",
+          maxWidth: isMobile ? "100vw" : "none",
         }}
       >
         {children}
@@ -272,20 +274,22 @@ const appShellStyle: React.CSSProperties = {
   fontFamily:
     'Inter, Arial, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   overflow: "hidden",
+  width: "100%",
+  maxWidth: "100vw",
   background:
     "radial-gradient(circle at 15% 0%, rgba(139,53,255,0.18), transparent 32%), radial-gradient(circle at 85% 10%, rgba(0,170,255,0.14), transparent 34%), linear-gradient(135deg, #050510, #070B16 45%, #00172F)",
 };
 
 const mobileMenuButtonStyle: React.CSSProperties = {
   position: "fixed",
-  top: "18px",
-  left: "18px",
-  zIndex: 9999,
+  top: "calc(18px + env(safe-area-inset-top, 0px))",
+  left: "16px",
+  zIndex: 900,
   border: "1px solid rgba(255,255,255,0.16)",
   borderRadius: "14px",
   background: "rgba(255,255,255,0.08)",
-  width: "46px",
-  height: "46px",
+  width: "48px",
+  height: "48px",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -300,7 +304,7 @@ const mobileOverlayStyle: React.CSSProperties = {
   inset: 0,
   background: "rgba(0,0,0,0.62)",
   backdropFilter: "blur(4px)",
-  zIndex: 999,
+  zIndex: 998,
 };
 
 const sidebarStyle: React.CSSProperties = {
@@ -322,6 +326,7 @@ const sidebarInnerStyle: React.CSSProperties = {
   flexDirection: "column",
   padding: "22px 14px 16px",
   boxSizing: "border-box",
+  minWidth: 0,
 };
 
 const sidebarTopStyle: React.CSSProperties = {
@@ -502,8 +507,10 @@ const logoutButtonStyle: React.CSSProperties = {
 
 const mainStyle: React.CSSProperties = {
   flex: 1,
+  minWidth: 0,
   height: "100vh",
   overflowY: "auto",
+  overflowX: "hidden",
   width: "100%",
   boxSizing: "border-box",
 };
