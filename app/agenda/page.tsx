@@ -158,6 +158,15 @@ export default function AgendaPage() {
   const hoje = useMemo(() => new Date(), [])
   const hojeStr = ymd(hoje)
 
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const verificarTela = () => setIsMobile(window.innerWidth <= 1100)
+    verificarTela()
+    window.addEventListener("resize", verificarTela)
+    return () => window.removeEventListener("resize", verificarTela)
+  }, [])
+
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
   const [formatos, setFormatos] = useState<FormatoShow[]>([])
@@ -688,7 +697,7 @@ export default function AgendaPage() {
       <PlanProtectedRoute modulo="agenda">
         <AppLayout>
           {/* ===== HEADER ===== */}
-          <div style={headerRow}>
+          <div style={isMobile ? mobileHeaderRow : headerRow}>
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
               <div style={headerIconBox}>
                 <CalendarDays size={24} />
@@ -699,7 +708,7 @@ export default function AgendaPage() {
               </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={isMobile ? mobileHeaderActions : { display: "flex", alignItems: "center", gap: 10 }}>
               <button style={iconButton} aria-label="Buscar">
                 <Search size={18} />
               </button>
@@ -718,7 +727,7 @@ export default function AgendaPage() {
           </div>
 
           {/* ===== TOOLBAR ===== */}
-          <div style={toolbarRow}>
+          <div style={isMobile ? mobileToolbarRow : toolbarRow}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <div style={navGroup}>
                 <button onClick={mesAnterior} style={navArrow} aria-label="Mês anterior">
@@ -757,7 +766,7 @@ export default function AgendaPage() {
                 <SlidersHorizontal size={16} />
                 Filtros
               </button>
-              <div style={searchBox}>
+              <div style={isMobile ? mobileSearchBox : searchBox}>
                 <Search size={16} color="#94A3B8" />
                 <input
                   value={busca}
@@ -795,7 +804,7 @@ export default function AgendaPage() {
           )}
 
           {/* ===== MÉTRICAS ===== */}
-          <div style={metricsGrid}>
+          <div style={isMobile ? mobileMetricsGrid : metricsGrid}>
             <MetricCard
               icon={<CalendarCheck size={20} />}
               tint="#8B35FF"
@@ -838,20 +847,20 @@ export default function AgendaPage() {
           </div>
 
           {/* ===== CONTEÚDO PRINCIPAL ===== */}
-          <div style={mainGrid}>
+          <div style={isMobile ? mobileMainGrid : mainGrid}>
             {/* Coluna esquerda */}
             <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
-              <div style={calendarCard}>
+              <div style={isMobile ? mobileCalendarCard : calendarCard}>
                 {vista === "mes" && (
                   <>
-                    <div style={weekHeader}>
+                    <div style={isMobile ? mobileWeekHeader : weekHeader}>
                       {diasSemana.map((d) => (
                         <div key={d} style={weekHeaderCell}>
                           {d}
                         </div>
                       ))}
                     </div>
-                    <div style={monthGrid}>
+                    <div style={isMobile ? mobileMonthGrid : monthGrid}>
                       {diasCalendario.map((dia, idx) => {
                         if (dia === null) return <div key={`v-${idx}`} style={emptyCell} />
                         const dataStr = formatarData(dia)
@@ -864,7 +873,7 @@ export default function AgendaPage() {
                             key={dataStr}
                             onClick={() => setDiaSelecionado(dataStr)}
                             style={{
-                              ...dayCell,
+                              ...(isMobile ? mobileDayCell : dayCell),
                               ...(selecionado ? dayCellSelected : {}),
                             }}
                           >
@@ -901,7 +910,7 @@ export default function AgendaPage() {
                 )}
 
                 {vista === "semana" && (
-                  <div style={monthGrid}>
+                  <div style={isMobile ? mobileWeekGrid : monthGrid}>
                     {diasDaSemana.map((d) => {
                       const dataStr = ymd(d)
                       const doDia = eventosDoDia(dataStr)
@@ -911,7 +920,7 @@ export default function AgendaPage() {
                         <button
                           key={dataStr}
                           onClick={() => setDiaSelecionado(dataStr)}
-                          style={{ ...dayCell, minHeight: 220, ...(selecionado ? dayCellSelected : {}) }}
+                          style={{ ...(isMobile ? mobileDayCell : dayCell), minHeight: isMobile ? 150 : 220, ...(selecionado ? dayCellSelected : {}) }}
                         >
                           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, marginBottom: 8 }}>
                             <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 700 }}>{diasSemana[d.getDay()]}</span>
@@ -973,7 +982,7 @@ export default function AgendaPage() {
               {/* Próximos eventos */}
               <div style={panelCard}>
                 <div style={panelHeader}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={isMobile ? mobileHeaderActions : { display: "flex", alignItems: "center", gap: 10 }}>
                     <CalendarRange size={18} color="#00AAFF" />
                     <h2 style={panelTitle}>Próximos Eventos</h2>
                   </div>
@@ -1002,7 +1011,7 @@ export default function AgendaPage() {
               {/* Eventos do dia */}
               <div style={panelCard}>
                 <div style={panelHeader}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={isMobile ? mobileHeaderActions : { display: "flex", alignItems: "center", gap: 10 }}>
                     <CalendarCheck size={18} color="#8B35FF" />
                     <div>
                       <h2 style={panelTitle}>Eventos do dia</h2>
@@ -1025,7 +1034,7 @@ export default function AgendaPage() {
                   {eventosDoDiaSelecionado.map((ev) => {
                     const cfg = getStageConfig(statusParaExibicaoEvento(ev))
                     return (
-                      <div key={ev.id} style={eventoDoDiaCardPremium}>
+                      <div key={ev.id} style={isMobile ? mobileEventoDoDiaCardPremium : eventoDoDiaCardPremium}>
                         <div style={eventoDoDiaTopRow}>
                           <div style={eventoDoDiaTitleGroup}>
                             <span style={{ ...horaDot, background: cfg.color }} />
@@ -1081,7 +1090,7 @@ export default function AgendaPage() {
               {/* Novo evento */}
               <div style={panelCard}>
                 <button onClick={() => setFormAberto((f) => !f)} style={novoEventoHeader}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={isMobile ? mobileHeaderActions : { display: "flex", alignItems: "center", gap: 10 }}>
                     <Plus size={18} color="#00AAFF" />
                     <h2 style={panelTitle}>{editandoId ? "Editar Evento" : "Novo Evento"}</h2>
                   </div>
@@ -1125,7 +1134,7 @@ export default function AgendaPage() {
                     </Campo>
 
                     <Campo label="CEP do Evento">
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10 }}>
+                      <div style={isMobile ? mobileCepGrid : { display: "grid", gridTemplateColumns: "1fr auto", gap: 10 }}>
                         <input
                           value={cep}
                           onChange={(e) => setCep(limparCep(e.target.value))}
@@ -1152,7 +1161,7 @@ export default function AgendaPage() {
                       <input value={numeroEndereco} onChange={(e) => setNumeroEndereco(e.target.value)} placeholder="Número do local" style={inputStyle} />
                     </Campo>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div style={isMobile ? mobileFormTwoGrid : { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                       <Campo label="Data">
                         <input type="date" value={diaSelecionado} onChange={(e) => setDiaSelecionado(e.target.value)} style={inputStyle} />
                       </Campo>
@@ -1161,7 +1170,7 @@ export default function AgendaPage() {
                       </Campo>
                     </div>
 
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div style={isMobile ? mobileFormTwoGrid : { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                       <Campo label="Duração">
                         <input value={showDuration} onChange={(e) => setShowDuration(e.target.value)} placeholder="Ex: 2 horas" style={inputStyle} />
                       </Campo>
@@ -1200,7 +1209,7 @@ export default function AgendaPage() {
                       <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Detalhes do evento..." style={{ ...inputStyle, resize: "vertical" }} />
                     </Campo>
 
-                    <div style={{ display: "flex", gap: 10 }}>
+                    <div style={isMobile ? mobileFormActions : { display: "flex", gap: 10 }}>
                       {editandoId && (
                         <button type="button" onClick={limparFormulario} style={{ ...ghostButton, flex: 1, justifyContent: "center" }}>
                           Cancelar
@@ -1233,7 +1242,7 @@ export default function AgendaPage() {
           {/* ===== MODAL DETALHES ===== */}
           {eventoSelecionado && (
             <div style={modalOverlay} onClick={() => setEventoSelecionado(null)}>
-              <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+              <div style={isMobile ? mobileModalCard : modalCard} onClick={(e) => e.stopPropagation()}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
                   <div>
                     <span
@@ -1255,7 +1264,7 @@ export default function AgendaPage() {
                   </button>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                <div style={isMobile ? mobileModalInfoGrid : { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
                   <InfoLinha icon={<CalendarDays size={16} />} label="Data" valor={new Date(eventoSelecionado.event_date + "T00:00:00").toLocaleDateString("pt-BR")} />
                   <InfoLinha icon={<Clock size={16} />} label="Horário" valor={`${eventoSelecionado.event_time} · ${eventoSelecionado.show_duration}`} />
                   <InfoLinha icon={<MapPin size={16} />} label="Local" valor={eventoSelecionado.location || "—"} />
@@ -1306,7 +1315,7 @@ export default function AgendaPage() {
                   </div>
                 )}
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 18 }}>
+                <div style={isMobile ? mobileModalActionsGrid : { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 18 }}>
                   <button onClick={() => gerarContrato(eventoSelecionado)} style={{ ...primaryButton, justifyContent: "center" }}>
                     <FileText size={16} /> Gerar contrato
                   </button>
@@ -1329,7 +1338,7 @@ export default function AgendaPage() {
 
           {whatsappEvento && (
             <div style={modalOverlay} onClick={fecharModalWhatsapp}>
-              <div style={whatsappModalCard} onClick={(e) => e.stopPropagation()}>
+              <div style={isMobile ? mobileWhatsappModalCard : whatsappModalCard} onClick={(e) => e.stopPropagation()}>
                 <div style={whatsappModalHeader}>
                   <div>
                     <p style={whatsappEyebrow}>CONFIRMAÇÃO VIA WHATSAPP</p>
@@ -1369,7 +1378,7 @@ export default function AgendaPage() {
                   <strong>{"{cliente}"}</strong>, <strong>{"{data}"}</strong>, <strong>{"{horario}"}</strong>, <strong>{"{formato}"}</strong>, <strong>{"{local}"}</strong>, <strong>{"{cache}"}</strong>, <strong>{"{pagamento}"}</strong>.
                 </div>
 
-                <div style={whatsappActionsGrid}>
+                <div style={isMobile ? mobileWhatsappActionsGrid : whatsappActionsGrid}>
                   <button type="button" onClick={salvarModeloWhatsapp} style={ghostButton}>
                     Salvar modelo
                   </button>
@@ -2024,11 +2033,13 @@ const countBadge: React.CSSProperties = {
 const eventoLinha: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 14,
+  gap: 12,
   padding: "12px 14px",
   borderRadius: 16,
   border: "1px solid rgba(255,255,255,0.07)",
   background: "rgba(255,255,255,0.025)",
+  flexWrap: "wrap",
+  overflow: "hidden",
 }
 const dataChip: React.CSSProperties = {
   width: 46,
@@ -2455,3 +2466,140 @@ const whatsappActionsGrid: React.CSSProperties = {
   marginTop: 18,
 }
 
+
+
+/* ===================== MOBILE / TABLET GIBA ===================== */
+
+const mobileHeaderRow: React.CSSProperties = {
+  ...headerRow,
+  flexDirection: "column",
+  alignItems: "stretch",
+  gap: 14,
+}
+
+const mobileHeaderActions: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+}
+
+const mobileToolbarRow: React.CSSProperties = {
+  ...toolbarRow,
+  flexDirection: "column",
+  alignItems: "stretch",
+  gap: 12,
+}
+
+const mobileSearchBox: React.CSSProperties = {
+  ...searchBox,
+  width: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+}
+
+const mobileMetricsGrid: React.CSSProperties = {
+  ...metricsGrid,
+  gridTemplateColumns: "1fr",
+}
+
+const mobileMainGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 18,
+  alignItems: "start",
+  width: "100%",
+  overflow: "hidden",
+}
+
+const mobileCalendarCard: React.CSSProperties = {
+  ...calendarCard,
+  padding: 14,
+  overflowX: "auto",
+  scrollbarWidth: "none",
+  msOverflowStyle: "none",
+}
+
+const mobileWeekHeader: React.CSSProperties = {
+  ...weekHeader,
+  minWidth: 620,
+}
+
+const mobileMonthGrid: React.CSSProperties = {
+  ...monthGrid,
+  minWidth: 620,
+}
+
+const mobileWeekGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(7, minmax(86px, 1fr))",
+  gap: 8,
+  minWidth: 620,
+}
+
+const mobileDayCell: React.CSSProperties = {
+  ...dayCell,
+  minHeight: 92,
+  padding: 7,
+}
+
+const mobileEventoDoDiaCardPremium: React.CSSProperties = {
+  ...eventoDoDiaCardPremium,
+  padding: 14,
+  overflow: "hidden",
+}
+
+const mobileCepGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 10,
+}
+
+const mobileFormTwoGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 10,
+}
+
+const mobileFormActions: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+}
+
+const mobileModalCard: React.CSSProperties = {
+  ...modalCard,
+  maxWidth: "100%",
+  maxHeight: "86vh",
+  padding: 18,
+  borderRadius: 20,
+}
+
+const mobileModalInfoGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 12,
+  marginBottom: 16,
+}
+
+const mobileModalActionsGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 10,
+  marginTop: 18,
+}
+
+const mobileWhatsappModalCard: React.CSSProperties = {
+  ...whatsappModalCard,
+  maxWidth: "100%",
+  maxHeight: "86vh",
+  padding: 18,
+  borderRadius: 20,
+}
+
+const mobileWhatsappActionsGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 10,
+  marginTop: 18,
+}
