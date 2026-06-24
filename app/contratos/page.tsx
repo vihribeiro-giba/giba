@@ -4,10 +4,25 @@ import ProtectedRoute from "../../components/ProtectedRoute";
 import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import jsPDF from "jspdf";
 import Link from "next/link";
+import {
+  CalendarDays,
+  CheckCircle2,
+  Download,
+  Edit3,
+  Eye,
+  FileCheck2,
+  FileText,
+  MapPin,
+  Plus,
+  Search,
+  Settings2,
+  Sparkles,
+  User,
+} from "lucide-react";
 
 type Evento = {
   id: string;
@@ -21,6 +36,8 @@ type Evento = {
   fee: number | string;
   payment_format: string;
   client_name: string;
+  status?: string | null;
+  created_at?: string | null;
 };
 
 type Cliente = {
@@ -101,6 +118,7 @@ function ContratosContent() {
   const [eventoSelecionado, setEventoSelecionado] = useState("");
   const [textoContrato, setTextoContrato] = useState("");
   const [carregando, setCarregando] = useState(true);
+  const [busca, setBusca] = useState("");
 
   async function obterUsuarioLogado() {
     const { data, error } = await supabase.auth.getUser();
@@ -188,6 +206,98 @@ function ContratosContent() {
 
   function normalizar(texto: string) {
     return (texto || "").toLowerCase().trim();
+  }
+
+  const eventosFiltrados = useMemo(() => {
+    const termo = normalizar(busca);
+
+    return eventos
+      .filter((evento) => statusContrato(evento) !== "Assinado")
+      .filter((evento) => {
+        if (!termo) return true;
+
+        const numeroContrato = numeroContratoEvento(evento);
+
+        return [
+          evento.client_name,
+          evento.event_type,
+          evento.show_format,
+          evento.location,
+          evento.event_date,
+          numeroContrato,
+        ]
+          .filter(Boolean)
+          .some((valor) => normalizar(String(valor)).includes(termo));
+      })
+      .sort((a, b) => {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        const dataA = a.event_date ? new Date(`${a.event_date}T00:00:00`).getTime() : Number.MAX_SAFE_INTEGER;
+        const dataB = b.event_date ? new Date(`${b.event_date}T00:00:00`).getTime() : Number.MAX_SAFE_INTEGER;
+        const aPassado = dataA < hoje.getTime();
+        const bPassado = dataB < hoje.getTime();
+
+        if (aPassado !== bPassado) return aPassado ? 1 : -1;
+        return dataA - dataB;
+      });
+  }, [eventos, busca, textoContrato, eventoSelecionado]);
+
+  const eventoAtual = useMemo(
+    () => eventos.find((evento) => evento.id === eventoSelecionado) || null,
+    [eventos, eventoSelecionado]
+  );
+
+  function numeroContratoEvento(evento: Evento) {
+    return `CTR-${String(evento.id || "").slice(0, 8).toUpperCase()}`;
+  }
+
+  function dataCriacaoEvento(evento: Evento) {
+    if (!evento.created_at) return "Data não informada";
+    return new Date(evento.created_at).toLocaleDateString("pt-BR");
+  }
+
+  function cidadeEvento(evento: Evento) {
+    return (evento.location || "").split(",").map((item) => item.trim()).filter(Boolean).slice(-2).join(", ") || "Local não informado";
+  }
+
+  function statusContrato(evento: Evento) {
+    const status = normalizar(evento.status || "");
+
+    if (status.includes("cancel")) return "Cancelado";
+    if (status.includes("assin")) return "Assinado";
+    if (status.includes("envi")) return "Enviado";
+    if (textoContrato && evento.id === eventoSelecionado) return "Gerado";
+
+    return "Pendente";
+  }
+
+  function selecionarEvento(id: string) {
+    setEventoSelecionado(id);
+    setTextoContrato("");
+  }
+
+  async function marcarComoAssinado(id: string) {
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("events")
+      .update({ status: "assinado" })
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error("Erro ao marcar contrato como assinado:", error);
+      alert("Erro ao marcar contrato como assinado.");
+      return;
+    }
+
+    setEventos((atuais) =>
+      atuais.map((evento) => (evento.id === id ? { ...evento, status: "assinado" } : evento))
+    );
+
+    if (eventoSelecionado === id) setTextoContrato("");
   }
 
   function formatarDataBR(data: string) {
@@ -415,8 +525,8 @@ function ContratosContent() {
     return `**${empresa.razao_social}**, de CNPJ **${empresa.cnpj}**, com Sede na **${empresa.endereco_completo}**, **${empresa.cidade}**. Representado por **${empresa.responsavel}**, portador do CPF nº **${empresa.cpf}**, residente e domiciliado na **${empresa.endereco_completo}**, **${empresa.cidade}, ${empresa.estado}**.`;
   }
 
-  function gerarContrato() {
-    const evento = eventos.find((e) => e.id === eventoSelecionado);
+  function gerarContrato(eventoId = eventoSelecionado) {
+    const evento = eventos.find((e) => e.id === eventoId);
 
     if (!evento) {
       alert("Selecione um evento.");
@@ -488,6 +598,7 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
 
 **${modeloContrato.cidade_assinatura || "Sabará"}, ${dataAtualContrato()}.**`;
 
+    setEventoSelecionado(evento.id);
     setTextoContrato(texto);
   }
 
@@ -729,26 +840,158 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
     <ProtectedRoute adminOnly>
       <PlanProtectedRoute modulo="contratos">
         <AppLayout>
-        <div style={{ color: "#fff" }}>
-          <h1 style={{ fontSize: "34px", marginBottom: "8px" }}>Contratos</h1>
+        <div className="contratos-page">
+          <header className="page-header">
+            <div className="header-left">
+              <div className="header-icon" aria-hidden="true">
+                <FileText size={26} />
+              </div>
+              <div>
+                <h1>Contratos</h1>
+                <p>Gerencie contratos, modelos e documentos gerados pela plataforma.</p>
+              </div>
+            </div>
 
-          <p style={{ color: "#b8b8d8", marginBottom: "22px" }}>
-            Gere contratos automáticos dos eventos cadastrados.
-          </p>
+            <button type="button" className="btn-primary header-btn" onClick={() => gerarContrato()}>
+              <Plus size={18} aria-hidden="true" />
+              Novo Contrato
+            </button>
+          </header>
 
-          <div style={{ marginBottom: "24px" }}>
-            <Link href="/contratos-modelo">
-              <button style={botaoConfigurarContrato}>Configurar Contrato</button>
+          <section className="hero-grid">
+            <div className="metric-card">
+              <div>
+                <span>Eventos disponíveis</span>
+                <strong>{eventos.length}</strong>
+                <p>Base da agenda</p>
+              </div>
+              <CalendarDays size={24} aria-hidden="true" />
+            </div>
+
+            <div className="metric-card">
+              <div>
+                <span>Contratos filtrados</span>
+                <strong>{eventosFiltrados.length}</strong>
+                <p>Resultado atual</p>
+              </div>
+              <Search size={24} aria-hidden="true" />
+            </div>
+
+            <Link href="/contratos-modelo" className="config-card-link">
+              <div className="config-card">
+                <div>
+                  <span>Modelo ativo</span>
+                  <strong>Configurar Contrato</strong>
+                  <p>{modeloContrato.titulo || modeloPadrao.titulo}</p>
+                </div>
+                <Settings2 size={24} aria-hidden="true" />
+              </div>
             </Link>
-          </div>
+          </section>
 
-          <section style={panelStyle}>
-            <label style={labelStyle}>Selecione o evento</label>
+          <div className="main-grid">
+            <section className="panel contracts-panel">
+              <div className="panel-header">
+                <div>
+                  <h2>Contratos pendentes e gerados</h2>
+                  <p>Mais próximos primeiro. Busque por cliente, evento, cidade ou número.</p>
+                </div>
+                <span className="count-badge">{eventosFiltrados.length}</span>
+              </div>
+
+              <div className="search-box">
+                <Search size={18} aria-hidden="true" />
+                <input
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Buscar por cliente, evento, cidade ou número..."
+                />
+              </div>
+
+              {carregando ? (
+                <div className="empty-state">
+                  <div className="spinner" aria-hidden="true" />
+                  <h3>Carregando contratos</h3>
+                  <p>Estamos preparando os dados da agenda, clientes e modelos.</p>
+                </div>
+              ) : eventosFiltrados.length === 0 ? (
+                <div className="empty-state">
+                  <FileCheck2 size={34} aria-hidden="true" />
+                  <h3>Nenhum contrato encontrado</h3>
+                  <p>Contratos assinados saem desta lista. Ajuste a busca para ver outros pendentes.</p>
+                </div>
+              ) : (
+                <div className="contracts-list">
+                  {eventosFiltrados.map((evento) => {
+                    const selecionado = evento.id === eventoSelecionado;
+                    const status = statusContrato(evento);
+
+                    return (
+                      <article key={evento.id} className={`contract-card ${selecionado ? "active" : ""}`}>
+                        <div className="contract-main">
+                          <div className="contract-top">
+                            <div className="doc-icon" aria-hidden="true">
+                              <FileText size={20} />
+                            </div>
+                            <div>
+                              <h3>{evento.event_type || evento.show_format || "Contrato de show"}</h3>
+                              <p>{numeroContratoEvento(evento)}</p>
+                            </div>
+                          </div>
+
+                          <div className="contract-info">
+                            <span><User size={14} aria-hidden="true" />{evento.client_name || "Cliente não informado"}</span>
+                            <span><FileCheck2 size={14} aria-hidden="true" />{evento.show_format || "Evento sem formato"}</span>
+                            <span><CalendarDays size={14} aria-hidden="true" />{formatarDataBR(evento.event_date)}</span>
+                            <span><MapPin size={14} aria-hidden="true" />{cidadeEvento(evento)}</span>
+                          </div>
+
+                          <div className="contract-meta">
+                            <span className={`status-badge status-${status.toLowerCase()}`}>{status}</span>
+                            <span>Criado em {dataCriacaoEvento(evento)}</span>
+                          </div>
+                        </div>
+
+                        <div className="card-actions">
+                          <button type="button" onClick={() => gerarContrato(evento.id)} className="icon-action">
+                            <Eye size={15} aria-hidden="true" />
+                            Visualizar
+                          </button>
+                          <button type="button" onClick={baixarPDF} className="icon-action">
+                            <Download size={15} aria-hidden="true" />
+                            Baixar PDF
+                          </button>
+                          <button type="button" onClick={() => selecionarEvento(evento.id)} className="icon-action">
+                            <Edit3 size={15} aria-hidden="true" />
+                            Editar
+                          </button>
+                          <button type="button" onClick={() => marcarComoAssinado(evento.id)} className="icon-action success">
+                            <CheckCircle2 size={15} aria-hidden="true" />
+                            Assinado
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            <aside className="side-stack">
+              <section className="panel quick-panel">
+                <div className="panel-header compact">
+                  <div>
+                    <h2>Ações rápidas</h2>
+                    <p>Selecione um evento, gere a prévia e baixe o PDF.</p>
+                  </div>
+                </div>
+
+            <label className="field-label">Selecione o evento</label>
 
             <select
-              style={inputStyle}
+              className="select-field"
               value={eventoSelecionado}
-              onChange={(e) => setEventoSelecionado(e.target.value)}
+              onChange={(e) => selecionarEvento(e.target.value)}
             >
               <option value="">Selecione um evento</option>
 
@@ -759,14 +1002,37 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
               ))}
             </select>
 
-            <div style={{ display: "flex", gap: "12px", marginTop: "18px", flexWrap: "wrap" }}>
-              <button type="button" onClick={gerarContrato} style={buttonStyle}>
+            {eventoAtual && (
+              <div className="selected-event">
+                <span>{numeroContratoEvento(eventoAtual)}</span>
+                <strong>{eventoAtual.client_name}</strong>
+                <p>{formatarDataBR(eventoAtual.event_date)} - {cidadeEvento(eventoAtual)}</p>
+                <div className="selected-status">
+                  <span className={`status-badge status-${statusContrato(eventoAtual).toLowerCase()}`}>
+                    {statusContrato(eventoAtual)}
+                  </span>
+                  <small>{textoContrato ? "Prévia gerada" : "Aguardando geração"}</small>
+                </div>
+              </div>
+            )}
+
+            <div className="quick-actions">
+              <button type="button" onClick={() => gerarContrato()} className="btn-primary">
+                <Sparkles size={17} aria-hidden="true" />
                 Gerar Contrato
               </button>
 
-              <button type="button" onClick={baixarPDF} style={buttonSecondaryStyle}>
+              <button type="button" onClick={baixarPDF} className="btn-secondary">
+                <Download size={17} aria-hidden="true" />
                 Baixar PDF
               </button>
+
+              {eventoAtual && (
+                <button type="button" onClick={() => marcarComoAssinado(eventoAtual.id)} className="btn-success">
+                  <CheckCircle2 size={17} aria-hidden="true" />
+                  Marcar como assinado
+                </button>
+              )}
             </div>
 
             {carregando && (
@@ -774,17 +1040,625 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
                 Carregando informações...
               </p>
             )}
-          </section>
+              </section>
+
+            </aside>
+          </div>
 
           {textoContrato && (
-            <section style={{ ...panelStyle, marginTop: "24px" }}>
-              <h2 style={{ marginTop: 0 }}>Prévia do Contrato</h2>
+            <section className="panel preview-panel">
+              <div className="panel-header">
+                <div>
+                  <h2>Prévia do Contrato</h2>
+                  <p>Revise o documento antes de baixar o PDF.</p>
+                </div>
+                <button type="button" onClick={baixarPDF} className="btn-secondary small">
+                  <Download size={16} aria-hidden="true" />
+                  Baixar PDF
+                </button>
+              </div>
 
-              <div style={previewStyle}>
+              <div className="preview-box">
                 {textoPreviewSemMarkdown(textoContrato)}
               </div>
             </section>
           )}
+
+          <style jsx>{`
+            .contratos-page {
+              width: 100%;
+              max-width: 1320px;
+              margin: 0 auto;
+              color: #ffffff;
+            }
+
+            .page-header {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 18px;
+              flex-wrap: wrap;
+              margin-bottom: 24px;
+            }
+
+            .header-left {
+              display: flex;
+              align-items: center;
+              gap: 16px;
+            }
+
+            .header-icon {
+              width: 62px;
+              height: 62px;
+              border-radius: 20px;
+              background: linear-gradient(135deg, #8b35ff, #00aaff);
+              display: grid;
+              place-items: center;
+              color: #fff;
+              box-shadow: 0 18px 38px rgba(139, 53, 255, 0.35);
+              flex-shrink: 0;
+            }
+
+            h1,
+            h2,
+            h3,
+            p {
+              margin: 0;
+            }
+
+            h1 {
+              font-size: 32px;
+              line-height: 1.1;
+              font-weight: 900;
+              letter-spacing: -0.5px;
+            }
+
+            .page-header p,
+            .panel-header p,
+            .config-card p,
+            .selected-event p {
+              color: #94a3b8;
+              font-size: 14px;
+              line-height: 1.45;
+              margin-top: 4px;
+            }
+
+            .hero-grid {
+              display: grid;
+              grid-template-columns: repeat(3, minmax(0, 1fr));
+              gap: 18px;
+              margin-bottom: 22px;
+            }
+
+            .metric-card,
+            .config-card,
+            .panel {
+              border-radius: 24px;
+              background: rgba(255, 255, 255, 0.04);
+              border: 1px solid rgba(255, 255, 255, 0.09);
+              box-shadow: 0 22px 50px rgba(0, 0, 0, 0.22);
+              backdrop-filter: blur(18px);
+            }
+
+            .metric-card,
+            .config-card {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 14px;
+              padding: 20px;
+              text-decoration: none;
+            }
+
+            .config-card-link {
+              display: block;
+              min-width: 0;
+              color: inherit;
+              text-decoration: none;
+            }
+
+            .metric-card span,
+            .config-card span {
+              display: block;
+              color: #94a3b8;
+              font-size: 13px;
+              font-weight: 700;
+            }
+
+            .metric-card strong,
+            .config-card strong {
+              display: block;
+              margin-top: 8px;
+              color: #ffffff;
+              font-size: 26px;
+              font-weight: 900;
+            }
+
+            .config-card strong {
+              font-size: 20px;
+            }
+
+            .metric-card p,
+            .config-card p {
+              margin-top: 5px;
+              color: #64748b;
+              font-size: 12px;
+              line-height: 1.4;
+            }
+
+            .metric-card svg,
+            .config-card svg {
+              width: 50px;
+              height: 50px;
+              padding: 13px;
+              border-radius: 16px;
+              color: #8b35ff;
+              background: rgba(139, 53, 255, 0.16);
+              border: 1px solid rgba(139, 53, 255, 0.28);
+              flex-shrink: 0;
+            }
+
+            .main-grid {
+              display: grid;
+              grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.8fr);
+              gap: 22px;
+              align-items: start;
+            }
+
+            .panel {
+              padding: 22px;
+            }
+
+            .side-stack {
+              display: grid;
+              gap: 22px;
+            }
+
+            .panel-header {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 14px;
+              margin-bottom: 18px;
+            }
+
+            .panel-header.compact {
+              display: block;
+            }
+
+            .panel-header h2 {
+              color: #fff;
+              font-size: 21px;
+              font-weight: 900;
+              letter-spacing: -0.02em;
+            }
+
+            .count-badge {
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              min-width: 34px;
+              height: 30px;
+              padding: 0 12px;
+              border-radius: 999px;
+              color: #c4b5fd;
+              background: rgba(139, 53, 255, 0.16);
+              border: 1px solid rgba(139, 53, 255, 0.28);
+              font-size: 13px;
+              font-weight: 900;
+            }
+
+            .search-box {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              height: 50px;
+              padding: 0 16px;
+              border-radius: 16px;
+              background: rgba(255, 255, 255, 0.05);
+              border: 1px solid rgba(255, 255, 255, 0.1);
+              color: #94a3b8;
+              margin-bottom: 18px;
+            }
+
+            .search-box input,
+            .select-field {
+              width: 100%;
+              border: 0;
+              outline: 0;
+              color: #fff;
+              background: transparent;
+              font-size: 14px;
+            }
+
+            .search-box input::placeholder {
+              color: rgba(148, 163, 184, 0.72);
+            }
+
+            .contracts-list {
+              display: grid;
+              gap: 14px;
+              max-height: 590px;
+              overflow-y: auto;
+              padding-right: 4px;
+              scrollbar-width: none;
+              -ms-overflow-style: none;
+            }
+
+            .contracts-list::-webkit-scrollbar {
+              display: none;
+            }
+
+            .contract-card {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 150px;
+              gap: 16px;
+              padding: 18px;
+              border-radius: 20px;
+              background: rgba(15, 23, 42, 0.58);
+              border: 1px solid rgba(255, 255, 255, 0.09);
+              transition: border-color 0.18s ease, transform 0.18s ease;
+            }
+
+            .contract-card:hover,
+            .contract-card.active {
+              border-color: rgba(139, 53, 255, 0.35);
+              transform: translateY(-1px);
+            }
+
+            .contract-top {
+              display: flex;
+              align-items: center;
+              gap: 12px;
+              margin-bottom: 14px;
+            }
+
+            .doc-icon {
+              width: 44px;
+              height: 44px;
+              border-radius: 14px;
+              display: grid;
+              place-items: center;
+              color: #c4b5fd;
+              background: rgba(139, 53, 255, 0.14);
+              border: 1px solid rgba(139, 53, 255, 0.22);
+              flex-shrink: 0;
+            }
+
+            .contract-card h3 {
+              color: #fff;
+              font-size: 17px;
+              font-weight: 900;
+              line-height: 1.25;
+            }
+
+            .contract-top p {
+              margin-top: 4px;
+              color: #38bdf8;
+              font-size: 12px;
+              font-weight: 800;
+            }
+
+            .contract-info {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 9px;
+              margin-bottom: 14px;
+            }
+
+            .contract-info span {
+              display: flex;
+              align-items: center;
+              gap: 7px;
+              min-width: 0;
+              color: #cbd5e1;
+              font-size: 13px;
+              line-height: 1.35;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            }
+
+            .contract-info svg {
+              color: #93c5fd;
+              flex-shrink: 0;
+            }
+
+            .contract-meta {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              flex-wrap: wrap;
+              color: #64748b;
+              font-size: 12px;
+              font-weight: 700;
+            }
+
+            .status-badge {
+              display: inline-flex;
+              align-items: center;
+              min-height: 26px;
+              padding: 0 10px;
+              border-radius: 999px;
+              font-size: 12px;
+              font-weight: 900;
+              border: 1px solid transparent;
+            }
+
+            .status-gerado {
+              color: #38bdf8;
+              background: rgba(14, 165, 233, 0.14);
+              border-color: rgba(14, 165, 233, 0.28);
+            }
+
+            .status-enviado {
+              color: #c4b5fd;
+              background: rgba(139, 53, 255, 0.16);
+              border-color: rgba(139, 53, 255, 0.3);
+            }
+
+            .status-assinado {
+              color: #37e884;
+              background: rgba(55, 232, 132, 0.12);
+              border-color: rgba(55, 232, 132, 0.26);
+            }
+
+            .status-pendente {
+              color: #ffb454;
+              background: rgba(255, 180, 84, 0.12);
+              border-color: rgba(255, 180, 84, 0.28);
+            }
+
+            .status-cancelado {
+              color: #fb7185;
+              background: rgba(244, 63, 94, 0.14);
+              border-color: rgba(244, 63, 94, 0.28);
+            }
+
+            .card-actions,
+            .quick-actions {
+              display: grid;
+              gap: 9px;
+              align-content: start;
+            }
+
+            .btn-primary,
+            .btn-secondary,
+            .icon-action,
+            .btn-success {
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              gap: 8px;
+              min-height: 42px;
+              border-radius: 14px;
+              border: 1px solid transparent;
+              color: #fff;
+              font-size: 14px;
+              font-weight: 900;
+              cursor: pointer;
+              text-decoration: none;
+              transition: transform 0.16s ease, opacity 0.16s ease;
+            }
+
+            .btn-primary:hover,
+            .btn-secondary:hover,
+            .icon-action:hover,
+            .btn-success:hover {
+              transform: translateY(-1px);
+              opacity: 0.94;
+            }
+
+            .btn-primary {
+              width: 100%;
+              background: linear-gradient(135deg, #8b35ff, #00aaff);
+              box-shadow: 0 16px 32px rgba(139, 53, 255, 0.28);
+              padding: 0 16px;
+            }
+
+            .header-btn {
+              width: auto;
+            }
+
+            .btn-secondary,
+            .icon-action,
+            .btn-success {
+              background: rgba(255, 255, 255, 0.07);
+              border-color: rgba(255, 255, 255, 0.12);
+            }
+
+            .btn-secondary.small {
+              width: auto;
+              padding: 0 16px;
+            }
+
+            .icon-action {
+              color: #dbeafe;
+            }
+
+            .icon-action.danger {
+              color: #fb7185;
+              background: rgba(244, 63, 94, 0.12);
+              border-color: rgba(244, 63, 94, 0.22);
+            }
+
+            .icon-action.success,
+            .btn-success {
+              color: #37e884;
+              background: rgba(55, 232, 132, 0.12);
+              border-color: rgba(55, 232, 132, 0.26);
+            }
+
+            button:disabled {
+              cursor: not-allowed;
+              opacity: 0.52;
+              transform: none !important;
+            }
+
+            .field-label {
+              display: block;
+              margin: 18px 0 8px;
+              color: #cbd5e1;
+              font-size: 13px;
+              font-weight: 900;
+            }
+
+            .select-field {
+              height: 50px;
+              padding: 0 14px;
+              border-radius: 16px;
+              background: rgba(2, 6, 23, 0.45);
+              border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .select-field option {
+              color: #fff;
+              background: #0a0f1c;
+            }
+
+            .selected-event {
+              margin-top: 14px;
+              padding: 14px;
+              border-radius: 16px;
+              background: rgba(15, 23, 42, 0.58);
+              border: 1px solid rgba(255, 255, 255, 0.08);
+            }
+
+            .selected-event > span {
+              color: #38bdf8;
+              font-size: 12px;
+              font-weight: 900;
+            }
+
+            .selected-event strong {
+              display: block;
+              margin-top: 4px;
+              color: #fff;
+              font-size: 16px;
+            }
+
+            .selected-status {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 10px;
+              margin-top: 12px;
+              padding-top: 12px;
+              border-top: 1px solid rgba(255, 255, 255, 0.08);
+            }
+
+            .selected-status small {
+              color: #94a3b8;
+              font-size: 12px;
+              font-weight: 800;
+            }
+
+            .quick-actions {
+              margin-top: 16px;
+            }
+
+            .preview-panel {
+              margin-top: 22px;
+            }
+
+            .preview-box {
+              width: 100%;
+              min-height: 520px;
+              padding: 22px;
+              border-radius: 18px;
+              border: 1px solid rgba(255, 255, 255, 0.1);
+              background: rgba(2, 6, 23, 0.45);
+              color: #fff;
+              font-size: 15px;
+              line-height: 1.7;
+              box-sizing: border-box;
+              white-space: pre-wrap;
+              text-align: justify;
+            }
+
+            .empty-state {
+              min-height: 280px;
+              display: grid;
+              place-items: center;
+              text-align: center;
+              padding: 32px;
+              border-radius: 20px;
+              border: 1px dashed rgba(255, 255, 255, 0.14);
+              background: rgba(2, 6, 23, 0.3);
+              color: #94a3b8;
+            }
+
+            .empty-state svg {
+              color: #c4b5fd;
+            }
+
+            .empty-state h3 {
+              margin-top: 12px;
+              color: #fff;
+              font-size: 18px;
+              font-weight: 900;
+            }
+
+            .empty-state p {
+              margin-top: 8px;
+              max-width: 380px;
+              line-height: 1.6;
+            }
+
+            .spinner {
+              width: 38px;
+              height: 38px;
+              border-radius: 999px;
+              border: 3px solid rgba(255, 255, 255, 0.12);
+              border-top-color: #8b35ff;
+              animation: spin 0.8s linear infinite;
+            }
+
+            @keyframes spin {
+              to {
+                transform: rotate(360deg);
+              }
+            }
+
+            @media (max-width: 1100px) {
+              .hero-grid,
+              .main-grid {
+                grid-template-columns: 1fr;
+              }
+            }
+
+            @media (max-width: 720px) {
+              .page-header {
+                align-items: flex-start;
+              }
+
+              .header-btn {
+                width: 100%;
+              }
+
+              h1 {
+                font-size: 30px;
+              }
+
+              .panel,
+              .metric-card {
+                border-radius: 20px;
+                padding: 18px;
+              }
+
+              .contract-card {
+                grid-template-columns: 1fr;
+              }
+
+              .contract-info {
+                grid-template-columns: 1fr;
+              }
+
+              .card-actions {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+              }
+            }
+          `}</style>
         </div>
         </AppLayout>
       </PlanProtectedRoute>
@@ -800,74 +1674,3 @@ export default function ContratosPage() {
   );
 }
 
-const panelStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  borderRadius: "24px",
-  padding: "24px",
-  boxShadow: "0 0 35px rgba(0,0,0,0.25)",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  marginBottom: "8px",
-  color: "#cbd5e1",
-  fontSize: "14px",
-  fontWeight: "bold",
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "14px",
-  borderRadius: "12px",
-  border: "1px solid rgba(255,255,255,0.16)",
-  background: "rgba(0,0,0,0.28)",
-  color: "#fff",
-  fontSize: "15px",
-  boxSizing: "border-box",
-};
-
-const buttonStyle: React.CSSProperties = {
-  padding: "14px 22px",
-  borderRadius: "12px",
-  border: "none",
-  background: "linear-gradient(90deg, #8b35ff, #00aaff)",
-  color: "#fff",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const buttonSecondaryStyle: React.CSSProperties = {
-  padding: "14px 22px",
-  borderRadius: "12px",
-  border: "1px solid rgba(255,255,255,0.16)",
-  background: "rgba(255,255,255,0.08)",
-  color: "#fff",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const botaoConfigurarContrato: React.CSSProperties = {
-  padding: "14px 22px",
-  borderRadius: "12px",
-  border: "none",
-  background: "linear-gradient(90deg, #8b35ff, #00aaff)",
-  color: "#fff",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const previewStyle: React.CSSProperties = {
-  width: "100%",
-  minHeight: "520px",
-  padding: "22px",
-  borderRadius: "16px",
-  border: "1px solid rgba(255,255,255,0.16)",
-  background: "rgba(0,0,0,0.30)",
-  color: "#fff",
-  fontSize: "15px",
-  lineHeight: "1.7",
-  boxSizing: "border-box",
-  whiteSpace: "pre-wrap",
-  textAlign: "justify",
-};
