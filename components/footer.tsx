@@ -6,16 +6,12 @@ const whatsapp =
 
 const footerLinks = {
   produto: [
-    { name: "Recursos", href: "#recursos" },
     { name: "Funcionalidades", href: "#funcionalidades" },
     { name: "Planos", href: "#planos" },
-    { name: "Demonstração", href: "#demo" },
   ],
   empresa: [
     { name: "Sobre", href: "#sobre" },
     { name: "Contato", href: whatsapp },
-    { name: "Blog", href: whatsapp },
-    { name: "Carreiras", href: whatsapp },
   ],
   legal: [
     { name: "Termos de uso", href: whatsapp },
@@ -114,7 +110,7 @@ export function Footer() {
 
           <div className="flex items-center gap-4">
             <span className="text-xs text-muted-foreground sm:text-sm">
-              Para bandas e artistas
+              contato@plataformagiba.com.br
             </span>
           </div>
         </div>

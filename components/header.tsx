@@ -13,10 +13,8 @@ export function Header() {
     "https://wa.me/5531993575969?text=Olá!%20Quero%20conhecer%20a%20plataforma%20GIBA."
 
   const navItems = [
-    { name: "Recursos", href: "#recursos" },
     { name: "Funcionalidades", href: "#funcionalidades" },
     { name: "Planos", href: "#planos" },
-    { name: "Demonstração", href: "#demo" },
     { name: "Sobre", href: "#sobre" },
     { name: "Contato", href: "#contato" },
   ]
@@ -54,9 +52,9 @@ export function Header() {
             </Button>
           </Link>
 
-          <a href={whatsapp} target="_blank" rel="noopener noreferrer">
+          <a href="/cadastro">
             <Button className="bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-lg shadow-violet-500/25 hover:from-violet-700 hover:to-violet-600 hover:shadow-violet-500/40">
-              Começar agora
+              Começar Agora
             </Button>
           </a>
         </div>
@@ -95,13 +93,13 @@ export function Header() {
               </Link>
 
               <a
-                href={whatsapp}
+                href="/cadastro"
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <Button className="w-full bg-gradient-to-r from-violet-600 to-violet-500 text-white shadow-lg shadow-violet-500/25 hover:from-violet-700 hover:to-violet-600">
-                  Começar agora
+                  Começar Agora
                 </Button>
               </a>
             </div>

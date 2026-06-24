@@ -50,31 +50,30 @@ export function Hero() {
             </h1>
 
             <p className="mx-auto max-w-lg text-sm leading-relaxed text-muted-foreground sm:text-base lg:mx-0 lg:text-lg">
-              Organize agenda, financeiro, contratos, clientes e produção
-              artística em um só lugar e tenha mais tempo para o que realmente
+              Organize Agenda, Financeiro, Contratos, Clientes, Colaboradores e Gestão de Eventos em um só lugar e tenha mais tempo para o que realmente
               importa:{" "}
-              <span className="font-medium text-cyan-400">a música.</span>
+              <span className="font-medium text-cyan-400">a Música.</span>
             </p>
 
             <div className="flex flex-col justify-center gap-3 sm:flex-row lg:justify-start">
-              <a href={whatsapp} target="_blank" rel="noopener noreferrer">
+              <a href="/cadastro">
                 <Button
                   size="lg"
                   className="h-11 bg-gradient-to-r from-violet-600 to-violet-500 px-6 text-sm text-white shadow-lg shadow-violet-500/30 hover:from-violet-700 hover:to-violet-600 hover:shadow-violet-500/50 sm:h-12 sm:px-8 sm:text-base"
                 >
-                  Começar agora
+                  Teste Grátis
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </a>
 
-              <Link href="/login">
+              <Link href={whatsapp} target="_blank" rel="noopener noreferrer">
                 <Button
                   size="lg"
                   variant="outline"
                   className="h-11 border-border/60 bg-transparent px-6 text-sm text-foreground hover:bg-secondary/50 sm:h-12 sm:px-8 sm:text-base"
                 >
                   <Play className="mr-2 h-4 w-4 fill-current" />
-                  Ver demonstração
+                  Fale Conosco
                 </Button>
               </Link>
             </div>

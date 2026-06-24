@@ -24,8 +24,8 @@ const features = [
   },
   {
     icon: Music,
-    title: "Produção Artística",
-    description: "Centralize riders, demandas técnicas e equipes para cada evento.",
+    title: "Gestão de Eventos",
+    description: "Organize eventos, demandas técnicas e equipes para cada evento.",
     iconBg: "bg-orange-500/20",
     iconColor: "text-orange-400",
   },
