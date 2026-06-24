@@ -6,26 +6,13 @@ import './globals.css'
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
-export const metadata: Metadata = {
-  title: 'GIBA - Gestão Inteligente para Bandas e Artistas',
-  description: 'Organize agenda, financeiro, contratos, clientes e produção artística em um só lugar e tenha mais tempo para o que realmente importa: a música.',
-  generator: 'v0.app',
+export const metadata = {
+  title: "Plataforma GIBA",
+  description: "Gestão Inteligente para Bandas e Artistas",
+
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: "/icon.png",
+    apple: "/apple-icon.png",
   },
 }
 
