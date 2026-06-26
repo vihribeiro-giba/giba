@@ -3,6 +3,17 @@
 import { useEffect, useState } from "react";
 import jsPDF from "jspdf";
 
+import CustosOperacionais from "../../components/calculadora/CustosOperacionais";
+import EquipeCard from "../../components/calculadora/EquipeCard";
+import EquipamentosCard from "../../components/calculadora/EquipamentosCard";
+import HeaderCalculadora from "../../components/calculadora/HeaderCalculadora";
+import ImpostosCard from "../../components/calculadora/ImpostosCard";
+import InformacoesGerais from "../../components/calculadora/InformacoesGerais";
+import LucroCard from "../../components/calculadora/LucroCard";
+import OrcamentosSalvos from "../../components/calculadora/OrcamentosSalvos";
+import ResultadoFinal from "../../components/calculadora/ResultadoFinal";
+import ResumoSimulacao from "../../components/calculadora/ResumoSimulacao";
+import TaxasMarketingCard from "../../components/calculadora/TaxasMarketingCard";
 import AppLayout from "../../components/AppLayout";
 import ProtectedRoute from "../../components/ProtectedRoute";
 import PlanProtectedRoute from "../../components/PlanProtectedRoute";
@@ -104,6 +115,10 @@ export default function CalculadoraShowPage() {
   carregarOrcamentos();
   carregarColaboradores();
 }, []);
+
+  useEffect(() => {
+    setValorNota(valorShow);
+  }, [valorShow]);
 
   async function carregarOrcamentos() {
     const user = await obterUsuarioLogado();
@@ -623,6 +638,110 @@ async function carregarColaboradores() {
     <ProtectedRoute adminOnly>
       <PlanProtectedRoute modulo="calculadora-show">
         <AppLayout>
+          <div className="min-h-screen text-white">
+            <HeaderCalculadora onNovaSimulacao={limparCalculadora} />
+
+            <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_340px]">
+              <main className="grid gap-6">
+                <ResultadoFinal
+                  custoTotal={formatarMoeda(totalCustos)}
+                  lucro={formatarMoeda(lucroLiquido)}
+                  precoIdeal={formatarMoeda(valorNumerico(valorShow))}
+                  precoMinimo={formatarMoeda(totalCustos)}
+                  precoSugerido={formatarMoeda(valorNumerico(valorShow))}
+                  lucroPercentual={`${margem.toFixed(2)}%`}
+                />
+
+                <InformacoesGerais
+                  nomeOrcamento={nomeOrcamento}
+                  setNomeOrcamento={setNomeOrcamento}
+                  valorShow={valorShow}
+                  setValorShow={setValorShow}
+                  dataFinanceiro={dataFinanceiro}
+                  setDataFinanceiro={setDataFinanceiro}
+                  onSalvar={salvarOrcamento}
+                  onExportar={exportarPDF}
+                  onLimpar={limparCalculadora}
+                />
+
+                <OrcamentosSalvos
+                  orcamentos={orcamentosSalvos}
+                  formatarDataHora={formatarDataHora}
+                  onCarregar={carregarOrcamento}
+                  onExcluir={excluirOrcamento}
+                />
+
+                <EquipeCard
+                  itens={caches}
+                  setItens={setCaches}
+                  colaboradores={colaboradores}
+                  atualizarItem={atualizarItem}
+                  adicionarItem={adicionarItem}
+                  removerItem={removerItem}
+                  total={formatarMoeda(totalCaches)}
+                />
+
+                <CustosOperacionais
+                  itens={logistica}
+                  setItens={setLogistica}
+                  atualizarItem={atualizarItem}
+                  adicionarItem={adicionarItem}
+                  removerItem={removerItem}
+                  total={formatarMoeda(totalLogistica)}
+                />
+
+                <EquipamentosCard
+                  itens={efeitos}
+                  setItens={setEfeitos}
+                  atualizarItem={atualizarItem}
+                  adicionarItem={adicionarItem}
+                  removerItem={removerItem}
+                  total={formatarMoeda(totalEfeitos)}
+                />
+
+                <TaxasMarketingCard
+                  itens={marketing}
+                  setItens={setMarketing}
+                  atualizarItem={atualizarItem}
+                  adicionarItem={adicionarItem}
+                  removerItem={removerItem}
+                  total={formatarMoeda(totalMarketing)}
+                />
+
+                <ImpostosCard
+                  valorBase={formatarMoeda(valorNumerico(valorShow))}
+                  percentualImposto={percentualImposto}
+                  setPercentualImposto={setPercentualImposto}
+                  impostoCalculado={formatarMoeda(impostoCalculado)}
+                />
+
+                <LucroCard
+                  cacheArtista={cacheArtista}
+                  setCacheArtista={setCacheArtista}
+                  lucroLiquido={formatarMoeda(lucroLiquido)}
+                  margem={`${margem.toFixed(2)}%`}
+                />
+              </main>
+
+              <div className="2xl:sticky 2xl:top-6 2xl:self-start">
+                <ResumoSimulacao
+                  custos={formatarMoeda(totalCustos)}
+                  equipe={formatarMoeda(totalCaches)}
+                  equipamentos={formatarMoeda(totalEfeitos)}
+                  lucro={formatarMoeda(lucroLiquido)}
+                  precoFinal={formatarMoeda(valorNumerico(valorShow))}
+                  dataFinanceiro={dataFinanceiro}
+                  setDataFinanceiro={setDataFinanceiro}
+                  onSalvar={salvarOrcamento}
+                  onExportar={exportarPDF}
+                  onEnviarFinanceiro={enviarParaFinanceiro}
+                  onLimpar={limparCalculadora}
+                />
+              </div>
+            </div>
+          </div>
+
+        {false && (
         <div style={{ color: "#fff" }}>
           <h1 style={{ fontSize: "34px", marginBottom: "8px" }}>
             Calculadora de Show
@@ -826,6 +945,7 @@ async function carregarColaboradores() {
             </div>
           </section>
         </div>
+        )}
         </AppLayout>
       </PlanProtectedRoute>
     </ProtectedRoute>
