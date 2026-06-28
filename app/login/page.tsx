@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { supabase } from "../../lib/supabase";
@@ -15,6 +15,13 @@ export default function LoginPage() {
   const [carregando, setCarregando] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [modo, setModo] = useState<ModoAuth>("login");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("confirmed") === "true") {
+      setSucesso("E-mail confirmado com sucesso. Agora você já pode acessar o GIBA.");
+    }
+  }, []);
 
   async function fazerLogin(e: React.FormEvent) {
     e.preventDefault();
