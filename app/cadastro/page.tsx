@@ -5,6 +5,14 @@ import Link from "next/link";
 import { ArrowLeft, Eye, EyeOff, Lock, Mail, User } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
+function obterRedirectUrl(path: string) {
+  if (typeof window === "undefined") {
+    return path;
+  }
+
+  return `${window.location.origin}${path}`;
+}
+
 export default function CadastroPage() {
   const [nomeArtistico, setNomeArtistico] = useState("");
   const [email, setEmail] = useState("");
@@ -104,7 +112,7 @@ export default function CadastroPage() {
       email: emailTratado,
       password: senha,
       options: {
-        emailRedirectTo: `${window.location.origin}/login?confirmed=true`,
+        emailRedirectTo: obterRedirectUrl("/login?confirmed=true"),
         data: {
           nome_artistico: nomeTratado,
           nome: nomeTratado,
@@ -135,7 +143,6 @@ export default function CadastroPage() {
     }
 
     if (!data.session) {
-      await criarRegistrosIniciais(user.id, nomeTratado, emailTratado);
       setAguardandoConfirmacao(true);
       setSucesso("Enviamos um link de confirmação para o seu e-mail.");
       setCarregando(false);
@@ -176,7 +183,7 @@ export default function CadastroPage() {
         type: "signup",
         email: emailTratado,
         options: {
-          emailRedirectTo: `${window.location.origin}/login?confirmed=true`,
+          emailRedirectTo: obterRedirectUrl("/login?confirmed=true"),
         },
       });
 

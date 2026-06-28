@@ -3,9 +3,108 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Eye, EyeOff, Lock, Mail } from "lucide-react";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { supabase } from "../../lib/supabase";
 
 type ModoAuth = "login" | "recuperar";
+
+function obterRedirectUrl(path: string) {
+  if (typeof window === "undefined") {
+    return path;
+  }
+
+  return `${window.location.origin}${path}`;
+}
+
+function obterNomeInicial(user: SupabaseUser) {
+  const metadata = user.user_metadata || {};
+  const nomeMetadata = metadata.nome_artistico || metadata.nome || metadata.name;
+
+  if (typeof nomeMetadata === "string" && nomeMetadata.trim()) {
+    return nomeMetadata.trim();
+  }
+
+  return user.email?.split("@")[0] || "GIBA";
+}
+
+async function garantirContaInicial(user: SupabaseUser) {
+  const emailTratado = user.email?.trim().toLowerCase() || "";
+  const nomeTratado = obterNomeInicial(user);
+
+  const { data: empresaExistente, error: erroBuscaEmpresa } = await supabase
+    .from("company_settings")
+    .select("id")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (erroBuscaEmpresa) {
+    console.error("Erro ao buscar configurações iniciais:", erroBuscaEmpresa);
+    return false;
+  }
+
+  if (!empresaExistente) {
+    const { error: erroEmpresa } = await supabase.from("company_settings").insert({
+      user_id: user.id,
+      nome_artistico: nomeTratado,
+      razao_social: "",
+      cnpj: "",
+      responsavel: "",
+      cpf: "",
+      email: emailTratado,
+      telefone: "",
+      endereco_completo: "",
+      cidade: "",
+      estado: "",
+      pix: "",
+      banco: "",
+      observacoes: "",
+      logo_url: "",
+    });
+
+    if (erroEmpresa) {
+      console.error("Erro ao criar configurações iniciais:", erroEmpresa);
+      return false;
+    }
+  }
+
+  const { data: assinaturaExistente, error: erroBuscaAssinatura } = await supabase
+    .from("subscriptions")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("status", "ativo")
+    .limit(1)
+    .maybeSingle();
+
+  if (erroBuscaAssinatura) {
+    console.error("Erro ao buscar assinatura inicial:", erroBuscaAssinatura);
+    return false;
+  }
+
+  if (!assinaturaExistente) {
+    const dataInicioTrial = new Date();
+    const dataFimTrial = new Date();
+    dataFimTrial.setDate(dataFimTrial.getDate() + 7);
+
+    const { error: erroAssinatura } = await supabase.from("subscriptions").insert({
+      user_id: user.id,
+      plano: "teste",
+      status: "ativo",
+      data_inicio: dataInicioTrial.toISOString(),
+      data_fim: dataFimTrial.toISOString(),
+      trial_dias: 7,
+      trial_finalizado: false,
+      mercadopago_subscription_id: null,
+    });
+
+    if (erroAssinatura) {
+      console.error("Erro ao criar assinatura inicial:", erroAssinatura);
+      return false;
+    }
+  }
+
+  return true;
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -17,10 +116,19 @@ export default function LoginPage() {
   const [modo, setModo] = useState<ModoAuth>("login");
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("confirmed") === "true") {
-      setSucesso("E-mail confirmado com sucesso. Agora você já pode acessar o GIBA.");
+    async function prepararConfirmacao() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("confirmed") === "true") {
+        setSucesso("E-mail confirmado com sucesso. Agora você já pode acessar o GIBA.");
+
+        const { data } = await supabase.auth.getUser();
+        if (data.user) {
+          await garantirContaInicial(data.user);
+        }
+      }
     }
+
+    prepararConfirmacao();
   }, []);
 
   async function fazerLogin(e: React.FormEvent) {
@@ -60,9 +168,8 @@ export default function LoginPage() {
         .eq("status", "Ativo")
         .maybeSingle();
 
-      setCarregando(false);
-
       if (colaborador) {
+        setCarregando(false);
         localStorage.setItem(
           "giba_colaborador_session",
           JSON.stringify({
@@ -76,6 +183,21 @@ export default function LoginPage() {
         );
 
         window.location.href = "/agenda-colaborador";
+        return;
+      }
+
+      if (!data.user) {
+        setCarregando(false);
+        setErro("Não foi possível validar sua conta. Tente novamente.");
+        return;
+      }
+
+      const contaPreparada = await garantirContaInicial(data.user);
+
+      setCarregando(false);
+
+      if (!contaPreparada) {
+        setErro("Login realizado, mas não foi possível ativar o plano teste. Tente novamente.");
         return;
       }
 
@@ -135,7 +257,7 @@ export default function LoginPage() {
     setCarregando(true);
 
     const { error } = await supabase.auth.resetPasswordForEmail(emailTratado, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: obterRedirectUrl("/reset-password"),
     });
 
     setCarregando(false);
