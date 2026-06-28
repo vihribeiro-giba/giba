@@ -30,6 +30,11 @@ function extrairUserId(externalReference?: string) {
   return externalReference.split(":")[0] || null;
 }
 
+function extrairUserIdDeMetadata(metadata?: Record<string, unknown> | null) {
+  const userId = metadata?.user_id || metadata?.userId || metadata?.giba_user_id;
+  return typeof userId === "string" && userId.trim() ? userId.trim() : null;
+}
+
 function extrairEmailPagamento(externalReference?: string, payerEmail?: string) {
   const partes = externalReference?.split(":") || [];
   const emailReference = partes[2];
@@ -45,10 +50,33 @@ function extrairEmailPagamento(externalReference?: string, payerEmail?: string) 
   return payerEmail?.trim().toLowerCase() || null;
 }
 
+function extrairEmailDeMetadata(metadata?: Record<string, unknown> | null) {
+  const email =
+    metadata?.mercado_pago_email ||
+    metadata?.mercadoPagoEmail ||
+    metadata?.payer_email ||
+    metadata?.payerEmail;
+
+  return typeof email === "string" && email.includes("@")
+    ? email.trim().toLowerCase()
+    : null;
+}
+
 function extrairPlano(
   externalReference?: string,
-  reason?: string
+  reason?: string,
+  metadata?: Record<string, unknown> | null
 ): PlanoId | null {
+  const planoMetadata = metadata?.plan || metadata?.plano;
+
+  if (
+    planoMetadata === "essencial" ||
+    planoMetadata === "profissional" ||
+    planoMetadata === "expertise"
+  ) {
+    return planoMetadata;
+  }
+
   if (externalReference?.includes(":")) {
     const plano = externalReference.split(":")[1];
 
@@ -68,6 +96,50 @@ function extrairPlano(
   if (texto.includes("essencial")) return "essencial";
 
   return null;
+}
+
+async function buscarUsuarioPorAssinaturaMp(
+  supabaseAdmin: any,
+  assinaturaMpId?: string | null
+) {
+  if (!assinaturaMpId) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("subscriptions")
+    .select("user_id")
+    .eq("mercadopago_subscription_id", assinaturaMpId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[MP WEBHOOK] erro ao buscar user_id por assinatura MP", error);
+    return null;
+  }
+
+  return data?.user_id || null;
+}
+
+async function buscarUsuarioPorEmailPagamento(
+  supabaseAdmin: any,
+  email?: string | null
+) {
+  if (!email) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from("subscriptions")
+    .select("user_id")
+    .eq("email_pagamento", email)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[MP WEBHOOK] erro ao buscar user_id por e-mail de pagamento", error);
+    return null;
+  }
+
+  return data?.user_id || null;
 }
 
 async function consultarMercadoPago(endpoint: string, token: string) {
@@ -165,6 +237,36 @@ async function ativarOuAtualizarAssinatura({
   };
 
   if (assinaturaAtual?.id) {
+    if (assinaturaMpId) {
+      const { data: assinaturaPorMercadoPagoId } = await supabaseAdmin
+        .from("subscriptions")
+        .select("id")
+        .eq("mercadopago_subscription_id", assinaturaMpId)
+        .limit(1)
+        .maybeSingle();
+
+      if (assinaturaPorMercadoPagoId?.id) {
+        const { error } = await supabaseAdmin
+          .from("subscriptions")
+          .update(dadosAssinatura)
+          .eq("id", assinaturaPorMercadoPagoId.id);
+
+        if (error) {
+          console.error("Erro ao atualizar assinatura por ID Mercado Pago:", error);
+
+          return {
+            ok: false,
+            error: "Erro ao atualizar assinatura.",
+          };
+        }
+
+        return {
+          ok: true,
+          action: "updated_by_mp_id",
+        };
+      }
+    }
+
     const { error } = await supabaseAdmin
       .from("subscriptions")
       .update(dadosAssinatura)
@@ -205,6 +307,43 @@ async function ativarOuAtualizarAssinatura({
   };
 }
 
+async function atualizarMetadadosExtrasAssinatura({
+  supabaseAdmin,
+  assinaturaMpId,
+  plano,
+  status,
+  customerId,
+  evento,
+}: {
+  supabaseAdmin: any;
+  assinaturaMpId?: string | null;
+  plano?: PlanoId | null;
+  status?: string | null;
+  customerId?: string | null;
+  evento: string;
+}) {
+  if (!assinaturaMpId) return;
+
+  const { error } = await supabaseAdmin
+    .from("subscriptions")
+    .update({
+      current_plan: plano || null,
+      subscription_status: status || null,
+      mercado_pago_customer_id: customerId || null,
+      plan_updated_at: new Date().toISOString(),
+      subscription_last_event: evento,
+      subscription_last_event_at: new Date().toISOString(),
+    })
+    .eq("mercadopago_subscription_id", assinaturaMpId);
+
+  if (error) {
+    console.log(
+      "[MP WEBHOOK] metadados extras nao salvos; colunas opcionais podem nao existir",
+      error.message
+    );
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     let body: any = {};
@@ -215,7 +354,7 @@ export async function POST(request: NextRequest) {
       body = {};
     }
 
-    console.log("Webhook Mercado Pago recebido:", JSON.stringify(body));
+    console.log("[MP WEBHOOK] evento recebido", JSON.stringify(body));
 
     const tipo = String(
       body?.type || body?.topic || body?.action || ""
@@ -264,7 +403,21 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      const userId = extrairUserId(assinaturaMp.external_reference);
+      const emailPagamento =
+        extrairEmailDeMetadata(assinaturaMp.metadata) ||
+        extrairEmailPagamento(
+          assinaturaMp.external_reference,
+          assinaturaMp.payer_email
+        );
+
+      const userId =
+        extrairUserIdDeMetadata(assinaturaMp.metadata) ||
+        extrairUserId(assinaturaMp.external_reference) ||
+        (await buscarUsuarioPorAssinaturaMp(
+          supabaseAdmin,
+          assinaturaMp.id || dataId
+        )) ||
+        (await buscarUsuarioPorEmailPagamento(supabaseAdmin, emailPagamento));
 
       if (!userId) {
         return NextResponse.json({
@@ -277,7 +430,8 @@ export async function POST(request: NextRequest) {
 
       const plano = extrairPlano(
         assinaturaMp.external_reference,
-        assinaturaMp.reason
+        assinaturaMp.reason,
+        assinaturaMp.metadata
       );
 
       if (!plano) {
@@ -292,10 +446,8 @@ export async function POST(request: NextRequest) {
 
       const status = normalizarStatusMercadoPago(assinaturaMp.status);
 
-      const emailPagamento = extrairEmailPagamento(
-        assinaturaMp.external_reference,
-        assinaturaMp.payer_email
-      );
+      console.log("[MP WEBHOOK] user_id identificado", userId);
+      console.log("[MP WEBHOOK] plano identificado", plano);
 
       if (status === "pendente") {
         return NextResponse.json({
@@ -328,6 +480,18 @@ export async function POST(request: NextRequest) {
             error: resultado.error,
           });
         }
+
+        await atualizarMetadadosExtrasAssinatura({
+          supabaseAdmin,
+          assinaturaMpId: assinaturaMp.id || dataId,
+          plano,
+          status: "ativo",
+          customerId: assinaturaMp.payer_id ? String(assinaturaMp.payer_id) : null,
+          evento: "preapproval_active",
+        });
+
+        console.log("[MP WEBHOOK] plano aprovado", plano);
+        console.log("[MP WEBHOOK] subscription atualizada", resultado);
 
         return NextResponse.json({
           success: true,
@@ -374,6 +538,15 @@ export async function POST(request: NextRequest) {
             error: "Erro ao atualizar cancelamento/pausa.",
           });
         }
+
+        await atualizarMetadadosExtrasAssinatura({
+          supabaseAdmin,
+          assinaturaMpId: assinaturaMp.id || dataId,
+          plano: null,
+          status,
+          customerId: assinaturaMp.payer_id ? String(assinaturaMp.payer_id) : null,
+          evento: `preapproval_${status}`,
+        });
 
         return NextResponse.json({
           success: true,
@@ -454,7 +627,23 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const userId = extrairUserId(externalReference);
+      const emailPagamento =
+        extrairEmailDeMetadata(pagamentoMp.metadata) ||
+        extrairEmailDeMetadata(assinaturaMp?.metadata) ||
+        extrairEmailPagamento(
+          externalReference,
+          pagamentoMp.payer?.email || assinaturaMp?.payer_email
+        );
+
+      const userId =
+        extrairUserIdDeMetadata(pagamentoMp.metadata) ||
+        extrairUserIdDeMetadata(assinaturaMp?.metadata) ||
+        extrairUserId(externalReference) ||
+        (await buscarUsuarioPorAssinaturaMp(
+          supabaseAdmin,
+          assinaturaMp?.id || preapprovalId
+        )) ||
+        (await buscarUsuarioPorEmailPagamento(supabaseAdmin, emailPagamento));
 
       if (!userId) {
         return NextResponse.json({
@@ -470,7 +659,8 @@ export async function POST(request: NextRequest) {
 
       const plano = extrairPlano(
         externalReference,
-        assinaturaMp?.reason || pagamentoMp.description
+        assinaturaMp?.reason || pagamentoMp.description,
+        assinaturaMp?.metadata || pagamentoMp.metadata
       );
 
       if (!plano) {
@@ -485,10 +675,8 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      const emailPagamento = extrairEmailPagamento(
-        externalReference,
-        pagamentoMp.payer?.email || assinaturaMp?.payer_email
-      );
+      console.log("[MP WEBHOOK] user_id identificado", userId);
+      console.log("[MP WEBHOOK] plano aprovado", plano);
 
       const resultado = await ativarOuAtualizarAssinatura({
         supabaseAdmin,
@@ -513,6 +701,20 @@ export async function POST(request: NextRequest) {
           error: resultado.error,
         });
       }
+
+      await atualizarMetadadosExtrasAssinatura({
+        supabaseAdmin,
+        assinaturaMpId: assinaturaMp?.id || preapprovalId || null,
+        plano,
+        status: "ativo",
+        customerId:
+          pagamentoMp.payer?.id || assinaturaMp?.payer_id
+            ? String(pagamentoMp.payer?.id || assinaturaMp?.payer_id)
+            : null,
+        evento: "payment_approved",
+      });
+
+      console.log("[MP WEBHOOK] subscription atualizada", resultado);
 
       return NextResponse.json({
         success: true,

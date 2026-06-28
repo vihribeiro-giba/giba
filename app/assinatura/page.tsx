@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Check,
+  CreditCard,
+  Crown,
+  Mail,
+  MessageCircle,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import AppLayout from "../../components/AppLayout";
 import ProtectedRoute from "../../components/ProtectedRoute";
 import { supabase } from "../../lib/supabase";
@@ -12,7 +21,9 @@ type Assinatura = {
   status: string;
   data_inicio: string;
   data_fim?: string | null;
+  created_at?: string | null;
   mercadopago_subscription_id?: string | null;
+  mercado_pago_customer_id?: string | null;
   email_pagamento?: string | null;
 };
 
@@ -22,7 +33,6 @@ type PlanoComercial = {
   id: PlanoId;
   nome: string;
   preco: string;
-  subtitulo: string;
   descricao: string;
   destaque?: boolean;
   recursos: string[];
@@ -33,9 +43,7 @@ const planosComerciais: PlanoComercial[] = [
     id: "essencial",
     nome: "Essencial",
     preco: "R$ 109,90",
-    subtitulo: "Para organizar o básico com profissionalismo.",
-    descricao:
-      "Ideal para artistas solo e pequenos projetos que precisam controlar agenda, clientes, financeiro e contratos.",
+    descricao: "Para organizar agenda, clientes, contratos e financeiro com clareza.",
     recursos: [
       "Dashboard",
       "Clientes",
@@ -43,8 +51,8 @@ const planosComerciais: PlanoComercial[] = [
       "Financeiro",
       "Formatos",
       "Contratos",
-      "Modelos de contrato",
-      "Configurações",
+      "Contratos Modelo",
+      "Configuracoes",
       "Assinatura",
     ],
   },
@@ -52,107 +60,48 @@ const planosComerciais: PlanoComercial[] = [
     id: "profissional",
     nome: "Profissional",
     preco: "R$ 209,90",
-    subtitulo: "O plano mais indicado para bandas e equipes.",
-    descricao:
-      "Recomendado para artistas, bandas e produtores que precisam de relatórios, colaboradores e cálculo de show.",
+    descricao: "O plano mais completo para artistas, bandas e equipes em crescimento.",
     destaque: true,
     recursos: [
       "Tudo do Essencial",
-      "Relatórios",
+      "Relatorios",
       "Calculadora de Show",
       "Colaboradores",
       "Agenda do Colaborador",
-      "Mais controle para equipe",
     ],
   },
   {
     id: "expertise",
     nome: "Expertise",
     preco: "R$ 359,90",
-    subtitulo: "Para operações maiores e gestão avançada.",
-    descricao:
-      "Pensado para artistas, produtoras e escritórios que desejam evoluir para CRM, eventos e gestão comercial.",
+    descricao: "Para operacoes maiores, CRM comercial e recursos avancados.",
     recursos: [
       "Tudo do Profissional",
-      "CRM de Prefeituras em breve",
-      "Gestão de Eventos em breve",
-      "Dashboard Comercial em breve",
-      "Recursos premium futuros",
+      "CRM Prefeituras",
+      "Modulos avancados",
+      "Automacoes futuras",
     ],
-  },
-];
-
-const comparativo: Array<{
-  recurso: string;
-  essencial: boolean | "breve";
-  profissional: boolean | "breve";
-  expertise: boolean | "breve";
-}> = [
-  { recurso: "Dashboard", essencial: true, profissional: true, expertise: true },
-  { recurso: "Clientes", essencial: true, profissional: true, expertise: true },
-  { recurso: "Agenda", essencial: true, profissional: true, expertise: true },
-  { recurso: "Financeiro", essencial: true, profissional: true, expertise: true },
-  { recurso: "Formatos", essencial: true, profissional: true, expertise: true },
-  { recurso: "Contratos", essencial: true, profissional: true, expertise: true },
-  {
-    recurso: "Modelos de Contrato",
-    essencial: true,
-    profissional: true,
-    expertise: true,
-  },
-  {
-    recurso: "Configurações",
-    essencial: true,
-    profissional: true,
-    expertise: true,
-  },
-  {
-    recurso: "Relatórios",
-    essencial: false,
-    profissional: true,
-    expertise: true,
-  },
-  {
-    recurso: "Calculadora de Show",
-    essencial: false,
-    profissional: true,
-    expertise: true,
-  },
-  {
-    recurso: "Colaboradores",
-    essencial: false,
-    profissional: true,
-    expertise: true,
-  },
-  {
-    recurso: "Agenda do Colaborador",
-    essencial: false,
-    profissional: true,
-    expertise: true,
-  },
-  {
-    recurso: "CRM de Prefeituras",
-    essencial: false,
-    profissional: false,
-    expertise: "breve",
-  },
-  {
-    recurso: "Gestão de Eventos",
-    essencial: false,
-    profissional: false,
-    expertise: "breve",
   },
 ];
 
 export default function AssinaturaPage() {
   const [assinatura, setAssinatura] = useState<Assinatura | null>(null);
-  const [carregando, setCarregando] = useState(true);
-  const [processandoPlano, setProcessandoPlano] = useState<string | null>(null);
+  const [emailGiba, setEmailGiba] = useState("");
   const [emailPagamento, setEmailPagamento] = useState("");
+  const [carregando, setCarregando] = useState(true);
+  const [processandoPlano, setProcessandoPlano] = useState<PlanoId | null>(null);
+  const [feedback, setFeedback] = useState("");
 
   useEffect(() => {
     carregarAssinatura();
   }, []);
+
+  const contaMaster = assinatura?.plano === "owner";
+  const planoAtual = assinatura?.plano;
+
+  const statusInfo = useMemo(() => {
+    return obterStatusInfo(assinatura?.status, assinatura?.plano);
+  }, [assinatura?.status, assinatura?.plano]);
 
   async function obterUsuarioLogado() {
     const { data, error } = await supabase.auth.getUser();
@@ -167,6 +116,7 @@ export default function AssinaturaPage() {
 
   async function carregarAssinatura() {
     setCarregando(true);
+    setFeedback("");
 
     const user = await obterUsuarioLogado();
 
@@ -174,6 +124,8 @@ export default function AssinaturaPage() {
       setCarregando(false);
       return;
     }
+
+    setEmailGiba(user.email || "");
 
     const { data, error } = await supabase
       .from("subscriptions")
@@ -185,84 +137,73 @@ export default function AssinaturaPage() {
 
     if (error) {
       console.error(error);
-      alert("Erro ao carregar assinatura.");
+      setFeedback("Nao foi possivel carregar sua assinatura agora.");
       setCarregando(false);
       return;
     }
 
-    setAssinatura(data);
-
-    const emailPadrao =
-      data?.email_pagamento?.trim() ||
-      user.email?.trim() ||
-      "";
-
-    setEmailPagamento(emailPadrao);
-
+    setAssinatura(data as Assinatura | null);
+    setEmailPagamento(data?.email_pagamento?.trim() || user.email?.trim() || "");
     setCarregando(false);
   }
 
   function formatarData(data?: string | null) {
     if (!data) return "-";
-
     return new Date(data).toLocaleDateString("pt-BR");
-  }
-
-  function corStatus(status?: string) {
-    switch (status) {
-      case "ativo":
-        return "#22c55e";
-
-      case "pendente":
-        return "#f59e0b";
-
-      case "cancelado":
-        return "#ef4444";
-
-      default:
-        return "#94a3b8";
-    }
   }
 
   function nomePlano(plano?: string) {
     if (!plano) return "Sem plano";
-
-    if (plano === "teste") return "Teste";
+    if (plano === "teste") return "Teste gratis";
     if (plano === "essencial") return "Essencial";
     if (plano === "profissional") return "Profissional";
     if (plano === "expertise") return "Expertise";
     if (plano === "owner") return "Acesso Master";
-
     return plano;
   }
 
-  const contaMaster = assinatura?.plano === "owner";
-  const planoAtual = assinatura?.plano;
+  function acaoPlano(plano: PlanoComercial) {
+    if (planoAtual === plano.id && assinatura?.status === "ativo") {
+      return "Plano atual";
+    }
+
+    if (assinatura?.status === "pendente" && planoAtual === plano.id) {
+      return "Pagamento pendente";
+    }
+
+    if (!assinatura || planoAtual === "teste") {
+      return `Assinar ${plano.nome}`;
+    }
+
+    if (assinatura.status !== "ativo") {
+      return `Renovar ${plano.nome}`;
+    }
+
+    return `Trocar para ${plano.nome}`;
+  }
 
   async function assinarPlano(plano: PlanoId) {
     if (contaMaster) {
-      alert("Conta master não pode contratar plano pelo checkout.");
+      setFeedback("Conta master nao contrata planos pelo checkout.");
       return;
     }
 
-    if (!emailPagamento.trim()) {
-      alert("Informe o e-mail que será usado no pagamento pelo Mercado Pago.");
-      return;
-    }
+    const emailTratado = emailPagamento.trim().toLowerCase();
 
-    if (!emailPagamento.includes("@")) {
-      alert("Informe um e-mail de pagamento válido.");
+    if (!emailTratado || !emailTratado.includes("@")) {
+      setFeedback("Informe um e-mail valido para o pagamento no Mercado Pago.");
       return;
     }
 
     try {
+      setFeedback("");
       setProcessandoPlano(plano);
 
       const { data: sessionData, error: sessionError } =
         await supabase.auth.getSession();
 
       if (sessionError || !sessionData.session?.access_token) {
-        alert("Sessão expirada. Faça login novamente.");
+        setFeedback("Sessao expirada. Faca login novamente.");
         window.location.href = "/login";
         return;
       }
@@ -275,7 +216,7 @@ export default function AssinaturaPage() {
         },
         body: JSON.stringify({
           plano,
-          email_pagamento: emailPagamento.trim(),
+          email_pagamento: emailTratado,
         }),
       });
 
@@ -283,709 +224,347 @@ export default function AssinaturaPage() {
 
       if (!resposta.ok) {
         console.error("Erro ao criar assinatura:", dados);
-        alert(dados?.error || "Erro ao criar assinatura.");
+        setFeedback(dados?.error || "Nao foi possivel criar a assinatura agora.");
         return;
       }
 
+      setFeedback("Assinatura criada. Finalize o pagamento no Mercado Pago.");
+
       if (!dados?.init_point) {
-        alert("Link de pagamento não retornado pelo Mercado Pago.");
+        setFeedback("Link de pagamento nao retornado pelo Mercado Pago.");
         return;
       }
 
       window.location.href = dados.init_point;
     } catch (error) {
       console.error("Erro inesperado ao assinar plano:", error);
-      alert("Erro inesperado ao iniciar assinatura.");
+      setFeedback("Erro inesperado ao iniciar assinatura.");
     } finally {
       setProcessandoPlano(null);
     }
   }
 
+  async function salvarEmailPagamento() {
+    if (!assinatura?.id) {
+      setFeedback("Assinatura nao encontrada para salvar o e-mail.");
+      return;
+    }
+
+    const emailTratado = emailPagamento.trim().toLowerCase();
+
+    if (!emailTratado || !emailTratado.includes("@")) {
+      setFeedback("Informe um e-mail valido para o Mercado Pago.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("subscriptions")
+      .update({ email_pagamento: emailTratado })
+      .eq("id", assinatura.id);
+
+    if (error) {
+      console.error("Erro ao salvar e-mail do Mercado Pago:", error);
+      setFeedback("Nao foi possivel salvar o e-mail do Mercado Pago agora.");
+      return;
+    }
+
+    setAssinatura({ ...assinatura, email_pagamento: emailTratado });
+    setEmailPagamento(emailTratado);
+    setFeedback("E-mail do Mercado Pago salvo com sucesso.");
+  }
+
   return (
     <ProtectedRoute adminOnly>
       <AppLayout>
-        <div style={pageStyle}>
-          <section style={heroStyle}>
-            <div>
-              <span style={eyebrowStyle}>GIBA Assinaturas</span>
-
-              <h1 style={tituloStyle}>Minha Assinatura</h1>
-
-              <p style={subtituloStyle}>
-                Gerencie seu plano, acompanhe o vencimento e escolha os recursos
-                ideais para sua operação artística.
-              </p>
-            </div>
-          </section>
-
-          {carregando ? (
-            <section style={cardStyle}>
-              <p style={{ color: "#b8b8d8" }}>Carregando assinatura...</p>
-            </section>
-          ) : !assinatura ? (
-            <section style={cardStyle}>
-              <h2>Nenhuma assinatura encontrada</h2>
-
-              <p style={{ color: "#b8b8d8", lineHeight: 1.6 }}>
-                Sua conta ainda não possui uma assinatura ativa. Escolha um plano
-                abaixo para iniciar o uso do GIBA.
-              </p>
-            </section>
-          ) : (
-            <>
-              {contaMaster && (
-                <section style={masterCardStyle}>
-                  <div>
-                    <span style={eyebrowVerdeStyle}>Conta proprietária</span>
-
-                    <h2 style={{ marginTop: "8px" }}>
-                      Acesso Master liberado
-                    </h2>
-
-                    <p style={{ color: "#b8b8d8", lineHeight: 1.6 }}>
-                      Esta conta possui acesso interno completo ao GIBA, não
-                      depende das permissões dos planos e não precisa contratar
-                      pelo checkout.
-                    </p>
-                  </div>
-                </section>
-              )}
-
-              <section style={infoGridStyle}>
-                <div style={cardStyle}>
-                  <span style={labelStyle}>Plano Atual</span>
-
-                  <h2 style={planoAtualTituloStyle}>
-                    {nomePlano(assinatura.plano)}
-                  </h2>
-
-                  <span
-                    style={{
-                      ...statusBadgeStyle,
-                      background: corStatus(assinatura.status),
-                    }}
-                  >
-                    {assinatura.status}
-                  </span>
-                </div>
-
-                <div style={cardStyle}>
-                  <span style={labelStyle}>Data de Início</span>
-
-                  <h2 style={infoNumeroStyle}>
-                    {formatarData(assinatura.data_inicio)}
-                  </h2>
-                </div>
-
-                <div style={cardStyle}>
-                  <span style={labelStyle}>Próximo Vencimento</span>
-
-                  <h2 style={infoNumeroStyle}>
-                    {formatarData(assinatura.data_fim)}
-                  </h2>
-                </div>
-              </section>
-            </>
-          )}
-
-          {!contaMaster && (
-            <>
-              <section style={cardStyle}>
-                <h2 style={{ marginTop: 0 }}>E-mail para pagamento</h2>
-
-                <p style={{ color: "#b8b8d8", lineHeight: 1.6 }}>
-                  Informe o e-mail que será usado no checkout do Mercado Pago.
-                  Ele pode ser diferente do e-mail de login no GIBA. A ativação
-                  do plano continuará vinculada à conta correta do GIBA.
-                </p>
-
-                <label style={inputLabelStyle}>
-                  E-mail do Mercado Pago
-                </label>
-
-                <input
-                  type="email"
-                  value={emailPagamento}
-                  onChange={(event) => setEmailPagamento(event.target.value)}
-                  placeholder="financeiro@suaempresa.com.br"
-                  style={inputStyle}
-                />
-              </section>
-
-              <section style={sectionHeaderStyle}>
-                <div>
-                  <h2 style={sectionTitleStyle}>Escolha seu plano</h2>
-
-                  <p style={sectionDescriptionStyle}>
-                    Compare as opções e selecione o plano ideal para sua fase
-                    atual.
-                  </p>
-                </div>
-              </section>
-
-              <section style={planosGridStyle}>
-                {planosComerciais.map((plano) => {
-                  const planoSelecionado = planoAtual === plano.id;
-                  const bloqueado = !!processandoPlano || planoSelecionado;
-
-                  return (
-                    <div
-                      key={plano.id}
-                      style={
-                        plano.destaque
-                          ? planoCardDestaqueStyle
-                          : planoCardStyle
-                      }
-                    >
-                      <div style={cardPlanoTopoStyle}>
-                        {plano.destaque && (
-                          <span style={tagDestaqueStyle}>Mais indicado</span>
-                        )}
-
-                        {planoSelecionado && (
-                          <span style={tagAtualStyle}>Plano atual</span>
-                        )}
-                      </div>
-
-                      <h2 style={nomePlanoStyle}>{plano.nome}</h2>
-
-                      <p style={subtituloPlanoStyle}>{plano.subtitulo}</p>
-
-                      <div style={precoLinhaStyle}>
-                        <strong style={precoStyle}>{plano.preco}</strong>
-                        <span style={{ color: "#b8b8d8" }}>/mês</span>
-                      </div>
-
-                      <p style={descricaoPlanoStyle}>{plano.descricao}</p>
-
-                      <button
-                        type="button"
-                        onClick={() => assinarPlano(plano.id)}
-                        disabled={bloqueado}
-                        style={{
-                          ...botaoPrincipal,
-                          width: "100%",
-                          opacity: bloqueado ? 0.7 : 1,
-                          cursor: bloqueado ? "not-allowed" : "pointer",
-                        }}
-                      >
-                        {planoSelecionado
-                          ? "Plano atual"
-                          : processandoPlano === plano.id
-                          ? "Gerando checkout..."
-                          : `Assinar ${plano.nome}`}
-                      </button>
-
-                      <ul style={listaRecursosStyle}>
-                        {plano.recursos.map((recurso) => (
-                          <li key={recurso} style={itemRecursoStyle}>
-                            <span style={checkStyle}>✓</span>
-                            <span>{recurso}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  );
-                })}
-              </section>
-            </>
-          )}
-
-          <section style={comparativoCardStyle}>
-            <div style={sectionHeaderStyle}>
+        <main className="min-h-screen pb-12 text-white">
+          <header className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-5">
+              <div className="grid h-20 w-20 shrink-0 place-items-center rounded-[24px] bg-gradient-to-br from-violet-600 to-sky-500 shadow-[0_24px_55px_rgba(0,170,255,0.22)]">
+                <Crown size={36} />
+              </div>
               <div>
-                <h2 style={sectionTitleStyle}>Comparativo dos planos</h2>
-
-                <p style={sectionDescriptionStyle}>
-                  Veja rapidamente quais módulos estão disponíveis em cada plano.
+                <h1 className="text-4xl font-black tracking-tight text-white md:text-5xl">
+                  Assinatura
+                </h1>
+                <p className="mt-2 max-w-2xl text-base leading-7 text-slate-300">
+                  Gerencie seu plano, pagamento e acesso a Plataforma GIBA.
                 </p>
               </div>
             </div>
 
-            <div style={tabelaContainerStyle}>
-              <table style={tabelaStyle}>
-                <thead>
-                  <tr>
-                    <th style={thLeftStyle}>Funcionalidade</th>
-                    <th style={thCenterStyle}>Essencial</th>
-                    <th style={thCenterStyle}>Profissional</th>
-                    <th style={thCenterStyle}>Expertise</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {comparativo.map((linha) => (
-                    <tr key={linha.recurso}>
-                      <td style={tdLeftStyle}>{linha.recurso}</td>
-                      <td style={tdCenterStyle}>{renderDisponibilidade(linha.essencial)}</td>
-                      <td style={tdCenterStyle}>
-                        {renderDisponibilidade(linha.profissional)}
-                      </td>
-                      <td style={tdCenterStyle}>
-                        {renderDisponibilidade(linha.expertise)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={carregarAssinatura}
+                className="inline-flex h-12 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.07] px-5 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-white/[0.1]"
+              >
+                <RefreshCw size={18} />
+                Atualizar status
+              </button>
+              <button
+                type="button"
+                onClick={() => window.open("https://wa.me/5531993575969", "_blank", "noopener,noreferrer")}
+                className="inline-flex h-12 items-center gap-2 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-5 text-sm font-black text-emerald-200 transition hover:-translate-y-0.5 hover:bg-emerald-500/15"
+              >
+                <MessageCircle size={18} />
+                Falar com suporte
+              </button>
             </div>
-          </section>
+          </header>
 
-          <section style={recomendacaoStyle}>
-            <div>
-              <span style={eyebrowAzulStyle}>Recomendação GIBA</span>
-
-              <h2 style={{ marginTop: "8px" }}>Plano Profissional</h2>
-
-              <p style={{ color: "#dbeafe", lineHeight: 1.7 }}>
-                Para artistas e bandas que já trabalham com equipe, agenda
-                recorrente, contratos e controle financeiro, o plano Profissional
-                entrega o melhor equilíbrio entre recursos e investimento.
-              </p>
+          {feedback && (
+            <div className="mb-6 rounded-3xl border border-sky-400/25 bg-sky-500/10 px-5 py-4 text-sm font-bold text-sky-100">
+              {feedback}
             </div>
-          </section>
+          )}
 
-          {assinatura && (
-            <section style={cardStyle}>
-              <h2>Gerenciamento</h2>
+          <section className="mb-7 rounded-[28px] border border-white/10 bg-white/[0.06] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl md:p-7">
+            {carregando ? (
+              <p className="text-slate-300">Carregando assinatura...</p>
+            ) : (
+              <div className="grid gap-6">
+                <div className="max-w-5xl">
+                  <div className="mb-5 flex flex-wrap items-center gap-3">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.07] px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-300">
+                      <ShieldCheck size={16} />
+                      Status atual
+                    </span>
+                    <span
+                      className={`inline-flex rounded-full border px-4 py-2 text-xs font-black uppercase tracking-wide ${statusInfo.classe}`}
+                    >
+                      {statusInfo.label}
+                    </span>
+                  </div>
 
-              {!contaMaster ? (
-                <>
-                  <p style={{ color: "#b8b8d8", lineHeight: 1.6 }}>
-                    Os botões acima estão conectados ao Mercado Pago. Ao trocar
-                    ou contratar um plano, o GIBA redireciona para o checkout
-                    seguro de assinatura.
+                  <h2 className="text-3xl font-black text-white md:text-[40px]">
+                    {nomePlano(assinatura?.plano)}
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                    {assinatura?.status === "pendente"
+                      ? "Pagamento pendente. Aguardando confirmacao do Mercado Pago."
+                      : "Seu acesso e liberado de acordo com o plano ativo mais recente."}
                   </p>
 
-                  <div style={acoesStyle}>
-                    <button
-                      type="button"
-                      onClick={() => assinarPlano("essencial")}
-                      disabled={!!processandoPlano || planoAtual === "essencial"}
-                      style={{
-                        ...botaoPrincipal,
-                        opacity:
-                          processandoPlano || planoAtual === "essencial"
-                            ? 0.7
-                            : 1,
-                      }}
-                    >
-                      Essencial
-                    </button>
+                  <div className="mt-6 overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/20">
+                    <StatusItem label="E-mail GIBA" value={emailGiba || "-"} />
+                    <StatusItem label="Status" value={assinatura?.status || "-"} />
+                    <StatusItem
+                      label="Inicio"
+                      value={formatarData(assinatura?.data_inicio)}
+                    />
+                    <StatusItem
+                      label="Proximo vencimento"
+                      value={formatarData(assinatura?.data_fim)}
+                    />
+                    <StatusItem
+                      label="ID Mercado Pago"
+                      value={assinatura?.mercadopago_subscription_id || "-"}
+                    />
+                    <StatusItem
+                      label="Cliente Mercado Pago"
+                      value={assinatura?.mercado_pago_customer_id || "-"}
+                    />
+                    {!contaMaster && (
+                      <div className="grid gap-3 border-t border-white/10 px-4 py-4 lg:grid-cols-[220px_minmax(0,1fr)_150px] lg:items-center">
+                        <div className="flex items-center gap-3">
+                          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-violet-500/15 text-violet-200">
+                            <Mail size={18} />
+                          </span>
+                          <div>
+                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                              E-mail Mercado Pago
+                            </p>
+                            <p className="text-xs font-semibold text-slate-400">
+                              Pode ser diferente do login.
+                            </p>
+                          </div>
+                        </div>
 
-                    <button
-                      type="button"
-                      onClick={() => assinarPlano("profissional")}
-                      disabled={
-                        !!processandoPlano || planoAtual === "profissional"
-                      }
-                      style={{
-                        ...botaoPrincipal,
-                        opacity:
-                          processandoPlano || planoAtual === "profissional"
-                            ? 0.7
-                            : 1,
-                      }}
-                    >
-                      Profissional
-                    </button>
+                        <input
+                          type="email"
+                          value={emailPagamento}
+                          onChange={(event) => setEmailPagamento(event.target.value)}
+                          placeholder="financeiro@suaempresa.com.br"
+                          className="h-11 w-full rounded-2xl border border-white/10 bg-slate-950/45 px-4 text-sm font-bold text-white outline-none transition placeholder:text-slate-500 focus:border-sky-400/70"
+                        />
 
-                    <button
-                      type="button"
-                      onClick={() => assinarPlano("expertise")}
-                      disabled={!!processandoPlano || planoAtual === "expertise"}
-                      style={{
-                        ...botaoPrincipal,
-                        opacity:
-                          processandoPlano || planoAtual === "expertise"
-                            ? 0.7
-                            : 1,
-                      }}
-                    >
-                      Expertise
-                    </button>
-
-                    <button type="button" style={botaoSecundario}>
-                      Cancelar Assinatura
-                    </button>
+                        <button
+                          type="button"
+                          onClick={salvarEmailPagamento}
+                          className="h-11 rounded-2xl bg-gradient-to-r from-violet-600 to-sky-500 px-4 text-sm font-black text-white shadow-[0_14px_28px_rgba(139,53,255,0.18)] transition hover:-translate-y-0.5"
+                        >
+                          Salvar e-mail
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </>
-              ) : (
-                <p style={{ color: "#b8b8d8", lineHeight: 1.6 }}>
-                  Esta conta é uma conta master interna. O plano não pode ser
-                  alterado por checkout e possui acesso completo permanente.
-                </p>
-              )}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {!contaMaster && (
+            <section>
+              <div className="mb-5 flex items-end justify-between gap-4">
+                <div>
+                  <h2 className="text-3xl font-black text-white">Planos GIBA</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">
+                    Escolha, renove ou altere seu plano sem interromper o acesso atual antes da aprovacao.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-3">
+                {planosComerciais.map((plano) => {
+                  const selecionado = planoAtual === plano.id && assinatura?.status === "ativo";
+                  const pendente = planoAtual === plano.id && assinatura?.status === "pendente";
+                  const bloqueado = !!processandoPlano || selecionado || pendente;
+
+                  return (
+                    <article
+                      key={plano.id}
+                      className={`relative overflow-hidden rounded-[28px] border bg-white/[0.06] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.24)] backdrop-blur-xl transition hover:-translate-y-1 ${
+                        plano.destaque
+                          ? "border-sky-400/45 shadow-sky-500/10"
+                          : "border-white/10"
+                      }`}
+                    >
+                      {plano.destaque && (
+                        <span className="mb-4 inline-flex rounded-full bg-gradient-to-r from-violet-600 to-sky-500 px-4 py-2 text-xs font-black uppercase tracking-wide text-white">
+                          Mais escolhido
+                        </span>
+                      )}
+
+                      {selecionado && (
+                        <span className="mb-4 ml-2 inline-flex rounded-full border border-emerald-400/25 bg-emerald-500/10 px-4 py-2 text-xs font-black uppercase tracking-wide text-emerald-200">
+                          Plano atual
+                        </span>
+                      )}
+
+                      {pendente && (
+                        <span className="mb-4 ml-2 inline-flex rounded-full border border-amber-400/25 bg-amber-500/10 px-4 py-2 text-xs font-black uppercase tracking-wide text-amber-200">
+                          Pendente
+                        </span>
+                      )}
+
+                      <h3 className="text-2xl font-black text-white">{plano.nome}</h3>
+                      <p className="mt-2 min-h-[54px] text-sm leading-6 text-slate-300">
+                        {plano.descricao}
+                      </p>
+
+                      <div className="my-6 flex items-end gap-2">
+                        <strong className="text-4xl font-black text-white">
+                          {plano.preco}
+                        </strong>
+                        <span className="pb-1 text-sm font-bold text-slate-400">
+                          /mes
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={bloqueado}
+                        onClick={() => assinarPlano(plano.id)}
+                        className="mb-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-sky-500 text-sm font-black text-white shadow-[0_18px_36px_rgba(139,53,255,0.22)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-65"
+                      >
+                        <CreditCard size={18} />
+                        {processandoPlano === plano.id
+                          ? "Gerando checkout..."
+                          : acaoPlano(plano)}
+                      </button>
+
+                      <ul className="grid gap-3">
+                        {plano.recursos.map((recurso) => (
+                          <li
+                            key={recurso}
+                            className="flex items-start gap-3 text-sm font-semibold leading-6 text-slate-200"
+                          >
+                            <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-500/15 text-emerald-300">
+                              <Check size={15} />
+                            </span>
+                            {recurso}
+                          </li>
+                        ))}
+                      </ul>
+                    </article>
+                  );
+                })}
+              </div>
             </section>
           )}
-        </div>
+
+          <section className="mt-7 rounded-[28px] border border-sky-400/20 bg-gradient-to-br from-violet-500/15 to-sky-500/10 p-6">
+            <div className="flex items-start gap-4">
+              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-sky-500/20 text-sky-200">
+                <Sparkles size={22} />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-white">
+                  Pagamento seguro pelo Mercado Pago
+                </h2>
+                <p className="mt-2 max-w-4xl text-sm leading-7 text-slate-300">
+                  O GIBA salva o plano como pendente, redireciona para o checkout e so atualiza o acesso quando o webhook confirmar a aprovacao. Assim, o teste gratis ou plano atual nao e removido antes da confirmacao.
+                </p>
+              </div>
+            </div>
+          </section>
+        </main>
       </AppLayout>
     </ProtectedRoute>
   );
 }
 
-function renderDisponibilidade(valor: boolean | "breve") {
-  if (valor === true) {
-    return <span style={checkTabelaStyle}>✓</span>;
-  }
-
-  if (valor === "breve") {
-    return <span style={breveStyle}>Em breve</span>;
-  }
-
-  return <span style={indisponivelStyle}>—</span>;
+function StatusItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-2 border-t border-white/10 px-4 py-4 first:border-t-0 sm:grid-cols-[220px_minmax(0,1fr)] sm:items-center">
+      <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p className="break-words text-sm font-black leading-5 text-white sm:text-right">
+        {value}
+      </p>
+    </div>
+  );
 }
 
-const pageStyle: CSSProperties = {
-  color: "#fff",
-  paddingBottom: "40px",
-};
+function obterStatusInfo(status?: string, plano?: string) {
+  if (plano === "teste") {
+    return {
+      label: "Teste gratis",
+      classe: "border-sky-400/25 bg-sky-500/10 text-sky-200",
+    };
+  }
 
-const heroStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "24px",
-  alignItems: "flex-start",
-  flexWrap: "wrap",
-  marginBottom: "28px",
-};
+  if (status === "ativo") {
+    return {
+      label: "Ativo",
+      classe: "border-emerald-400/25 bg-emerald-500/10 text-emerald-200",
+    };
+  }
 
-const eyebrowStyle: CSSProperties = {
-  display: "inline-block",
-  color: "#38bdf8",
-  fontSize: "13px",
-  fontWeight: "bold",
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  marginBottom: "10px",
-};
+  if (status === "pendente") {
+    return {
+      label: "Pendente",
+      classe: "border-amber-400/25 bg-amber-500/10 text-amber-200",
+    };
+  }
 
-const eyebrowAzulStyle: CSSProperties = {
-  ...eyebrowStyle,
-  color: "#bfdbfe",
-};
+  if (status === "cancelado") {
+    return {
+      label: "Cancelado",
+      classe: "border-rose-400/25 bg-rose-500/10 text-rose-200",
+    };
+  }
 
-const eyebrowVerdeStyle: CSSProperties = {
-  ...eyebrowStyle,
-  color: "#86efac",
-};
+  if (status === "vencido") {
+    return {
+      label: "Vencido",
+      classe: "border-rose-400/25 bg-rose-500/10 text-rose-200",
+    };
+  }
 
-const tituloStyle: CSSProperties = {
-  fontSize: "38px",
-  lineHeight: 1.1,
-  margin: 0,
-};
-
-const subtituloStyle: CSSProperties = {
-  color: "#b8b8d8",
-  maxWidth: "760px",
-  lineHeight: 1.7,
-  marginTop: "12px",
-};
-
-
-const labelStyle: CSSProperties = {
-  display: "block",
-  color: "#94a3b8",
-  fontSize: "13px",
-  fontWeight: "bold",
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-};
-
-const inputLabelStyle: CSSProperties = {
-  display: "block",
-  marginBottom: "8px",
-  color: "#dbeafe",
-  fontSize: "14px",
-  fontWeight: "bold",
-};
-
-const inputStyle: CSSProperties = {
-  width: "100%",
-  maxWidth: "520px",
-  padding: "14px",
-  borderRadius: "14px",
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(0,0,0,0.22)",
-  color: "#fff",
-  outline: "none",
-  boxSizing: "border-box",
-};
-
-
-const statusBadgeStyle: CSSProperties = {
-  display: "inline-block",
-  padding: "8px 14px",
-  borderRadius: "999px",
-  color: "#fff",
-  fontWeight: "bold",
-  textTransform: "capitalize",
-  fontSize: "13px",
-};
-
-const masterCardStyle: CSSProperties = {
-  background: "rgba(34,197,94,0.10)",
-  border: "1px solid rgba(34,197,94,0.35)",
-  borderRadius: "24px",
-  padding: "24px",
-  margin: "28px 0",
-  boxShadow: "0 0 35px rgba(34,197,94,0.12)",
-};
-
-const infoGridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-  gap: "18px",
-  marginBottom: "28px",
-};
-
-const cardStyle: CSSProperties = {
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  borderRadius: "24px",
-  padding: "24px",
-  marginBottom: "24px",
-};
-
-const planoAtualTituloStyle: CSSProperties = {
-  fontSize: "32px",
-  marginTop: "10px",
-  marginBottom: "14px",
-  textTransform: "capitalize",
-};
-
-const infoNumeroStyle: CSSProperties = {
-  fontSize: "28px",
-  marginTop: "12px",
-  marginBottom: 0,
-};
-
-const sectionHeaderStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-end",
-  gap: "16px",
-  flexWrap: "wrap",
-  marginBottom: "18px",
-};
-
-const sectionTitleStyle: CSSProperties = {
-  fontSize: "28px",
-  margin: 0,
-};
-
-const sectionDescriptionStyle: CSSProperties = {
-  color: "#b8b8d8",
-  marginTop: "8px",
-  marginBottom: 0,
-  lineHeight: 1.6,
-};
-
-const planosGridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-  gap: "20px",
-  margin: "28px 0",
-};
-
-const planoCardStyle: CSSProperties = {
-  background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  borderRadius: "24px",
-  padding: "24px",
-  position: "relative",
-  overflow: "hidden",
-};
-
-const planoCardDestaqueStyle: CSSProperties = {
-  ...planoCardStyle,
-  border: "1px solid rgba(56,189,248,0.65)",
-  boxShadow: "0 0 40px rgba(0,170,255,0.20)",
-  transform: "translateY(-4px)",
-};
-
-const cardPlanoTopoStyle: CSSProperties = {
-  minHeight: "34px",
-  display: "flex",
-  gap: "8px",
-  flexWrap: "wrap",
-  marginBottom: "8px",
-};
-
-const tagDestaqueStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "7px 12px",
-  borderRadius: "999px",
-  background: "linear-gradient(90deg,#8b35ff,#00aaff)",
-  color: "#fff",
-  fontSize: "12px",
-  fontWeight: "bold",
-};
-
-const tagAtualStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  padding: "7px 12px",
-  borderRadius: "999px",
-  background: "rgba(34,197,94,0.16)",
-  color: "#86efac",
-  border: "1px solid rgba(34,197,94,0.32)",
-  fontSize: "12px",
-  fontWeight: "bold",
-};
-
-const nomePlanoStyle: CSSProperties = {
-  fontSize: "26px",
-  margin: "4px 0 8px",
-};
-
-const subtituloPlanoStyle: CSSProperties = {
-  color: "#e2e8f0",
-  minHeight: "44px",
-  lineHeight: 1.5,
-};
-
-const precoLinhaStyle: CSSProperties = {
-  display: "flex",
-  alignItems: "flex-end",
-  gap: "8px",
-  margin: "18px 0",
-};
-
-const precoStyle: CSSProperties = {
-  fontSize: "34px",
-  lineHeight: 1,
-};
-
-const descricaoPlanoStyle: CSSProperties = {
-  color: "#b8b8d8",
-  lineHeight: 1.6,
-  minHeight: "104px",
-};
-
-const listaRecursosStyle: CSSProperties = {
-  listStyle: "none",
-  padding: 0,
-  margin: "22px 0 0",
-  display: "grid",
-  gap: "12px",
-};
-
-const itemRecursoStyle: CSSProperties = {
-  display: "flex",
-  gap: "10px",
-  color: "#dbeafe",
-  lineHeight: 1.5,
-};
-
-const checkStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: "22px",
-  height: "22px",
-  minWidth: "22px",
-  borderRadius: "999px",
-  background: "rgba(34,197,94,0.18)",
-  color: "#86efac",
-  fontWeight: "bold",
-};
-
-const comparativoCardStyle: CSSProperties = {
-  ...cardStyle,
-  overflow: "hidden",
-};
-
-const tabelaContainerStyle: CSSProperties = {
-  width: "100%",
-  overflowX: "auto",
-};
-
-const tabelaStyle: CSSProperties = {
-  width: "100%",
-  minWidth: "720px",
-  borderCollapse: "collapse",
-};
-
-const thLeftStyle: CSSProperties = {
-  textAlign: "left",
-  padding: "14px 12px",
-  color: "#e2e8f0",
-  borderBottom: "1px solid rgba(255,255,255,0.12)",
-};
-
-const thCenterStyle: CSSProperties = {
-  textAlign: "center",
-  padding: "14px 12px",
-  color: "#e2e8f0",
-  borderBottom: "1px solid rgba(255,255,255,0.12)",
-};
-
-const tdLeftStyle: CSSProperties = {
-  padding: "14px 12px",
-  color: "#cbd5e1",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
-};
-
-const tdCenterStyle: CSSProperties = {
-  padding: "14px 12px",
-  textAlign: "center",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
-};
-
-const checkTabelaStyle: CSSProperties = {
-  color: "#86efac",
-  fontWeight: "bold",
-  fontSize: "18px",
-};
-
-const breveStyle: CSSProperties = {
-  display: "inline-block",
-  color: "#7dd3fc",
-  background: "rgba(14,165,233,0.12)",
-  border: "1px solid rgba(14,165,233,0.28)",
-  padding: "5px 9px",
-  borderRadius: "999px",
-  fontSize: "12px",
-  fontWeight: "bold",
-};
-
-const indisponivelStyle: CSSProperties = {
-  color: "#64748b",
-  fontWeight: "bold",
-  fontSize: "18px",
-};
-
-const recomendacaoStyle: CSSProperties = {
-  background:
-    "linear-gradient(135deg, rgba(139,53,255,0.32), rgba(0,170,255,0.24))",
-  border: "1px solid rgba(125,211,252,0.35)",
-  borderRadius: "24px",
-  padding: "26px",
-  marginBottom: "24px",
-  boxShadow: "0 0 35px rgba(0,170,255,0.12)",
-};
-
-const acoesStyle: CSSProperties = {
-  display: "flex",
-  gap: "12px",
-  flexWrap: "wrap",
-  marginTop: "20px",
-};
-
-const botaoPrincipal: CSSProperties = {
-  padding: "14px 20px",
-  borderRadius: "12px",
-  border: "none",
-  background: "linear-gradient(90deg,#8b35ff,#00aaff)",
-  color: "#fff",
-  fontWeight: "bold",
-  cursor: "pointer",
-};
-
-const botaoSecundario: CSSProperties = {
-  ...botaoPrincipal,
-  background: "#ef4444",
-};
+  return {
+    label: status || "Sem status",
+    classe: "border-white/10 bg-white/[0.07] text-slate-200",
+  };
+}

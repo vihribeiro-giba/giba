@@ -150,6 +150,12 @@ export async function POST(request: NextRequest) {
       external_reference: `${user.id}:${planoRecebido}:${encodeURIComponent(
         emailPagamento
       )}`,
+      metadata: {
+        user_id: user.id,
+        plan: planoRecebido,
+        giba_email: user.email,
+        mercado_pago_email: emailPagamento,
+      },
       payer_email: emailPagamento,
       back_url: `${appUrl}/assinatura`,
       status: "pending",
@@ -196,6 +202,28 @@ export async function POST(request: NextRequest) {
         {
           error: "Mercado Pago não retornou os dados da assinatura.",
           details: dadosMercadoPago,
+        },
+        { status: 500 }
+      );
+    }
+
+    const { error: erroSalvarPendente } = await supabase.from("subscriptions").insert({
+      user_id: user.id,
+      plano: planoRecebido,
+      status: "pendente",
+      data_inicio: new Date().toISOString(),
+      data_fim: assinaturaAtualAntesCheckout?.data_fim || null,
+      mercadopago_subscription_id: mercadoPagoSubscriptionId,
+      email_pagamento: emailPagamento,
+    });
+
+    if (erroSalvarPendente) {
+      console.error("Erro ao salvar assinatura pendente:", erroSalvarPendente);
+
+      return NextResponse.json(
+        {
+          error: "Assinatura criada no Mercado Pago, mas nÃ£o foi possÃ­vel salvar o status pendente no GIBA.",
+          details: erroSalvarPendente,
         },
         { status: 500 }
       );
