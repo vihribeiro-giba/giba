@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import ProtectedRoute from "../../components/ProtectedRoute"
 import PlanProtectedRoute from "../../components/PlanProtectedRoute"
 import AppLayout from "../../components/AppLayout"
@@ -161,6 +161,43 @@ function labelEvento(evento: Evento) {
   return `${data} • ${primeirosNomes(evento.client_name || evento.title)}`
 }
 
+function dataEventoMs(data?: string | null) {
+  if (!data) return null
+  const valor = new Date(`${data}T00:00:00`).getTime()
+  return Number.isNaN(valor) ? null : valor
+}
+
+function ordenarEventosCronologicos(eventos: Evento[]) {
+  return [...eventos].sort((a, b) => {
+    const dataA = dataEventoMs(a.event_date)
+    const dataB = dataEventoMs(b.event_date)
+
+    if (dataA === null && dataB === null) return 0
+    if (dataA === null) return 1
+    if (dataB === null) return -1
+
+    return dataA - dataB
+  })
+}
+
+function eventoMaisProximoId(eventos: Evento[]) {
+  const hoje = new Date()
+  hoje.setHours(0, 0, 0, 0)
+  const hojeMs = hoje.getTime()
+
+  const eventosComData = eventos
+    .map((evento) => ({ evento, data: dataEventoMs(evento.event_date) }))
+    .filter((item): item is { evento: Evento; data: number } => item.data !== null)
+
+  const futuroMaisProximo = eventosComData
+    .filter((item) => item.data >= hojeMs)
+    .sort((a, b) => a.data - b.data)[0]
+
+  if (futuroMaisProximo) return futuroMaisProximo.evento.id
+
+  return eventosComData.sort((a, b) => b.data - a.data)[0]?.evento.id || ""
+}
+
 function tituloEventoPorId(eventos: Evento[], id?: string | null) {
   if (!id) return ""
   const evento = eventos.find((e) => e.id === id)
@@ -268,7 +305,7 @@ export default function FinanceiroPage() {
     ])
 
     if (!movRes.error) setMovimentacoes(movRes.data || [])
-    if (!evtRes.error) setEventos(evtRes.data || [])
+    if (!evtRes.error) setEventos(ordenarEventosCronologicos(evtRes.data || []))
     if (!colRes.error) {
       const ordenados = [...(colRes.data || [])].sort((a, b) =>
         nomeColaborador(a).localeCompare(nomeColaborador(b)),
@@ -940,6 +977,7 @@ export default function FinanceiroPage() {
                         value={eventoId}
                         placeholder="Busque por data, evento ou cliente"
                         options={eventos.map((ev) => ({ value: ev.id, label: labelEvento(ev) }))}
+                        initialScrollValue={eventoMaisProximoId(eventos)}
                         onChange={(id) => {
                           setEventoId(id)
                           const ev = eventos.find((x) => x.id === id)
@@ -1344,19 +1382,32 @@ function DropdownSearch({
   options,
   onChange,
   placeholder,
+  initialScrollValue,
 }: {
   value: string
   options: Array<{ value: string; label: string }>
   onChange: (value: string) => void
   placeholder: string
+  initialScrollValue?: string
 }) {
   const [open, setOpen] = useState(false)
   const [term, setTerm] = useState("")
+  const optionsRef = useRef<HTMLDivElement | null>(null)
 
   const selecionado = options.find((o) => o.value === value)
   const filtradas = options.filter((o) =>
     o.label.toLowerCase().includes(term.toLowerCase()),
   )
+  const scrollTargetValue = value || initialScrollValue
+
+  useEffect(() => {
+    if (!open || term || !scrollTargetValue) return
+
+    const target = optionsRef.current?.querySelector<HTMLElement>("[data-scroll-target='true']")
+    if (!target || !optionsRef.current) return
+
+    optionsRef.current.scrollTop = Math.max(target.offsetTop - 8, 0)
+  }, [open, term, scrollTargetValue, filtradas.length])
 
   return (
     <div style={{ position: "relative" }}>
@@ -1376,7 +1427,7 @@ function DropdownSearch({
             placeholder="Digite para buscar..."
             style={dropdownSearchStyle}
           />
-          <div style={dropdownOptionsStyle} className="giba-scroll-hidden">
+          <div ref={optionsRef} style={dropdownOptionsStyle} className="giba-scroll-hidden">
             {filtradas.length === 0 && (
               <p style={{ margin: 0, padding: "10px 12px", color: "#94A3B8", fontSize: 13 }}>
                 Nenhum resultado encontrado.
@@ -1386,6 +1437,7 @@ function DropdownSearch({
               <button
                 key={option.value}
                 type="button"
+                data-scroll-target={option.value === scrollTargetValue ? "true" : undefined}
                 onClick={() => {
                   onChange(option.value)
                   setTerm("")

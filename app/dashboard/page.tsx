@@ -76,6 +76,26 @@ function saudacao() {
   return "Boa noite";
 }
 
+function normalizarStatusContrato(texto: string) {
+  return (texto || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function statusContratoDashboard(evento: Evento) {
+  const status = normalizarStatusContrato(evento.status || "");
+
+  if (status.includes("cancel")) return "cancelado";
+  if (status.includes("venc")) return "vencido";
+  if (status.includes("assin")) return "assinado";
+  if (status.includes("envi")) return "enviado";
+  if (status.includes("ger")) return "gerado";
+
+  return "pendente";
+}
+
 export default function DashboardPage() {
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -208,8 +228,20 @@ export default function DashboardPage() {
   }, [clientes]);
 
   const ticketMedio = eventos.length > 0 ? resumo.entradas / eventos.length : 0;
-  const contratosPendentes = proximosEventos.length;
-  const contratosAssinados = eventos.filter((evento) => getEventStatus(evento.event_date) === "realizado").length;
+  const contratosResumo = useMemo(() => {
+    return eventos.reduce(
+      (acc, evento) => {
+        const status = statusContratoDashboard(evento);
+
+        if (status === "assinado") acc.assinados += 1;
+        else if (status === "cancelado" || status === "vencido") acc.vencidos += 1;
+        else acc.pendentes += 1;
+
+        return acc;
+      },
+      { pendentes: 0, assinados: 0, vencidos: 0 }
+    );
+  }, [eventos]);
 
   return (
     <ProtectedRoute adminOnly>
@@ -315,19 +347,19 @@ export default function DashboardPage() {
                 rows={[
                   {
                     label: "Pendentes",
-                    value: contratosPendentes,
+                    value: contratosResumo.pendentes,
                     icon: <Clock size={20} />,
                     color: "#F59E0B",
                   },
                   {
-                    label: "Assinados / realizados",
-                    value: contratosAssinados,
+                    label: "Assinados",
+                    value: contratosResumo.assinados,
                     icon: <CheckCircle2 size={20} />,
                     color: "#37E884",
                   },
                   {
-                    label: "Vencidos",
-                    value: 0,
+                    label: "Cancelados / vencidos",
+                    value: contratosResumo.vencidos,
                     icon: <XCircle size={20} />,
                     color: "#FF5B8A",
                   },

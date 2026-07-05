@@ -38,6 +38,17 @@ type Cliente = { id: string; nome: string; celular?: string | null; telefone?: s
 type Colaborador = { id: string; nome: string; funcao: string; status: string }
 type FormatoShow = { id: string; nome: string }
 type EventCollaborator = { event_id: string; collaborator_id: string }
+type ReceitaEvento = {
+  id: string
+  event_id: string | null
+  type: string | null
+  amount: number | null
+  description: string | null
+  category: string | null
+  status: string | null
+  payment_date: string | null
+  created_at: string
+}
 
 type Evento = {
   id: string
@@ -208,6 +219,7 @@ export default function AgendaPage() {
   const [colaboradoresSelecionados, setColaboradoresSelecionados] = useState<string[]>([])
 
   const [eventos, setEventos] = useState<Evento[]>([])
+  const [receitasEventos, setReceitasEventos] = useState<ReceitaEvento[]>([])
   const [eventoSelecionado, setEventoSelecionado] = useState<Evento | null>(null)
   const [editandoId, setEditandoId] = useState<string | null>(null)
 
@@ -254,6 +266,7 @@ export default function AgendaPage() {
     carregarColaboradores()
     carregarEventos()
     carregarVinculos()
+    carregarReceitasEventos()
   }, [])
 
   // Se o dia selecionado não tiver eventos, foca automaticamente no próximo
@@ -344,6 +357,25 @@ export default function AgendaPage() {
     setEventCollaborators(data || [])
   }
 
+  async function carregarReceitasEventos() {
+    const user = await obterUsuarioLogado()
+    if (!user) return setReceitasEventos([])
+
+    const { data, error } = await supabase
+      .from("finance")
+      .select("id,event_id,type,amount,description,category,status,payment_date,created_at")
+      .eq("user_id", user.id)
+      .order("payment_date", { ascending: true })
+
+    if (error) {
+      console.error("Erro ao carregar receitas dos eventos:", error)
+      setReceitasEventos([])
+      return
+    }
+
+    setReceitasEventos((data || []) as ReceitaEvento[])
+  }
+
   function limparFormulario() {
     setEditandoId(null)
     setClientName("")
@@ -370,6 +402,38 @@ export default function AgendaPage() {
   function colaboradoresDoEvento(eventId: string) {
     const ids = eventCollaborators.filter((i) => i.event_id === eventId).map((i) => i.collaborator_id)
     return colaboradores.filter((c) => ids.includes(c.id))
+  }
+
+  function receitasDoEvento(eventId: string) {
+    return receitasEventos.filter((receita) => receita.event_id === eventId)
+  }
+
+  function totalReceitasDoEvento(eventId: string) {
+    return receitasDoEvento(eventId)
+      .filter((receita) => {
+        const tipo = normalizarTexto(receita.type || "")
+        return tipo === "entrada" || tipo === "receita"
+      })
+      .reduce((total, receita) => total + Number(receita.amount || 0), 0)
+  }
+
+  function totalDespesasDoEvento(eventId: string) {
+    return receitasDoEvento(eventId)
+      .filter((receita) => {
+        const tipo = normalizarTexto(receita.type || "")
+        return tipo === "saida" || tipo === "despesa"
+      })
+      .reduce((total, receita) => total + Number(receita.amount || 0), 0)
+  }
+
+  function abrirLocalizacao(endereco: string) {
+    if (!endereco || !endereco.trim()) {
+      alert("Endereço não informado para este evento.")
+      return
+    }
+
+    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(endereco)}`
+    window.open(url, "_blank", "noopener,noreferrer")
   }
 
   async function salvarVinculosEvento(eventId: string) {
@@ -1276,7 +1340,7 @@ export default function AgendaPage() {
           {/* ===== MODAL DETALHES ===== */}
           {eventoSelecionado && (
             <div style={modalOverlay} onClick={() => setEventoSelecionado(null)}>
-              <div style={isMobile ? mobileModalCard : modalCard} onClick={(e) => e.stopPropagation()}>
+              <div className="giba-agenda-modal-card" style={isMobile ? mobileModalCard : modalCard} onClick={(e) => e.stopPropagation()}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
                   <div>
                     <span
@@ -1338,6 +1402,72 @@ export default function AgendaPage() {
                   </div>
                 </div>
 
+                {(() => {
+                  const receitas = receitasDoEvento(eventoSelecionado.id)
+                  const totalRecebido = totalReceitasDoEvento(eventoSelecionado.id)
+                  const totalDespesas = totalDespesasDoEvento(eventoSelecionado.id)
+                  const totalEvento = Number(eventoSelecionado.fee || 0)
+                  const faltaReceber = Math.max(totalEvento - totalRecebido, 0)
+
+                  return (
+                    <div style={receitasEventoBox}>
+                      <div style={receitasEventoHeader}>
+                        <div>
+                          <p style={receitasEventoTitle}>HISTÓRICO FINANCEIRO</p>
+                          <p style={receitasEventoSubtitle}>Entradas e despesas lançadas para este evento.</p>
+                        </div>
+                        <div style={receitasResumoGrid}>
+                          <div style={receitasResumoItem}>
+                            <span style={receitasResumoLabel}>Recebido</span>
+                            <strong style={{ ...receitasResumoValor, color: "#37E884" }}>{formatarMoeda(totalRecebido)}</strong>
+                          </div>
+                          <div style={receitasResumoItem}>
+                            <span style={receitasResumoLabel}>Despesas</span>
+                            <strong style={{ ...receitasResumoValor, color: totalDespesas > 0 ? "#FF5B8A" : "#94A3B8" }}>{formatarMoeda(totalDespesas)}</strong>
+                          </div>
+                          <div style={receitasResumoItem}>
+                            <span style={receitasResumoLabel}>Falta</span>
+                            <strong style={{ ...receitasResumoValor, color: faltaReceber > 0 ? "#FFB454" : "#37E884" }}>{formatarMoeda(faltaReceber)}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {receitas.length === 0 ? (
+                        <p style={receitasVazioText}>Nenhuma movimentação financeira lançada para este evento.</p>
+                      ) : (
+                        <div style={receitasLista}>
+                          {receitas.map((receita) => (
+                            <div key={receita.id} style={receitaItem}>
+                              <div style={{ minWidth: 0 }}>
+                                <p style={receitaDescricao}>{receita.description || receita.category || "Receita do evento"}</p>
+                                <p style={receitaMeta}>
+                                  {(receita.type || "Movimentação")} · {(receita.category || "Outros")} · {receita.status || "Sem status"} · {receita.payment_date ? new Date(`${receita.payment_date}T00:00:00`).toLocaleDateString("pt-BR") : new Date(receita.created_at).toLocaleDateString("pt-BR")}
+                                </p>
+                              </div>
+                              {(() => {
+                                const tipoNormalizado = normalizarTexto(receita.type || "")
+                                const saida = tipoNormalizado === "saida" || tipoNormalizado === "despesa"
+
+                                return (
+                              <strong
+                                style={{
+                                  ...receitaValor,
+                                      color: saida ? "#FF5B8A" : "#37E884",
+                                }}
+                              >
+                                    {saida ? "-" : ""}
+                                {formatarMoeda(Number(receita.amount || 0))}
+                              </strong>
+                                )
+                              })()}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
                 <div style={{ marginBottom: 16 }}>
                   <p style={{ margin: "0 0 8px", color: "#94A3B8", fontSize: 12, fontWeight: 700 }}>EQUIPE ESCALADA</p>
                   <AvatarStack pessoas={colaboradoresDoEvento(eventoSelecionado.id)} mostrarNomes />
@@ -1365,10 +1495,26 @@ export default function AgendaPage() {
                   <button onClick={() => excluirEvento(eventoSelecionado.id)} style={dangerButton}>
                     Excluir
                   </button>
+                  <button onClick={() => abrirLocalizacao(eventoSelecionado.location)} style={locationButton}>
+                    <MapPin size={16} /> Localização
+                  </button>
                 </div>
               </div>
             </div>
           )}
+
+          <style jsx global>{`
+            .giba-agenda-modal-card {
+              scrollbar-width: none;
+              -ms-overflow-style: none;
+            }
+
+            .giba-agenda-modal-card::-webkit-scrollbar {
+              width: 0;
+              height: 0;
+              display: none;
+            }
+          `}</style>
 
           {whatsappEvento && (
             <div style={modalOverlay} onClick={fecharModalWhatsapp}>
@@ -1843,6 +1989,17 @@ const dangerButton: React.CSSProperties = {
   cursor: "pointer",
 }
 
+const locationButton: React.CSSProperties = {
+  ...ghostButton,
+  justifyContent: "center",
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  color: "#7DD3FC",
+  border: "1px solid rgba(0,170,255,0.35)",
+  background: "rgba(0,170,255,0.10)",
+}
+
 const filtrosBar: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -2304,6 +2461,7 @@ const modalCard: React.CSSProperties = {
   maxWidth: 540,
   maxHeight: "90vh",
   overflowY: "auto",
+  overflowX: "hidden",
   padding: 24,
   borderRadius: 24,
   border: "1px solid rgba(255,255,255,0.12)",
@@ -2316,6 +2474,113 @@ const notasBox: React.CSSProperties = {
   borderRadius: 14,
   border: "1px solid rgba(255,255,255,0.08)",
   background: "rgba(255,255,255,0.03)",
+}
+
+const receitasEventoBox: React.CSSProperties = {
+  marginBottom: 16,
+  padding: 14,
+  borderRadius: 16,
+  border: "1px solid rgba(55,232,132,0.18)",
+  background: "rgba(55,232,132,0.05)",
+  overflow: "hidden",
+}
+
+const receitasEventoHeader: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+  flexWrap: "wrap",
+  marginBottom: 12,
+}
+
+const receitasEventoTitle: React.CSSProperties = {
+  margin: 0,
+  color: "#94A3B8",
+  fontSize: 12,
+  fontWeight: 800,
+  letterSpacing: "0.04em",
+}
+
+const receitasEventoSubtitle: React.CSSProperties = {
+  margin: "4px 0 0",
+  color: "#64748B",
+  fontSize: 12,
+}
+
+const receitasResumoGrid: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+}
+
+const receitasResumoItem: React.CSSProperties = {
+  minWidth: 112,
+  padding: "8px 10px",
+  borderRadius: 12,
+  background: "rgba(2,6,23,0.35)",
+  border: "1px solid rgba(255,255,255,0.07)",
+}
+
+const receitasResumoLabel: React.CSSProperties = {
+  display: "block",
+  color: "#94A3B8",
+  fontSize: 11,
+  fontWeight: 700,
+  marginBottom: 3,
+}
+
+const receitasResumoValor: React.CSSProperties = {
+  display: "block",
+  fontSize: 14,
+  fontWeight: 900,
+}
+
+const receitasVazioText: React.CSSProperties = {
+  margin: 0,
+  color: "#94A3B8",
+  fontSize: 13,
+}
+
+const receitasLista: React.CSSProperties = {
+  display: "grid",
+  gap: 8,
+}
+
+const receitaItem: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.08)",
+  background: "rgba(2,6,23,0.28)",
+}
+
+const receitaDescricao: React.CSSProperties = {
+  margin: 0,
+  color: "#E2E8F0",
+  fontSize: 13,
+  fontWeight: 800,
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  lineHeight: 1.4,
+}
+
+const receitaMeta: React.CSSProperties = {
+  margin: "3px 0 0",
+  color: "#64748B",
+  fontSize: 11,
+  overflowWrap: "anywhere",
+  lineHeight: 1.4,
+}
+
+const receitaValor: React.CSSProperties = {
+  color: "#37E884",
+  fontSize: 13,
+  fontWeight: 900,
+  whiteSpace: "nowrap",
 }
 
 const eventosDoDiaList: React.CSSProperties = {
