@@ -13,6 +13,7 @@ type LinhaImportacao = {
   modelo_contratacao: string;
   evento: string;
   data_evento: string | null;
+  prioridade: string;
   status: string;
   prefeito: string;
   email_prefeito: string;
@@ -66,13 +67,22 @@ export default function ImportarCrmPage() {
   function normalizarNumero(valor: any): number | null {
     if (valor === null || valor === undefined || valor === "") return null;
 
-    const numero = Number(
-      String(valor)
-        .replace("R$", "")
-        .replace(/\./g, "")
-        .replace(",", ".")
-        .trim()
-    );
+    let texto = String(valor)
+      .replace("R$", "")
+      .replace(/[^\d,.-]/g, "")
+      .trim();
+
+    if (!texto) return null;
+
+    if (texto.includes(",")) {
+      texto = texto.replace(/\./g, "").replace(",", ".");
+    } else {
+      const pontos = (texto.match(/\./g) || []).length;
+      const pareceDecimal = pontos === 1 && /\.\d{1,2}$/.test(texto);
+      if (!pareceDecimal) texto = texto.replace(/\./g, "");
+    }
+
+    const numero = Number(texto);
 
     return Number.isNaN(numero) ? null : numero;
   }
@@ -205,6 +215,9 @@ export default function ImportarCrmPage() {
           data_evento: normalizarData(
             buscarCampo(row, ["DATA DO EVENTO", "DATA EVENTO", "DATA"])
           ),
+          prioridade: normalizarTexto(
+            buscarCampo(row, ["STATUS PRIORIDADE", "PRIORIDADE"])
+          ),
           status: normalizarStatus(buscarCampo(row, ["STATUS"])),
           prefeito: normalizarTexto(buscarCampo(row, ["PREFEITO"])),
           email_prefeito: normalizarTexto(
@@ -324,7 +337,7 @@ export default function ImportarCrmPage() {
               nome_evento: linha.evento,
               data_evento: linha.data_evento,
               modelo_contratacao: linha.modelo_contratacao,
-              prioridade: null,
+              prioridade: linha.prioridade || null,
               observacoes: linha.observacoes || null,
             });
 
