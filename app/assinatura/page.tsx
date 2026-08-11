@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import AppLayout from "../../components/AppLayout";
 import ProtectedRoute from "../../components/ProtectedRoute";
+import WhatsAppMessageModal from "../../components/whatsapp/WhatsAppMessageModal";
 import { supabase } from "../../lib/supabase";
 
 type Assinatura = {
@@ -91,6 +92,7 @@ export default function AssinaturaPage() {
   const [carregando, setCarregando] = useState(true);
   const [processandoPlano, setProcessandoPlano] = useState<PlanoId | null>(null);
   const [feedback, setFeedback] = useState("");
+  const [whatsappSuporteAberto, setWhatsappSuporteAberto] = useState(false);
 
   useEffect(() => {
     carregarAssinatura();
@@ -278,15 +280,15 @@ export default function AssinaturaPage() {
       <AppLayout>
         <main className="min-h-screen pb-12 text-white">
           <header className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-start gap-5">
-              <div className="grid h-20 w-20 shrink-0 place-items-center rounded-[24px] bg-gradient-to-br from-violet-600 to-sky-500 shadow-[0_24px_55px_rgba(0,170,255,0.22)]">
-                <Crown size={36} />
+            <div className="flex items-center gap-4">
+              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-sky-500 shadow-[0_14px_30px_rgba(139,53,255,0.30)]">
+                <Crown size={24} />
               </div>
               <div>
-                <h1 className="text-4xl font-black tracking-tight text-white md:text-5xl">
+                <h1 className="text-[28px] font-black tracking-[-0.5px] text-white">
                   Assinatura
                 </h1>
-                <p className="mt-2 max-w-2xl text-base leading-7 text-slate-300">
+                <p className="mt-1 max-w-2xl text-sm text-slate-400">
                   Gerencie seu plano, pagamento e acesso a Plataforma GIBA.
                 </p>
               </div>
@@ -303,7 +305,7 @@ export default function AssinaturaPage() {
               </button>
               <button
                 type="button"
-                onClick={() => window.open("https://wa.me/5531993575969", "_blank", "noopener,noreferrer")}
+                onClick={() => setWhatsappSuporteAberto(true)}
                 className="inline-flex h-12 items-center gap-2 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-5 text-sm font-black text-emerald-200 transition hover:-translate-y-0.5 hover:bg-emerald-500/15"
               >
                 <MessageCircle size={18} />
@@ -508,6 +510,14 @@ export default function AssinaturaPage() {
               </div>
             </div>
           </section>
+          <WhatsAppMessageModal
+            open={whatsappSuporteAberto}
+            onOpenChange={setWhatsappSuporteAberto}
+            contextType="contratante"
+            messageType="solicitacao_informacoes"
+            recipient={{ name: "Suporte GIBA", phone: "5531993575969" }}
+            extraVariables={{ empresa: "Plataforma GIBA", status: assinatura?.status }}
+          />
         </main>
       </AppLayout>
     </ProtectedRoute>

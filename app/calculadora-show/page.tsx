@@ -17,7 +17,9 @@ import TaxasMarketingCard from "../../components/calculadora/TaxasMarketingCard"
 import AppLayout from "../../components/AppLayout";
 import ProtectedRoute from "../../components/ProtectedRoute";
 import PlanProtectedRoute from "../../components/PlanProtectedRoute";
+import GibaSelect from "../../components/GibaSelect";
 import { supabase } from "../../lib/supabase";
+import { getAccountAuthUser } from "../../lib/access-session";
 
 type Item = {
   id: number;
@@ -100,7 +102,7 @@ export default function CalculadoraShowPage() {
   const [efeitos, setEfeitos] = useState<Item[]>(efeitosPadrao);
 
   async function obterUsuarioLogado() {
-    const { data, error } = await supabase.auth.getUser();
+    const { data, error } = await getAccountAuthUser();
 
     if (error || !data.user) {
       alert("Usuário não autenticado.");
@@ -635,7 +637,7 @@ async function carregarColaboradores() {
   }
 
   return (
-    <ProtectedRoute adminOnly>
+    <ProtectedRoute modulo="calculadora_show">
       <PlanProtectedRoute modulo="calculadora-show">
         <AppLayout>
           <div className="min-h-screen text-white">
@@ -980,35 +982,21 @@ function TabelaDinamica({
           />
 
           {titulo.includes("Cachê") ? (
-  <select
+  <GibaSelect
     value={item.campo2}
-    onChange={(e) =>
-      atualizarItem(
-        itens,
-        setItens,
-        item.id,
-        "campo2",
-        e.target.value
-      )
+    onChange={(nextCollaborator) =>
+      atualizarItem(itens, setItens, item.id, "campo2", nextCollaborator)
     }
-    style={inputStyle}
-  >
-    <option value="">
-      Selecione o colaborador
-    </option>
-
-    {colaboradores.map((colaborador: Colaborador) => (
-      <option
-        key={colaborador.id}
-        value={colaborador.nome}
-      >
-        {colaborador.nome}
-        {colaborador.role
-          ? ` - ${colaborador.role}`
-          : ""}
-      </option>
-    ))}
-  </select>
+    options={[
+      { value: "", label: "Selecione o colaborador" },
+      ...colaboradores.map((colaborador: Colaborador) => ({
+        value: colaborador.nome,
+        label: `${colaborador.nome}${colaborador.role ? ` - ${colaborador.role}` : ""}`,
+      })),
+    ]}
+    searchable
+    triggerStyle={inputStyle}
+  />
 ) : (
   <input
     value={item.campo2}

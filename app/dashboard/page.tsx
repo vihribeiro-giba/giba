@@ -5,6 +5,7 @@ import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
+import { getAccountAuthUser } from "../../lib/access-session";
 import {
   CalendarDays,
   DollarSign,
@@ -16,9 +17,8 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  Search,
-  Bell,
   Calendar,
+  LayoutDashboard,
 } from "lucide-react";
 
 import MetricCard from "../../components/dashboard/MetricCard";
@@ -103,7 +103,7 @@ export default function DashboardPage() {
   const [nomeUsuario, setNomeUsuario] = useState("Usuário GIBA");
 
   async function obterUsuarioLogado() {
-    const { data, error } = await supabase.auth.getUser();
+    const { data, error } = await getAccountAuthUser();
 
     if (error || !data.user) {
       alert("Usuário não autenticado.");
@@ -244,23 +244,22 @@ export default function DashboardPage() {
   }, [eventos]);
 
   return (
-    <ProtectedRoute adminOnly>
+    <ProtectedRoute modulo="dashboard">
       <PlanProtectedRoute modulo="dashboard">
         <AppLayout>
           <div style={pageStyle}>
             <header style={headerStyle}>
-              <div>
-                <h1 style={titleStyle}>{saudacao()}, {nomeUsuario}! 👋</h1>
-                <p style={subtitleStyle}>Aqui está o resumo da sua operação hoje.</p>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={headerIconBoxStyle}>
+                  <LayoutDashboard size={24} />
+                </div>
+                <div>
+                  <h1 style={titleStyle}>{saudacao()}, {nomeUsuario}! 👋</h1>
+                  <p style={subtitleStyle}>Aqui está o resumo da sua operação hoje.</p>
+                </div>
               </div>
 
               <div style={headerActionsStyle}>
-                <button style={iconButtonStyle} aria-label="Buscar">
-                  <Search size={18} />
-                </button>
-                <button style={iconButtonStyle} aria-label="Notificações">
-                  <Bell size={18} />
-                </button>
                 <button style={dateButtonStyle}>
                   <Calendar size={16} />
                   {new Date().toLocaleDateString("pt-BR", {
@@ -398,16 +397,29 @@ const headerStyle: React.CSSProperties = {
 
 const titleStyle: React.CSSProperties = {
   margin: 0,
-  fontSize: "34px",
+  fontSize: "28px",
   lineHeight: 1.1,
-  letterSpacing: "-0.04em",
+  letterSpacing: "-0.5px",
   color: "#FFFFFF",
 };
 
+const headerIconBoxStyle: React.CSSProperties = {
+  width: 48,
+  height: 48,
+  minWidth: 48,
+  borderRadius: 16,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "#FFFFFF",
+  background: "linear-gradient(135deg, #8B35FF, #00AAFF)",
+  boxShadow: "0 14px 30px rgba(139,53,255,0.30)",
+};
+
 const subtitleStyle: React.CSSProperties = {
-  margin: "9px 0 0",
+  margin: "4px 0 0",
   color: "#94A3B8",
-  fontSize: "15px",
+  fontSize: "14px",
 };
 
 const headerActionsStyle: React.CSSProperties = {
@@ -416,18 +428,6 @@ const headerActionsStyle: React.CSSProperties = {
   justifyContent: "flex-end",
   gap: "10px",
   flexWrap: "wrap",
-};
-
-const iconButtonStyle: React.CSSProperties = {
-  width: "42px",
-  height: "42px",
-  borderRadius: "14px",
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.05)",
-  color: "#CBD5E1",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
 };
 
 const dateButtonStyle: React.CSSProperties = {

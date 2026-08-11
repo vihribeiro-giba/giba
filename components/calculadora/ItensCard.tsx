@@ -9,6 +9,7 @@ import type {
   ItemCalculadora,
   RemoverItemFn,
 } from "./types";
+import GibaSelect from "../GibaSelect";
 
 export default function ItensCard({
   label1,
@@ -43,19 +44,19 @@ export default function ItensCard({
           />
 
           {usaColaboradores ? (
-            <select
+            <GibaSelect
               value={item.campo2}
-              onChange={(event) => atualizarItem(itens, setItens, item.id, "campo2", event.target.value)}
-              className="h-11 rounded-2xl border border-white/10 bg-slate-950/45 px-3 text-sm font-semibold text-white outline-none focus:border-sky-400/60"
-            >
-              <option value="">Selecione o colaborador</option>
-              {(colaboradores || []).map((colaborador) => (
-                <option key={colaborador.id} value={colaborador.nome} className="bg-slate-950 text-white">
-                  {colaborador.nome}
-                  {colaborador.role ? ` - ${colaborador.role}` : ""}
-                </option>
-              ))}
-            </select>
+              onChange={(nextCollaborator) => atualizarItem(itens, setItens, item.id, "campo2", nextCollaborator)}
+              options={[
+                { value: "", label: "Selecione o colaborador" },
+                ...(colaboradores || []).map((colaborador) => ({
+                  value: colaborador.nome,
+                  label: `${colaborador.nome}${colaborador.role ? ` - ${colaborador.role}` : ""}`,
+                })),
+              ]}
+              searchable
+              triggerClassName="h-11 rounded-2xl bg-slate-950/45 font-semibold"
+            />
           ) : (
             <input
               value={item.campo2}

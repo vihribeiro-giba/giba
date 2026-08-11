@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { BadgeCheck, Building2, FileText, ImageIcon, Save, Settings, UserRound, WalletCards } from "lucide-react";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
+import { createProposalSignedUrl, uploadProposalAsset } from "../../lib/proposals/storage";
+import { normalizeProfessionalDomain } from "../../lib/access-modules";
 
 type Empresa = {
   id: string;
@@ -24,6 +26,9 @@ type Empresa = {
   banco: string;
   observacoes: string;
   logo_url: string;
+  instagram?: string | null;
+  signature_url?: string | null;
+  professional_domain?: string | null;
 };
 
 export default function ConfiguracoesPage() {
@@ -36,6 +41,7 @@ export default function ConfiguracoesPage() {
   const [responsavel, setResponsavel] = useState("");
   const [cpf, setCpf] = useState("");
   const [email, setEmail] = useState("");
+  const [professionalDomain, setProfessionalDomain] = useState("");
   const [telefone, setTelefone] = useState("");
   const [enderecoCompleto, setEnderecoCompleto] = useState("");
   const [cidade, setCidade] = useState("");
@@ -44,6 +50,9 @@ export default function ConfiguracoesPage() {
   const [banco, setBanco] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
+  const [instagram, setInstagram] = useState("");
+  const [signatureUrl, setSignatureUrl] = useState("");
+  const [signaturePreviewUrl, setSignaturePreviewUrl] = useState("");
 
   async function obterUsuarioLogado() {
     const { data, error } = await supabase.auth.getUser();
@@ -86,6 +95,7 @@ export default function ConfiguracoesPage() {
     setResponsavel(empresa.responsavel || "");
     setCpf(empresa.cpf || "");
     setEmail(empresa.email || "");
+    setProfessionalDomain(empresa.professional_domain || "");
     setTelefone(empresa.telefone || "");
     setEnderecoCompleto(empresa.endereco_completo || "");
     setCidade(empresa.cidade || "");
@@ -94,6 +104,12 @@ export default function ConfiguracoesPage() {
     setBanco(empresa.banco || "");
     setObservacoes(empresa.observacoes || "");
     setLogoUrl(empresa.logo_url || "");
+    setInstagram(empresa.instagram || "");
+    setSignatureUrl(empresa.signature_url || "");
+    if (empresa.signature_url) {
+      try { setSignaturePreviewUrl(empresa.signature_url.startsWith("http") ? empresa.signature_url : await createProposalSignedUrl(empresa.signature_url, 3600)); }
+      catch { setSignaturePreviewUrl(""); }
+    }
   }
 
   async function uploadLogo(file: File) {
@@ -122,6 +138,18 @@ export default function ConfiguracoesPage() {
     setLogoUrl(data.publicUrl);
   }
 
+  async function uploadSignature(file: File) {
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+    try {
+      const path = await uploadProposalAsset(user.id, file, "assets");
+      setSignatureUrl(path);
+      setSignaturePreviewUrl(URL.createObjectURL(file));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Erro ao enviar assinatura.");
+    }
+  }
+
   async function salvarEmpresa(e: React.FormEvent) {
     e.preventDefault();
     setCarregando(true);
@@ -141,6 +169,7 @@ export default function ConfiguracoesPage() {
       responsavel,
       cpf,
       email,
+      professional_domain: normalizeProfessionalDomain(professionalDomain),
       telefone,
       endereco_completo: enderecoCompleto,
       cidade,
@@ -149,6 +178,8 @@ export default function ConfiguracoesPage() {
       banco,
       observacoes,
       logo_url: logoUrl,
+      instagram,
+      signature_url: signatureUrl,
     };
 
     if (empresaId) {
@@ -196,13 +227,13 @@ export default function ConfiguracoesPage() {
       <AppLayout>
       <div className="min-h-screen text-white">
         <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex items-center gap-5">
-            <div className="grid h-[68px] w-[68px] shrink-0 place-items-center rounded-[22px] bg-gradient-to-br from-violet-600 to-sky-500 shadow-[0_18px_38px_rgba(59,130,246,0.2)]">
-              <Settings size={31} />
+          <div className="flex items-center gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-sky-500 shadow-[0_14px_30px_rgba(139,53,255,0.30)]">
+              <Settings size={24} />
             </div>
             <div>
-              <h1 className="text-[34px] font-black leading-tight tracking-[-0.02em] text-white">Configurações</h1>
-              <p className="mt-1 max-w-3xl text-base leading-7 text-slate-300">
+              <h1 className="text-[28px] font-black leading-tight tracking-[-0.5px] text-white">Configurações</h1>
+              <p className="mt-1 max-w-3xl text-sm text-slate-400">
                 Gerencie os dados da sua conta, artista, empresa e preferências da plataforma.
               </p>
             </div>
@@ -228,6 +259,8 @@ export default function ConfiguracoesPage() {
                 <Field label="CPF" value={cpf} onChange={setCpf} placeholder="CPF" />
                 <Field label="Telefone" value={telefone} onChange={setTelefone} placeholder="Telefone" />
                 <Field label="E-mail" value={email} onChange={setEmail} placeholder="E-mail" />
+                <Field label="Domínio profissional" value={professionalDomain} onChange={setProfessionalDomain} placeholder="exemplo.com.br" />
+                <Field label="Instagram" value={instagram} onChange={setInstagram} placeholder="@seuperfil" />
                 <Field label="Cidade" value={cidade} onChange={setCidade} placeholder="Cidade" />
                 <Field label="Estado" value={estado} onChange={setEstado} placeholder="Estado" />
               </div>
@@ -281,6 +314,16 @@ export default function ConfiguracoesPage() {
                 />
 
                 <p className="text-xs leading-5 text-slate-400">Recomendado: PNG com fundo transparente.</p>
+                <div className="mt-3 border-t border-white/[0.08] pt-4">
+                  <p className="mb-3 text-sm font-black text-slate-200">Assinatura para propostas</p>
+                  {signaturePreviewUrl && <div className="mb-3 flex h-24 items-center justify-center rounded-2xl border border-white/10 bg-white p-3"><img src={signaturePreviewUrl} alt="Assinatura" className="max-h-full max-w-full object-contain" /></div>}
+                  <input
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/45 p-3 text-sm font-semibold text-slate-200 file:mr-3 file:rounded-xl file:border-0 file:bg-gradient-to-r file:from-violet-600 file:to-sky-500 file:px-3 file:py-2 file:text-sm file:font-black file:text-white"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadSignature(file); }}
+                  />
+                </div>
               </div>
             </ConfigCard>
 
@@ -300,8 +343,10 @@ export default function ConfiguracoesPage() {
                 enderecoCompleto,
                 pix,
                 banco,
+                instagram,
+                signatureUrl,
               ].filter((valor) => valor.trim()).length}
-              total={12}
+              total={14}
             />
           </aside>
         </form>

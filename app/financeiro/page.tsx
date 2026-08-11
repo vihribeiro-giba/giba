@@ -5,8 +5,10 @@ import ProtectedRoute from "../../components/ProtectedRoute"
 import PlanProtectedRoute from "../../components/PlanProtectedRoute"
 import AppLayout from "../../components/AppLayout"
 import { supabase } from "../../lib/supabase"
+import { getAccountAuthUser } from "../../lib/access-session"
 import FluxoCaixaChart from "../../components/financeiro/FluxoCaixaChart"
 import DespesasDonut from "../../components/financeiro/DespesasDonut"
+import GibaSelect from "../../components/GibaSelect"
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -265,7 +267,7 @@ export default function FinanceiroPage() {
   const [periodicidade, setPeriodicidade] = useState("Mensal")
 
   async function obterUsuario() {
-    const { data } = await supabase.auth.getUser()
+    const { data } = await getAccountAuthUser()
     return data.user
   }
 
@@ -623,7 +625,7 @@ export default function FinanceiroPage() {
   /* ------------------------------- Render -------------------------------- */
 
   return (
-    <ProtectedRoute adminOnly>
+    <ProtectedRoute modulo="financeiro">
       <PlanProtectedRoute modulo="financeiro">
         <AppLayout>
           <div style={isMobile ? mobilePageStyle : pageStyle}>
@@ -632,7 +634,7 @@ export default function FinanceiroPage() {
             <header style={headerStyle}>
               <div style={headerLeftStyle}>
                 <div style={headerIconStyle}>
-                  <DollarSign size={26} />
+                  <DollarSign size={24} />
                 </div>
                 <div>
                   <h1 style={titleStyle}>Financeiro</h1>
@@ -643,36 +645,22 @@ export default function FinanceiroPage() {
               </div>
 
               <div style={filtersStyle}>
-                <div style={selectWrapStyle}>
-                  <CalendarDays size={15} style={{ color: "#8B35FF" }} />
-                  <select
-                    value={mes}
-                    onChange={(e) => setMes(Number(e.target.value))}
-                    style={selectStyle}
-                    aria-label="Mês"
-                  >
-                    {MESES.map((m, i) => (
-                      <option key={m} value={i} style={optionStyle}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <GibaSelect
+                  value={mes}
+                  onChange={(nextMonth) => setMes(Number(nextMonth))}
+                  options={MESES.map((label, index) => ({ value: String(index), label }))}
+                  ariaLabel="Mês"
+                  leadingIcon={<CalendarDays size={15} />}
+                  className="min-w-[150px]"
+                />
 
-                <div style={selectWrapStyle}>
-                  <select
-                    value={ano}
-                    onChange={(e) => setAno(Number(e.target.value))}
-                    style={selectStyle}
-                    aria-label="Ano"
-                  >
-                    {anosDisponiveis.map((a) => (
-                      <option key={a} value={a} style={optionStyle}>
-                        {a}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <GibaSelect
+                  value={ano}
+                  onChange={(nextYear) => setAno(Number(nextYear))}
+                  options={anosDisponiveis.map((year) => ({ value: String(year), label: String(year) }))}
+                  ariaLabel="Ano"
+                  className="min-w-[105px]"
+                />
 
                 <button style={filterBtnStyle} onClick={() => carregarDados()}>
                   <Filter size={15} />
@@ -1481,9 +1469,9 @@ const headerLeftStyle: React.CSSProperties = {
 }
 
 const headerIconStyle: React.CSSProperties = {
-  width: "62px",
-  height: "62px",
-  borderRadius: "20px",
+  width: "48px",
+  height: "48px",
+  borderRadius: "16px",
   background: "linear-gradient(135deg, #8B35FF, #00AAFF)",
   display: "flex",
   alignItems: "center",
@@ -1495,7 +1483,7 @@ const headerIconStyle: React.CSSProperties = {
 
 const titleStyle: React.CSSProperties = {
   margin: 0,
-  fontSize: "32px",
+  fontSize: "28px",
   fontWeight: 900,
   color: "#fff",
   letterSpacing: "-0.5px",
@@ -1512,32 +1500,6 @@ const filtersStyle: React.CSSProperties = {
   alignItems: "center",
   gap: "10px",
   flexWrap: "wrap",
-}
-
-const selectWrapStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "7px",
-  padding: "0 12px",
-  height: "42px",
-  borderRadius: "14px",
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.10)",
-}
-
-const selectStyle: React.CSSProperties = {
-  background: "transparent",
-  border: "none",
-  outline: "none",
-  color: "#fff",
-  fontSize: "14px",
-  fontWeight: 600,
-  cursor: "pointer",
-}
-
-const optionStyle: React.CSSProperties = {
-  background: "#0A0F1C",
-  color: "#fff",
 }
 
 const filterBtnStyle: React.CSSProperties = {

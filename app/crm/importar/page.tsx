@@ -1,11 +1,18 @@
-"use client";
+﻿"use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
+import {
+  ArrowLeft,
+  CheckCircle2,
+  FileSpreadsheet,
+  Upload,
+} from "lucide-react";
 import AppLayout from "../../../components/AppLayout";
 import ProtectedRoute from "../../../components/ProtectedRoute";
 import { supabase } from "../../../lib/supabase";
+import { getAccountAuthUser } from "../../../lib/access-session";
 
 type LinhaImportacao = {
   municipio: string;
@@ -47,9 +54,10 @@ export default function ImportarCrmPage() {
   const [linhas, setLinhas] = useState<LinhaImportacao[]>([]);
   const [importando, setImportando] = useState(false);
   const [arquivoNome, setArquivoNome] = useState("");
+  const inputArquivoRef = useRef<HTMLInputElement | null>(null);
 
   async function obterUsuarioLogado() {
-    const { data, error } = await supabase.auth.getUser();
+    const { data, error } = await getAccountAuthUser();
 
     if (error || !data.user) {
       window.location.href = "/login";
@@ -374,26 +382,69 @@ export default function ImportarCrmPage() {
   }
 
   return (
-    <ProtectedRoute adminOnly>
+    <ProtectedRoute modulo="crm">
       <AppLayout>
-        <div style={{ color: "#fff" }}>
-          <Link href="/crm" style={voltarStyle}>
-            ← Voltar para o CRM
-          </Link>
+        <div style={pageStyle}>
+          <header style={headerStyle}>
+            <div style={headerTextStyle}>
+              <Link href="/crm" style={voltarStyle}>
+                <ArrowLeft size={18} />
+                Voltar para o CRM
+              </Link>
 
-          <p style={tagStyle}>IMPORTAÇÃO</p>
+              <div style={titleRowStyle}>
+                <div style={iconBoxStyle}>
+                  <FileSpreadsheet size={34} />
+                </div>
+                <div>
+                  <h1 style={tituloStyle}>Importar Prefeituras</h1>
+                  <p style={subtituloStyle}>
+                    Transforme sua planilha em municípios, oportunidades,
+                    eventos e histórico dentro do CRM.
+                  </p>
+                </div>
+              </div>
+            </div>
 
-          <h1 style={tituloStyle}>Importar Prefeituras</h1>
+            <div style={headerBadgeStyle}>
+              <CheckCircle2 size={18} />
+              XLSX, XLS ou CSV
+            </div>
+          </header>
 
-          <p style={subtituloStyle}>
-            Importe sua planilha Excel e transforme os dados em municípios,
-            oportunidades, eventos e histórico dentro do CRM.
-          </p>
+          <section style={uploadCardStyle}>
+            <div style={sectionHeadingStyle}>
+              <div style={sectionIconStyle}>
+                <Upload size={22} />
+              </div>
+              <div>
+                <h2 style={sectionTitleStyle}>Selecionar planilha</h2>
+                <p style={sectionSubtitleStyle}>
+                  Use a planilha de controle para preencher os dados do CRM em
+                  lote.
+                </p>
+              </div>
+            </div>
 
-          <section style={cardStyle}>
-            <h2 style={{ marginTop: 0 }}>Selecionar planilha</h2>
+            <button
+              type="button"
+              onClick={() => inputArquivoRef.current?.click()}
+              style={uploadDropStyle}
+            >
+              <span style={uploadIconStyle}>
+                <FileSpreadsheet size={30} />
+              </span>
+              <span style={uploadTitleStyle}>
+                {arquivoNome || "Clique para escolher a planilha"}
+              </span>
+              <span style={uploadHintStyle}>
+                O arquivo será lido antes da importação para você conferir a
+                prévia.
+              </span>
+            </button>
 
             <input
+              ref={inputArquivoRef}
               type="file"
               accept=".xlsx,.xls,.csv"
               onChange={lerArquivo}
@@ -401,9 +452,10 @@ export default function ImportarCrmPage() {
             />
 
             {arquivoNome && (
-              <p style={{ color: "#b8b8d8" }}>
+              <div style={arquivoSelecionadoStyle}>
+                <CheckCircle2 size={18} />
                 Arquivo selecionado: <strong>{arquivoNome}</strong>
-              </p>
+              </div>
             )}
           </section>
 
@@ -453,8 +505,8 @@ export default function ImportarCrmPage() {
               <section style={cardStyle}>
                 <div style={topoPreviewStyle}>
                   <div>
-                    <h2 style={{ marginTop: 0 }}>Prévia da importação</h2>
-                    <p style={{ color: "#b8b8d8" }}>
+                    <h2 style={sectionTitleStyle}>Prévia da importação</h2>
+                    <p style={sectionSubtitleStyle}>
                       Confira os primeiros registros antes de importar.
                     </p>
                   </div>
@@ -468,6 +520,7 @@ export default function ImportarCrmPage() {
                       opacity: importando ? 0.7 : 1,
                     }}
                   >
+                    <Upload size={18} />
                     {importando ? "Importando..." : "Importar para o CRM"}
                   </button>
                 </div>
@@ -518,8 +571,8 @@ export default function ImportarCrmPage() {
                 </div>
 
                 {linhas.length > 30 && (
-                  <p style={{ color: "#b8b8d8" }}>
-                    Exibindo apenas os primeiros 30 registros na prévia.
+                  <p style={sectionSubtitleStyle}>
+                    Exibindo apenas os primeiros 30 registros na previa.
                   </p>
                 )}
               </section>
@@ -531,78 +584,206 @@ export default function ImportarCrmPage() {
   );
 }
 
-const voltarStyle: React.CSSProperties = {
-  display: "inline-block",
-  marginBottom: "18px",
-  color: "#38bdf8",
-  textDecoration: "none",
-  fontWeight: "bold",
+const pageStyle: React.CSSProperties = {
+  color: "#fff",
+  paddingBottom: 48,
 };
 
-const tagStyle: React.CSSProperties = {
-  margin: 0,
+const headerStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 24,
+  marginBottom: 28,
+  flexWrap: "wrap",
+};
+
+const headerTextStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 20,
+};
+
+const voltarStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
   color: "#38bdf8",
-  fontWeight: "bold",
-  letterSpacing: "2px",
-  fontSize: "14px",
+  textDecoration: "none",
+  fontWeight: 800,
+  width: "fit-content",
+};
+
+const titleRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 18,
+};
+
+const iconBoxStyle: React.CSSProperties = {
+  width: 78,
+  height: 78,
+  borderRadius: 22,
+  display: "grid",
+  placeItems: "center",
+  background: "linear-gradient(135deg,#8B35FF,#00AAFF)",
+  boxShadow: "0 18px 45px rgba(0,170,255,0.20)",
+  flex: "0 0 auto",
 };
 
 const tituloStyle: React.CSSProperties = {
-  fontSize: "38px",
-  margin: "10px 0",
+  fontSize: "clamp(34px, 4vw, 48px)",
+  lineHeight: 1,
+  margin: 0,
+  fontWeight: 900,
 };
 
 const subtituloStyle: React.CSSProperties = {
-  color: "#b8b8d8",
+  color: "#b8c7e3",
   fontSize: "18px",
-  margin: "0 0 28px",
+  margin: "10px 0 0",
   maxWidth: "850px",
   lineHeight: 1.5,
 };
 
-const cardStyle: React.CSSProperties = {
+const headerBadgeStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 10,
+  padding: "14px 18px",
+  borderRadius: 18,
   background: "rgba(255,255,255,0.06)",
-  border: "1px solid rgba(255,255,255,0.10)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  color: "#dbeafe",
+  fontWeight: 800,
+};
+
+const cardStyle: React.CSSProperties = {
+  background: "linear-gradient(135deg, rgba(255,255,255,0.065), rgba(0,170,255,0.08))",
+  border: "1px solid rgba(255,255,255,0.12)",
   borderRadius: "24px",
   padding: "24px",
   marginBottom: "24px",
+  boxShadow: "0 20px 60px rgba(0,0,0,0.22)",
+};
+
+const uploadCardStyle: React.CSSProperties = {
+  ...cardStyle,
+  padding: "28px",
+};
+
+const sectionHeadingStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 14,
+  marginBottom: 18,
+};
+
+const sectionIconStyle: React.CSSProperties = {
+  width: 54,
+  height: 54,
+  borderRadius: 16,
+  display: "grid",
+  placeItems: "center",
+  background: "rgba(139,53,255,0.22)",
+  border: "1px solid rgba(139,53,255,0.35)",
+  color: "#c4b5fd",
+};
+
+const sectionTitleStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: "26px",
+  fontWeight: 900,
+};
+
+const sectionSubtitleStyle: React.CSSProperties = {
+  color: "#9fb4d9",
+  fontSize: "16px",
+  margin: "6px 0 0",
+  lineHeight: 1.45,
+};
+
+const uploadDropStyle: React.CSSProperties = {
+  width: "100%",
+  minHeight: 172,
+  borderRadius: 22,
+  border: "1px dashed rgba(56,189,248,0.45)",
+  background: "rgba(2, 10, 28, 0.62)",
+  color: "#fff",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 10,
+  padding: 24,
+  cursor: "pointer",
+  textAlign: "center",
+};
+
+const uploadIconStyle: React.CSSProperties = {
+  width: 64,
+  height: 64,
+  borderRadius: 18,
+  display: "grid",
+  placeItems: "center",
+  background: "linear-gradient(135deg,#8B35FF,#00AAFF)",
+  boxShadow: "0 16px 36px rgba(0,170,255,0.24)",
+};
+
+const uploadTitleStyle: React.CSSProperties = {
+  fontSize: "20px",
+  fontWeight: 900,
+};
+
+const uploadHintStyle: React.CSSProperties = {
+  color: "#9fb4d9",
+  maxWidth: 560,
+  lineHeight: 1.45,
 };
 
 const inputFileStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "16px",
-  borderRadius: "16px",
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(0,0,0,0.22)",
-  color: "#fff",
+  display: "none",
+};
+
+const arquivoSelecionadoStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 10,
+  marginTop: 16,
+  padding: "12px 16px",
+  borderRadius: 16,
+  border: "1px solid rgba(34,197,94,0.28)",
+  background: "rgba(34,197,94,0.10)",
+  color: "#bbf7d0",
 };
 
 const resumoGridStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: "18px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+  gap: "16px",
   marginBottom: "24px",
 };
 
 const cardResumoStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.06)",
+  background: "rgba(255,255,255,0.055)",
   border: "1px solid rgba(255,255,255,0.10)",
-  borderRadius: "24px",
-  padding: "22px",
+  borderRadius: "22px",
+  padding: "20px",
 };
 
 const cardLabelStyle: React.CSSProperties = {
   margin: 0,
   color: "#9fb4d9",
-  fontWeight: "bold",
+  fontWeight: 900,
   textTransform: "uppercase",
   letterSpacing: "1px",
-  fontSize: "13px",
+  fontSize: "12px",
 };
 
 const cardNumeroStyle: React.CSSProperties = {
   margin: "10px 0 0",
-  fontSize: "30px",
+  fontSize: "32px",
+  lineHeight: 1,
 };
 
 const topoPreviewStyle: React.CSSProperties = {
@@ -614,39 +795,51 @@ const topoPreviewStyle: React.CSSProperties = {
 };
 
 const botaoPrincipal: React.CSSProperties = {
-  padding: "14px 20px",
-  borderRadius: "14px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 10,
+  padding: "15px 22px",
+  borderRadius: "16px",
   border: "none",
   background: "linear-gradient(90deg,#8b35ff,#00aaff)",
   color: "#fff",
-  fontWeight: "bold",
+  fontWeight: 900,
   cursor: "pointer",
   textDecoration: "none",
+  minHeight: 52,
 };
 
 const tabelaContainerStyle: React.CSSProperties = {
   width: "100%",
   overflowX: "auto",
   marginTop: "20px",
+  borderRadius: 18,
+  border: "1px solid rgba(255,255,255,0.08)",
 };
 
 const tableStyle: React.CSSProperties = {
   width: "100%",
   borderCollapse: "collapse",
   minWidth: "1100px",
+  background: "rgba(2,10,28,0.42)",
 };
 
 const thStyle: React.CSSProperties = {
   textAlign: "left",
-  padding: "12px",
-  color: "#dbeafe",
-  borderBottom: "1px solid rgba(255,255,255,0.12)",
+  padding: "14px 16px",
+  color: "#93c5fd",
+  borderBottom: "1px solid rgba(255,255,255,0.10)",
   whiteSpace: "nowrap",
+  fontSize: 12,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
 };
 
 const tdStyle: React.CSSProperties = {
-  padding: "12px",
+  padding: "14px 16px",
   color: "#fff",
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  borderBottom: "1px solid rgba(255,255,255,0.07)",
   whiteSpace: "nowrap",
+  fontWeight: 700,
 };

@@ -1,29 +1,33 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import {
-  Bell,
-  CalendarClock,
   Check,
-  ChevronDown,
-  Eye,
-  Filter,
   Landmark,
   Mail,
-  MapPin,
   MessageSquare,
   Phone,
   Plus,
-  Search,
+  Send,
   Trash2,
-  Upload,
-  Users,
   X,
 } from "lucide-react";
 import AppLayout from "../../components/AppLayout";
+import GibaSelect from "../../components/GibaSelect";
 import ProtectedRoute from "../../components/ProtectedRoute";
+import CrmEventTable from "../../components/crm/CrmEventTable";
+import CrmFilters from "../../components/crm/CrmFilters";
+import CrmHeader from "../../components/crm/CrmHeader";
+import CrmHistory from "../../components/crm/CrmHistory";
+import CrmModalTabs, {
+  type CrmModalTab,
+} from "../../components/crm/CrmModalTabs";
+import CrmSummaryCards from "../../components/crm/CrmSummaryCards";
+import CrmTable from "../../components/crm/CrmTable";
+import WhatsAppMessageModal from "../../components/whatsapp/WhatsAppMessageModal";
 import { supabase } from "../../lib/supabase";
+import { getAccountAuthUser } from "../../lib/access-session";
+import ImportarCrmModal from "./ImportarCrmModal";
 
 type Municipio = {
   id: string;
@@ -113,7 +117,9 @@ const STATUS_OPTIONS = [
   { value: "perdido", label: "Perdido" },
 ];
 
-const MODELOS_CONTRATACAO = ["CIMVALPI", "LICITAR", "INEXIGIBILIDADE"];
+const MODELOS_CONTRATACAO = ["Credenciamento", "Inexigibilidade"];
+const MODELOS_EVENTO = ["Credenciamento", "Inexigibilidade"];
+const PRIORIDADES_CRM = ["Boa Oportunidade", "Urgência", "Máxima"];
 
 const formInicial: FormMunicipio = {
   nome: "",
@@ -127,7 +133,7 @@ const formInicial: FormMunicipio = {
   telefone_whatsapp: "",
   observacoes: "",
   status: "novo_lead",
-  modelo_contratacao: "CIMVALPI",
+  modelo_contratacao: "Credenciamento",
   valor_proposto: "",
   data_contato: "",
   proximo_contato: "",
@@ -147,16 +153,18 @@ export default function CrmPage() {
   const [busca, setBusca] = useState("");
   const [filtroModelo, setFiltroModelo] = useState("todos");
   const [filtroPrioridade, setFiltroPrioridade] = useState("todos");
+  const [filtroMesContato, setFiltroMesContato] = useState("todos");
   const [form, setForm] = useState<FormMunicipio>(formInicial);
   const [selecionadaId, setSelecionadaId] = useState<string | null>(null);
-  const [mostrarNotificacoes, setMostrarNotificacoes] = useState(false);
+  const [mostrarImportacao, setMostrarImportacao] = useState(false);
+  const [excluindoCrm, setExcluindoCrm] = useState(false);
 
   useEffect(() => {
     carregarDados();
   }, []);
 
   async function obterUsuarioLogado() {
-    const { data, error } = await supabase.auth.getUser();
+    const { data, error } = await getAccountAuthUser();
 
     if (error || !data.user) {
       window.location.href = "/login";
@@ -200,8 +208,8 @@ export default function CrmPage() {
       ]);
 
     if (municipiosRes.error) {
-      console.error("Erro ao carregar municipios:", municipiosRes.error);
-      alert("Erro ao carregar municipios.");
+      console.error("Erro ao carregar municípios:", municipiosRes.error);
+      alert("Erro ao carregar municípios.");
     }
 
     if (oportunidadesRes.error) {
@@ -214,7 +222,7 @@ export default function CrmPage() {
     }
 
     if (interacoesRes.error) {
-      console.error("Erro ao carregar interacoes:", interacoesRes.error);
+      console.error("Erro ao carregar interações:", interacoesRes.error);
     }
 
     setMunicipios((municipiosRes.data || []) as Municipio[]);
@@ -239,7 +247,7 @@ export default function CrmPage() {
     if (!user) return;
 
     if (!form.nome.trim()) {
-      alert("Informe o nome do municipio.");
+      alert("Informe o nome do município.");
       return;
     }
 
@@ -265,8 +273,8 @@ export default function CrmPage() {
         .single();
 
       if (erroMunicipio) {
-        console.error("Erro ao cadastrar municipio:", erroMunicipio);
-        alert("Erro ao cadastrar municipio.");
+        console.error("Erro ao cadastrar município:", erroMunicipio);
+        alert("Erro ao cadastrar município.");
         return;
       }
 
@@ -291,7 +299,7 @@ export default function CrmPage() {
 
       if (erroOportunidade) {
         console.error("Erro ao criar oportunidade:", erroOportunidade);
-        alert("Municipio criado, mas houve erro ao criar oportunidade.");
+        alert("Município criado, mas houve erro ao criar oportunidade.");
         await carregarDados();
         return;
       }
@@ -360,8 +368,8 @@ export default function CrmPage() {
       .eq("id", id);
 
     if (error) {
-      console.error("Erro ao alterar modelo de contratacao:", error);
-      alert("Erro ao alterar modelo de contratacao.");
+      console.error("Erro ao alterar modelo de contratação:", error);
+      alert("Erro ao alterar modelo de contratação.");
       return;
     }
 
@@ -371,7 +379,7 @@ export default function CrmPage() {
   async function excluirOportunidade(oportunidade: Oportunidade) {
     const confirmar = window.confirm(
       `Deseja excluir a oportunidade de ${
-        oportunidade.municipios?.nome || "municipio"
+        oportunidade.municipios?.nome || "município"
       }?`,
     );
 
@@ -392,6 +400,51 @@ export default function CrmPage() {
     await carregarDados();
   }
 
+  async function excluirTodosDadosCrm() {
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+
+    const confirmar = window.confirm(
+      "Isso vai apagar TODAS as prefeituras, oportunidades, eventos e históricos do CRM. Deseja continuar?",
+    );
+
+    if (!confirmar) return;
+
+    const texto = window.prompt(
+      "Para confirmar a exclusão total do CRM, digite EXCLUIR.",
+    );
+
+    if (texto !== "EXCLUIR") return;
+
+    try {
+      setExcluindoCrm(true);
+
+      const exclusoes = [
+        await supabase.from("crm_interacoes").delete().eq("user_id", user.id),
+        await supabase.from("municipio_eventos").delete().eq("user_id", user.id),
+        await supabase.from("crm_oportunidades").delete().eq("user_id", user.id),
+        await supabase.from("municipios").delete().eq("user_id", user.id),
+      ];
+
+      const erro = exclusoes.find((resultado) => resultado.error)?.error;
+
+      if (erro) {
+        console.error("Erro ao excluir dados do CRM:", erro);
+        alert("Não foi possível excluir todos os dados do CRM.");
+        return;
+      }
+
+      setSelecionadaId(null);
+      setMunicipios([]);
+      setOportunidades([]);
+      setEventos([]);
+      setInteracoes([]);
+      await carregarDados();
+    } finally {
+      setExcluindoCrm(false);
+    }
+  }
+
   const linhasCrm = useMemo(() => {
     return oportunidades.map((oportunidade) => {
       const municipio = oportunidade.municipios || null;
@@ -402,6 +455,18 @@ export default function CrmPage() {
         (interacao) => interacao.oportunidade_id === oportunidade.id,
       );
       const eventoPrincipal = escolherEventoPrincipal(eventosMunicipio);
+      const modeloContratacao = normalizarModeloEvento(
+        eventoPrincipal?.modelo_contratacao ||
+          oportunidade.modelo_contratacao ||
+          "",
+      );
+      const prioridade = normalizarPrioridadeCrm(
+        eventoPrincipal?.prioridade || "",
+      );
+      const proximoContato = obterProximoContatoCrm(
+        oportunidade,
+        eventoPrincipal,
+      );
 
       return {
         oportunidade,
@@ -409,7 +474,9 @@ export default function CrmPage() {
         eventos: eventosMunicipio,
         interacoes: interacoesOportunidade,
         eventoPrincipal,
-        prioridade: eventoPrincipal?.prioridade || "",
+        modeloContratacao,
+        prioridade,
+        proximoContato,
         ultimaAtualizacao: calcularUltimaAtualizacao(
           municipio,
           oportunidade,
@@ -420,21 +487,12 @@ export default function CrmPage() {
     });
   }, [oportunidades, eventos, interacoes]);
 
-  const prioridadesDisponiveis = useMemo(() => {
-    const valores = new Set<string>();
-    linhasCrm.forEach((linha) => {
-      if (linha.prioridade) valores.add(linha.prioridade);
-    });
-    return Array.from(valores).sort((a, b) => a.localeCompare(b));
-  }, [linhasCrm]);
-
   const linhasFiltradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
 
-    return linhasCrm.filter((linha) => {
+    return linhasCrm
+      .filter((linha) => {
       const municipio = linha.municipio;
-      const oportunidade = linha.oportunidade;
-      const evento = linha.eventoPrincipal;
 
       const combinaBusca =
         !termo ||
@@ -442,19 +500,50 @@ export default function CrmPage() {
         municipio?.prefeito?.toLowerCase().includes(termo) ||
         municipio?.secretario_cultura?.toLowerCase().includes(termo) ||
         municipio?.telefone_whatsapp?.toLowerCase().includes(termo) ||
-        oportunidade.modelo_contratacao?.toLowerCase().includes(termo) ||
-        evento?.prioridade?.toLowerCase().includes(termo);
+        linha.modeloContratacao.toLowerCase().includes(termo) ||
+        linha.prioridade.toLowerCase().includes(termo) ||
+        formatarMelhorMesContato(linha.proximoContato)
+          .toLowerCase()
+          .includes(termo);
 
       const combinaModelo =
         filtroModelo === "todos" ||
-        oportunidade.modelo_contratacao === filtroModelo;
+        linha.modeloContratacao === filtroModelo;
 
       const combinaPrioridade =
-        filtroPrioridade === "todos" || linha.prioridade === filtroPrioridade;
+        filtroPrioridade === "todos" ||
+        obterChaveFiltro(linha.prioridade) === obterChaveFiltro(filtroPrioridade);
 
-      return combinaBusca && combinaModelo && combinaPrioridade;
+      const combinaMesContato =
+        filtroMesContato === "todos" ||
+        linha.eventos.some((evento) => {
+          const dataContato = calcularDataContatoEvento(
+            evento.data_evento || "",
+            obterMesesAntesEvento(evento.observacoes),
+          );
+
+          if (!dataContato) return false;
+
+          const data = new Date(`${dataContato}T00:00:00`);
+          return data.getMonth() === Number(filtroMesContato);
+        });
+
+      return (
+        combinaBusca &&
+        combinaModelo &&
+        combinaPrioridade &&
+        combinaMesContato
+      );
+    })
+    .sort((a, b) => {
+      const dataA = obterPesoOrdenacaoContato(a.proximoContato);
+      const dataB = obterPesoOrdenacaoContato(b.proximoContato);
+
+      if (dataA !== dataB) return dataA - dataB;
+
+      return (a.municipio?.nome || "").localeCompare(b.municipio?.nome || "");
     });
-  }, [linhasCrm, busca, filtroModelo, filtroPrioridade]);
+  }, [linhasCrm, busca, filtroModelo, filtroPrioridade, filtroMesContato]);
 
   const notificacoesCrm = useMemo(() => {
     const hoje = new Date();
@@ -463,9 +552,9 @@ export default function CrmPage() {
     limite.setDate(limite.getDate() + 30);
 
     return linhasCrm
-      .filter((linha) => linha.oportunidade.proximo_contato)
+      .filter((linha) => linha.proximoContato)
       .map((linha) => {
-        const data = new Date(`${linha.oportunidade.proximo_contato}T00:00:00`);
+        const data = new Date(`${linha.proximoContato}T00:00:00`);
         const dias = Math.ceil(
           (data.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24),
         );
@@ -482,64 +571,50 @@ export default function CrmPage() {
       .sort((a, b) => a.data.getTime() - b.data.getTime());
   }, [linhasCrm]);
 
+  const resumoCrm = useMemo(() => {
+    const ativas = linhasCrm.filter(
+      (linha) =>
+        linha.oportunidade.status !== "fechado" &&
+        linha.oportunidade.status !== "perdido",
+    ).length;
+
+    return {
+      total: linhasCrm.length,
+      ativas,
+      vencidos: notificacoesCrm.filter((item) => item.status === "vencido")
+        .length,
+      hoje: notificacoesCrm.filter((item) => item.status === "hoje").length,
+      proximos: notificacoesCrm.filter((item) => item.status === "proximo")
+        .length,
+    };
+  }, [linhasCrm, notificacoesCrm]);
+
   const linhaSelecionada =
     linhasCrm.find((linha) => linha.oportunidade.id === selecionadaId) || null;
 
   return (
-    <ProtectedRoute adminOnly>
+    <ProtectedRoute modulo="crm">
       <AppLayout>
         <div style={pageStyle}>
-          <header style={headerStyle}>
-            <div style={headerIdentityStyle}>
-              <div style={headerIconStyle}>
-                <Landmark size={34} />
-              </div>
-              <div>
-                <h1 style={tituloStyle}>CRM de Prefeituras</h1>
-                <p style={subtituloStyle}>
-                  Controle municipios, contatos, prioridades e oportunidades no
-                  padrao GIBA V2.
-                </p>
-              </div>
-            </div>
+          <CrmHeader
+            deleting={excluindoCrm}
+            onCreate={() => setMostrarFormulario(true)}
+            onImport={() => setMostrarImportacao(true)}
+            onDeleteAll={excluirTodosDadosCrm}
+          />
 
-            <div style={headerActionsStyle}>
-              <button
-                type="button"
-                onClick={() => setMostrarNotificacoes(true)}
-                style={notificationButtonStyle}
-                aria-label="Notificacoes CRM"
-              >
-                <Bell size={20} />
-                {notificacoesCrm.length > 0 && (
-                  <span style={notificationBadgeStyle}>
-                    {notificacoesCrm.length}
-                  </span>
-                )}
-              </button>
-              <Link href="/crm/importar" style={botaoSecundario}>
-                <Upload size={18} />
-                Importar planilha
-              </Link>
-              <button
-                type="button"
-                onClick={() => setMostrarFormulario(true)}
-                style={botaoPrincipal}
-              >
-                <Plus size={18} />
-                Nova prefeitura
-              </button>
-            </div>
-          </header>
+          <CrmSummaryCards
+            total={resumoCrm.total}
+            active={resumoCrm.ativas}
+            overdue={resumoCrm.vencidos}
+            today={resumoCrm.hoje}
+            upcoming={resumoCrm.proximos}
+          />
 
-          {mostrarNotificacoes && (
-            <NotificacoesModal
-              notificacoes={notificacoesCrm}
-              onClose={() => setMostrarNotificacoes(false)}
-              onOpen={(id) => {
-                setMostrarNotificacoes(false);
-                setSelecionadaId(id);
-              }}
+          {mostrarImportacao && (
+            <ImportarCrmModal
+              onClose={() => setMostrarImportacao(false)}
+              onImported={carregarDados}
             />
           )}
 
@@ -559,7 +634,7 @@ export default function CrmPage() {
                       <Plus size={24} />
                     </div>
                     <div>
-                      <h2 style={modalTitleStyle}>Cadastrar prefeitura</h2>
+                      <h2 style={modalTitleStyle}>Cadastrar Prefeitura</h2>
                       <p style={sectionSubtitleStyle}>
                         Crie o registro principal e, se desejar, ja informe
                         evento e prioridade.
@@ -576,7 +651,7 @@ export default function CrmPage() {
                 </div>
 
                 <div style={{ ...formGridStyle, marginTop: 12 }}>
-                  <Campo label="Municipio *">
+                  <Campo label="Município *">
                     <input
                       value={form.nome}
                       onChange={(e) => atualizarCampo("nome", e.target.value)}
@@ -592,7 +667,7 @@ export default function CrmPage() {
                       placeholder="MG"
                     />
                   </Campo>
-                  <Campo label="Distancia da capital">
+                  <Campo label="Distância da Capital">
                     <input
                       value={form.distancia_bh}
                       onChange={(e) =>
@@ -614,29 +689,26 @@ export default function CrmPage() {
                       placeholder="12851"
                     />
                   </Campo>
-                  <Campo label="Modelo de contratacao">
-                    <select
+                  <Campo label="Modelo de Contratação">
+                    <GibaSelect
                       value={form.modelo_contratacao}
-                      onChange={(e) =>
-                        atualizarCampo("modelo_contratacao", e.target.value)
+                      onChange={(value) =>
+                        atualizarCampo("modelo_contratacao", value)
                       }
-                      style={inputStyle}
-                    >
-                      {MODELOS_CONTRATACAO.map((modelo) => (
-                        <option key={modelo} value={modelo}>
-                          {modelo}
-                        </option>
-                      ))}
-                    </select>
+                      options={MODELOS_CONTRATACAO.map((modelo) => ({ value: modelo, label: modelo }))}
+                      triggerStyle={inputStyle}
+                    />
                   </Campo>
                   <Campo label="Prioridade">
-                    <input
+                    <GibaSelect
                       value={form.prioridade}
-                      onChange={(e) =>
-                        atualizarCampo("prioridade", e.target.value)
-                      }
-                      style={inputStyle}
-                      placeholder="Urgencia total, maxima..."
+                      onChange={(value) => atualizarCampo("prioridade", value)}
+                      options={[
+                        { value: "", label: "Sem prioridade" },
+                        ...PRIORIDADES_CRM.map((prioridade) => ({ value: prioridade, label: prioridade })),
+                      ]}
+                      placeholder="Selecione a prioridade"
+                      triggerStyle={inputStyle}
                     />
                   </Campo>
                   <Campo label="Evento">
@@ -646,10 +718,10 @@ export default function CrmPage() {
                         atualizarCampo("nome_evento", e.target.value)
                       }
                       style={inputStyle}
-                      placeholder="Aniversario, festa da cidade..."
+                      placeholder="Aniversário, festa da cidade..."
                     />
                   </Campo>
-                  <Campo label="Data do evento">
+                  <Campo label="Data do Evento">
                     <input
                       value={form.data_evento}
                       onChange={(e) =>
@@ -668,7 +740,7 @@ export default function CrmPage() {
                       style={inputStyle}
                     />
                   </Campo>
-                  <Campo label="E-mail prefeito">
+                  <Campo label="E-mail do Prefeito">
                     <input
                       value={form.email_prefeito}
                       onChange={(e) =>
@@ -678,7 +750,7 @@ export default function CrmPage() {
                       type="email"
                     />
                   </Campo>
-                  <Campo label="Secretario de cultura">
+                  <Campo label="Secretário de Cultura">
                     <input
                       value={form.secretario_cultura}
                       onChange={(e) =>
@@ -687,7 +759,7 @@ export default function CrmPage() {
                       style={inputStyle}
                     />
                   </Campo>
-                  <Campo label="E-mail cultura">
+                  <Campo label="E-mail da Cultura">
                     <input
                       value={form.email_cultura}
                       onChange={(e) =>
@@ -707,7 +779,7 @@ export default function CrmPage() {
                       placeholder="(31) 99999-9999"
                     />
                   </Campo>
-                  <Campo label="Valor proposto">
+                  <Campo label="Valor Proposto">
                     <input
                       value={form.valor_proposto}
                       onChange={(e) =>
@@ -717,7 +789,7 @@ export default function CrmPage() {
                       placeholder="15000"
                     />
                   </Campo>
-                  <Campo label="Data de contato">
+                  <Campo label="Data de Contato">
                     <input
                       value={form.data_contato}
                       onChange={(e) =>
@@ -727,7 +799,7 @@ export default function CrmPage() {
                       type="date"
                     />
                   </Campo>
-                  <Campo label="Proximo contato">
+                  <Campo label="Próximo Contato">
                     <input
                       value={form.proximo_contato}
                       onChange={(e) =>
@@ -738,14 +810,14 @@ export default function CrmPage() {
                     />
                   </Campo>
                   <div style={{ gridColumn: "1 / -1" }}>
-                    <Campo label="Observacoes">
+                    <Campo label="Observações">
                       <textarea
                         value={form.observacoes}
                         onChange={(e) =>
                           atualizarCampo("observacoes", e.target.value)
                         }
                         style={{ ...inputStyle, minHeight: 104, paddingTop: 14 }}
-                        placeholder="Historico, detalhes de contato, pendencias..."
+                        placeholder="Histórico, detalhes de contato, pendências..."
                       />
                     </Campo>
                   </div>
@@ -778,7 +850,7 @@ export default function CrmPage() {
             <section style={cardStyle}>
               <div style={sectionHeaderStyle}>
                 <div>
-                  <h2 style={sectionTitleStyle}>Cadastrar prefeitura</h2>
+                  <h2 style={sectionTitleStyle}>Cadastrar Prefeitura</h2>
                   <p style={sectionSubtitleStyle}>
                     Crie o registro principal e, se desejar, ja informe evento e
                     prioridade.
@@ -788,7 +860,7 @@ export default function CrmPage() {
 
               <form onSubmit={salvarMunicipioEOportunidade}>
                 <div style={formGridStyle}>
-                  <Campo label="Municipio *">
+                  <Campo label="Município *">
                     <input
                       value={form.nome}
                       onChange={(e) => atualizarCampo("nome", e.target.value)}
@@ -804,7 +876,7 @@ export default function CrmPage() {
                       placeholder="MG"
                     />
                   </Campo>
-                  <Campo label="Distancia da capital">
+                  <Campo label="Distância da Capital">
                     <input
                       value={form.distancia_bh}
                       onChange={(e) =>
@@ -826,29 +898,24 @@ export default function CrmPage() {
                       placeholder="12851"
                     />
                   </Campo>
-                  <Campo label="Modelo de contratacao">
-                    <select
+                  <Campo label="Modelo de Contratação">
+                    <GibaSelect
                       value={form.modelo_contratacao}
-                      onChange={(e) =>
-                        atualizarCampo("modelo_contratacao", e.target.value)
-                      }
-                      style={inputStyle}
-                    >
-                      {MODELOS_CONTRATACAO.map((modelo) => (
-                        <option key={modelo} value={modelo}>
-                          {modelo}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(value) => atualizarCampo("modelo_contratacao", value)}
+                      options={MODELOS_CONTRATACAO.map((modelo) => ({ value: modelo, label: modelo }))}
+                      triggerStyle={inputStyle}
+                    />
                   </Campo>
                   <Campo label="Prioridade">
-                    <input
+                    <GibaSelect
                       value={form.prioridade}
-                      onChange={(e) =>
-                        atualizarCampo("prioridade", e.target.value)
-                      }
-                      style={inputStyle}
-                      placeholder="Urgencia total, maxima..."
+                      onChange={(value) => atualizarCampo("prioridade", value)}
+                      options={[
+                        { value: "", label: "Sem prioridade" },
+                        ...PRIORIDADES_CRM.map((prioridade) => ({ value: prioridade, label: prioridade })),
+                      ]}
+                      placeholder="Selecione a prioridade"
+                      triggerStyle={inputStyle}
                     />
                   </Campo>
                   <Campo label="Evento">
@@ -858,7 +925,7 @@ export default function CrmPage() {
                         atualizarCampo("nome_evento", e.target.value)
                       }
                       style={inputStyle}
-                      placeholder="Aniversario, festa da cidade..."
+                      placeholder="Aniversário, festa da cidade..."
                     />
                   </Campo>
                   <Campo label="Data do evento">
@@ -880,7 +947,7 @@ export default function CrmPage() {
                       style={inputStyle}
                     />
                   </Campo>
-                  <Campo label="E-mail prefeito">
+                  <Campo label="E-mail do Prefeito">
                     <input
                       value={form.email_prefeito}
                       onChange={(e) =>
@@ -890,7 +957,7 @@ export default function CrmPage() {
                       type="email"
                     />
                   </Campo>
-                  <Campo label="Secretario de cultura">
+                  <Campo label="Secretário de Cultura">
                     <input
                       value={form.secretario_cultura}
                       onChange={(e) =>
@@ -899,7 +966,7 @@ export default function CrmPage() {
                       style={inputStyle}
                     />
                   </Campo>
-                  <Campo label="E-mail cultura">
+                  <Campo label="E-mail da Cultura">
                     <input
                       value={form.email_cultura}
                       onChange={(e) =>
@@ -919,7 +986,7 @@ export default function CrmPage() {
                       placeholder="(31) 99999-9999"
                     />
                   </Campo>
-                  <Campo label="Valor proposto">
+                  <Campo label="Valor Proposto">
                     <input
                       value={form.valor_proposto}
                       onChange={(e) =>
@@ -929,7 +996,7 @@ export default function CrmPage() {
                       placeholder="15000"
                     />
                   </Campo>
-                  <Campo label="Data de contato">
+                  <Campo label="Data de Contato">
                     <input
                       value={form.data_contato}
                       onChange={(e) =>
@@ -939,7 +1006,7 @@ export default function CrmPage() {
                       type="date"
                     />
                   </Campo>
-                  <Campo label="Proximo contato">
+                  <Campo label="Próximo Contato">
                     <input
                       value={form.proximo_contato}
                       onChange={(e) =>
@@ -950,14 +1017,14 @@ export default function CrmPage() {
                     />
                   </Campo>
                   <div style={{ gridColumn: "1 / -1" }}>
-                    <Campo label="Observacoes">
+                    <Campo label="Observações">
                       <textarea
                         value={form.observacoes}
                         onChange={(e) =>
                           atualizarCampo("observacoes", e.target.value)
                         }
                         style={{ ...inputStyle, minHeight: 104 }}
-                        placeholder="Historico, detalhes de contato, pendencias..."
+                        placeholder="Histórico, detalhes de contato, pendências..."
                       />
                     </Campo>
                   </div>
@@ -986,114 +1053,44 @@ export default function CrmPage() {
             </section>
           )}
 
-          <section style={cardStyle}>
-            <div style={sectionHeaderStyle}>
+          <section className="mt-5 rounded-[30px] border border-white/10 bg-white/[0.045] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl sm:mt-6 sm:p-5">
+            <div className="mb-4 flex flex-col gap-2 px-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h2 style={sectionTitleStyle}>Lista de prefeituras</h2>
-                <p style={sectionSubtitleStyle}>
-                  Visao principal: municipio, distancia, contratacao,
-                  prioridade, habitantes e ultima atualizacao.
-                </p>
+                <span className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-300">Carteira comercial</span>
+                <h2 className="mt-1 text-2xl font-black tracking-[-0.025em] text-white">Prefeituras e oportunidades</h2>
               </div>
-              <span style={countBadgeStyle}>{linhasFiltradas.length}</span>
+              <p className="max-w-xl text-sm leading-6 text-slate-400 sm:text-right">
+                Follow-ups mais urgentes aparecem primeiro. Abra um registro para acessar o dossiê completo.
+              </p>
             </div>
 
-            <div style={filtersStyle}>
-              <div style={searchWrapStyle}>
-                <Search size={18} color="#94A3B8" />
-                <input
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  style={searchInputStyle}
-                  placeholder="Buscar municipio, contato, modelo ou prioridade..."
-                />
-              </div>
-              <SelectFilter
-                icon={<Filter size={16} />}
-                value={filtroModelo}
-                onChange={setFiltroModelo}
-                options={[
-                  { value: "todos", label: "Todos os modelos" },
-                  ...MODELOS_CONTRATACAO.map((modelo) => ({
-                    value: modelo,
-                    label: modelo,
-                  })),
-                ]}
-              />
-              <SelectFilter
-                icon={<CalendarClock size={16} />}
-                value={filtroPrioridade}
-                onChange={setFiltroPrioridade}
-                options={[
-                  { value: "todos", label: "Todas prioridades" },
-                  ...prioridadesDisponiveis.map((prioridade) => ({
-                    value: prioridade,
-                    label: prioridade,
-                  })),
-                ]}
+            <CrmFilters
+              search={busca}
+              model={filtroModelo}
+              priority={filtroPrioridade}
+              contactMonth={filtroMesContato}
+              resultCount={linhasFiltradas.length}
+              onSearchChange={setBusca}
+              onModelChange={setFiltroModelo}
+              onPriorityChange={setFiltroPrioridade}
+              onContactMonthChange={setFiltroMesContato}
+              modelOptions={[
+                { value: "todos", label: "Todos os modelos" },
+                ...MODELOS_EVENTO.map((modelo) => ({ value: modelo, label: modelo })),
+              ]}
+              priorityOptions={[
+                { value: "todos", label: "Todas as prioridades" },
+                ...PRIORIDADES_CRM.map((prioridade) => ({ value: prioridade, label: prioridade })),
+              ]}
+            />
+
+            <div className="mt-4">
+              <CrmTable
+                rows={linhasFiltradas}
+                loading={carregando}
+                onOpen={setSelecionadaId}
               />
             </div>
-
-            {carregando ? (
-              <p style={mutedTextStyle}>Carregando CRM...</p>
-            ) : linhasFiltradas.length === 0 ? (
-              <div style={emptyStyle}>
-                <Landmark size={34} />
-                <h3 style={{ margin: "12px 0 6px" }}>
-                  Nenhuma prefeitura encontrada
-                </h3>
-                <p style={mutedTextStyle}>
-                  Cadastre ou importe sua planilha para iniciar o controle.
-                </p>
-              </div>
-            ) : (
-              <div style={tableWrapStyle}>
-                <div style={tableHeaderStyle}>
-                  <span>Municipio</span>
-                  <span>Distancia da Capital</span>
-                  <span>Modelo de contratacao</span>
-                  <span>Prioridade</span>
-                  <span>Habitantes</span>
-                  <span>Ultima atualizacao</span>
-                  <span />
-                </div>
-
-                <div style={tableBodyStyle}>
-                  {linhasFiltradas.map((linha) => {
-                    const municipio = linha.municipio;
-                    const oportunidade = linha.oportunidade;
-
-                    return (
-                      <button
-                        key={oportunidade.id}
-                        type="button"
-                        onClick={() => setSelecionadaId(oportunidade.id)}
-                        style={tableRowStyle}
-                      >
-                        <span style={municipioCellStyle}>
-                          <strong>
-                            {municipio?.nome || "Municipio nao informado"}
-                          </strong>
-                          <small>{municipio?.estado || "MG"}</small>
-                        </span>
-                        <span>{formatarDistancia(municipio?.distancia_bh)}</span>
-                        <span>
-                          <Badge value={oportunidade.modelo_contratacao || "-"} />
-                        </span>
-                        <span>
-                          <PrioridadeBadge value={linha.prioridade || "-"} />
-                        </span>
-                        <span>{formatarNumero(municipio?.habitantes)}</span>
-                        <span>{formatarDataHoraCurta(linha.ultimaAtualizacao)}</span>
-                        <span style={rowActionCellStyle}>
-                          <Eye size={18} />
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </section>
 
           {linhaSelecionada && (
@@ -1137,13 +1134,26 @@ function CrmModal({
 }) {
   const { oportunidade, municipio, eventos, interacoes, eventoPrincipal } =
     linha;
+  const telefonesIniciais = separarTelefones(municipio?.telefone_whatsapp || "");
   const [salvandoAlteracoes, setSalvandoAlteracoes] = useState(false);
+  const [abaAtiva, setAbaAtiva] = useState<CrmModalTab>("dados");
   const [salvandoEvento, setSalvandoEvento] = useState(false);
   const [eventosModal, setEventosModal] = useState(eventos);
+  const [interacoesModal, setInteracoesModal] = useState(interacoes);
+  const [novaObservacao, setNovaObservacao] = useState("");
+  const [salvandoObservacao, setSalvandoObservacao] = useState(false);
+  const [whatsappAberto, setWhatsappAberto] = useState(false);
+
+  function abrirNovaObservacao() {
+    setAbaAtiva("historico");
+    window.setTimeout(() => {
+      document.getElementById("crm-nova-observacao")?.focus();
+    }, 0);
+  }
   const [novoEvento, setNovoEvento] = useState({
     nome: "",
     data: "",
-    modelo: oportunidade.modelo_contratacao || "CIMVALPI",
+    modelo: "Credenciamento",
     mesesAntes: "3",
     observacoes: "",
   });
@@ -1156,7 +1166,8 @@ function CrmModal({
     email_prefeito: municipio?.email_prefeito || "",
     secretario_cultura: municipio?.secretario_cultura || "",
     email_cultura: municipio?.email_cultura || "",
-    telefone_whatsapp: municipio?.telefone_whatsapp || "",
+    telefone_1: telefonesIniciais[0],
+    telefone_2: telefonesIniciais[1],
     observacoes: municipio?.observacoes || oportunidade.observacoes || "",
     status: oportunidade.status || "novo_lead",
     modelo_contratacao: oportunidade.modelo_contratacao || "CIMVALPI",
@@ -1189,6 +1200,7 @@ function CrmModal({
     try {
       setSalvandoEvento(true);
 
+      const dataEventoBanco = normalizarDataEventoParaBanco(novoEvento.data);
       const proximoContato = calcularDataContatoEvento(
         novoEvento.data,
         Number(novoEvento.mesesAntes || 0),
@@ -1201,10 +1213,10 @@ function CrmModal({
           user_id: oportunidade.user_id,
           municipio_id: municipio.id,
           nome_evento: novoEvento.nome.trim(),
-          data_evento: novoEvento.data || null,
+          data_evento: dataEventoBanco,
           modelo_contratacao: novoEvento.modelo || null,
           prioridade: prioridadeAutomatica,
-          observacoes: novoEvento.observacoes.trim() || null,
+          observacoes: criarObservacaoEvento(novoEvento.mesesAntes),
         })
         .select("*")
         .single();
@@ -1236,7 +1248,7 @@ function CrmModal({
       setNovoEvento({
         nome: "",
         data: "",
-        modelo: edit.modelo_contratacao,
+        modelo: "Credenciamento",
         mesesAntes: "3",
         observacoes: "",
       });
@@ -1244,6 +1256,87 @@ function CrmModal({
     } finally {
       setSalvandoEvento(false);
     }
+  }
+
+  async function excluirEventoMapeado(evento: EventoMunicipal) {
+    const confirmar = window.confirm(
+      `Deseja excluir o evento "${evento.nome_evento}"?`,
+    );
+
+    if (!confirmar) return;
+
+    const { error } = await supabase
+      .from("municipio_eventos")
+      .delete()
+      .eq("id", evento.id);
+
+    if (error) {
+      console.error("Erro ao excluir evento mapeado:", error);
+      alert("Não foi possível excluir o evento.");
+      return;
+    }
+
+    setEventosModal((atual) => atual.filter((item) => item.id !== evento.id));
+    await onSaved();
+  }
+
+  async function adicionarObservacaoHistorico(event: React.FormEvent) {
+    event.preventDefault();
+
+    if (!novaObservacao.trim()) {
+      alert("Informe a observação.");
+      return;
+    }
+
+    try {
+      setSalvandoObservacao(true);
+
+      const { data, error } = await supabase
+        .from("crm_interacoes")
+        .insert({
+          user_id: oportunidade.user_id,
+          oportunidade_id: oportunidade.id,
+          tipo: "Observacao",
+          descricao: novaObservacao.trim(),
+          data_interacao: new Date().toISOString(),
+        })
+        .select("*")
+        .single();
+
+      if (error) {
+        console.error("Erro ao adicionar observação:", error);
+        alert("Não foi possível adicionar a observação.");
+        return;
+      }
+
+      setInteracoesModal((atual) => [data as Interacao, ...atual]);
+      setNovaObservacao("");
+      await onSaved();
+    } finally {
+      setSalvandoObservacao(false);
+    }
+  }
+
+  async function excluirObservacaoHistorico(interacao: Interacao) {
+    const confirmar = window.confirm("Deseja excluir esta observação?");
+
+    if (!confirmar) return;
+
+    const { error } = await supabase
+      .from("crm_interacoes")
+      .delete()
+      .eq("id", interacao.id);
+
+    if (error) {
+      console.error("Erro ao excluir observação:", error);
+      alert("Não foi possível excluir a observação.");
+      return;
+    }
+
+    setInteracoesModal((atual) =>
+      atual.filter((item) => item.id !== interacao.id),
+    );
+    await onSaved();
   }
 
   async function salvarAlteracoes() {
@@ -1263,14 +1356,14 @@ function CrmModal({
           email_prefeito: edit.email_prefeito.trim() || null,
           secretario_cultura: edit.secretario_cultura.trim() || null,
           email_cultura: edit.email_cultura.trim() || null,
-          telefone_whatsapp: edit.telefone_whatsapp.trim() || null,
+          telefone_whatsapp: combinarTelefones(edit.telefone_1, edit.telefone_2),
           observacoes: edit.observacoes.trim() || null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", municipio.id);
 
       if (municipioError) {
-        console.error("Erro ao atualizar municipio:", municipioError);
+        console.error("Erro ao atualizar município:", municipioError);
         alert("Erro ao salvar dados da prefeitura.");
         return;
       }
@@ -1351,11 +1444,11 @@ function CrmModal({
             </div>
             <div>
               <h2 style={modalTitleStyle}>
-                {municipio?.nome || "Municipio nao informado"}
+                {municipio?.nome || "Município não informado"}
                 {municipio?.estado ? ` / ${municipio.estado}` : ""}
               </h2>
               <p style={sectionSubtitleStyle}>
-                Dossie completo da prefeitura e oportunidade comercial.
+                Informações da prefeitura e oportunidade comercial.
               </p>
             </div>
           </div>
@@ -1364,11 +1457,44 @@ function CrmModal({
           </button>
         </div>
 
-        <div style={modalGridStyle}>
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          {(edit.telefone_1 || edit.telefone_2) ? (
+            <button
+              type="button"
+              onClick={() => setWhatsappAberto(true)}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 text-xs font-black text-emerald-200 transition hover:bg-emerald-400/20"
+            >
+              <Phone size={16} /> WhatsApp
+            </button>
+          ) : (
+            <span className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-xs font-black text-slate-600">
+              <Phone size={16} /> Sem WhatsApp
+            </span>
+          )}
+          {edit.email_prefeito && (
+            <a href={`mailto:${edit.email_prefeito}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-blue-400/20 bg-blue-500/10 px-4 text-xs font-black text-blue-200 transition hover:bg-blue-500/20">
+              <Mail size={16} /> E-mail prefeito
+            </a>
+          )}
+          {edit.email_cultura && (
+            <a href={`mailto:${edit.email_cultura}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 text-xs font-black text-cyan-200 transition hover:bg-cyan-400/20">
+              <Send size={16} /> E-mail cultura
+            </a>
+          )}
+          <button type="button" onClick={abrirNovaObservacao} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-violet-400/20 bg-violet-500/10 px-4 text-xs font-black text-violet-200 transition hover:bg-violet-500/20">
+            <MessageSquare size={16} /> Adicionar observação
+          </button>
+        </div>
+
+        <div className="mb-5">
+          <CrmModalTabs active={abaAtiva} eventCount={eventosModal.length} historyCount={interacoesModal.length} onChange={setAbaAtiva} />
+        </div>
+
+        {abaAtiva === "dados" && <div style={modalGridStyle}>
           <section style={modalSectionStyle}>
-            <h3 style={modalSectionTitleStyle}>Dados da prefeitura</h3>
+            <h3 style={modalSectionTitleStyle}>Dados da Prefeitura</h3>
             <div style={formGridStyle}>
-              <Campo label="Municipio">
+              <Campo label="Município">
                 <input
                   value={edit.municipio}
                   onChange={(event) => atualizarEdit("municipio", event.target.value)}
@@ -1382,7 +1508,7 @@ function CrmModal({
                   style={inputStyle}
                 />
               </Campo>
-              <Campo label="Distancia da capital">
+              <Campo label="Distância da capital">
                 <input
                   value={edit.distancia_bh}
                   onChange={(event) =>
@@ -1407,7 +1533,7 @@ function CrmModal({
                   style={inputStyle}
                 />
               </Campo>
-              <Campo label="E-mail prefeito">
+              <Campo label="E-mail do Prefeito">
                 <input
                   value={edit.email_prefeito}
                   onChange={(event) =>
@@ -1417,7 +1543,7 @@ function CrmModal({
                   type="email"
                 />
               </Campo>
-              <Campo label="Secretario de cultura">
+              <Campo label="Secretário de Cultura">
                 <input
                   value={edit.secretario_cultura}
                   onChange={(event) =>
@@ -1426,7 +1552,7 @@ function CrmModal({
                   style={inputStyle}
                 />
               </Campo>
-              <Campo label="E-mail cultura">
+              <Campo label="E-mail da Cultura">
                 <input
                   value={edit.email_cultura}
                   onChange={(event) =>
@@ -1436,161 +1562,189 @@ function CrmModal({
                   type="email"
                 />
               </Campo>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <Campo label="Telefone/WhatsApp">
-                  <input
-                    value={edit.telefone_whatsapp}
-                    onChange={(event) =>
-                      atualizarEdit("telefone_whatsapp", event.target.value)
-                    }
-                    style={inputStyle}
-                  />
-                </Campo>
+              <div className="col-span-full min-w-0">
+                <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <Campo label="Telefone 1">
+                    <input
+                      value={edit.telefone_1}
+                      onChange={(event) =>
+                        atualizarEdit(
+                          "telefone_1",
+                          formatarTelefoneDigitado(event.target.value)
+                        )
+                      }
+                      style={inputStyle}
+                      placeholder="Telefone principal"
+                    />
+                  </Campo>
+                  <Campo label="Telefone 2">
+                    <input
+                      value={edit.telefone_2}
+                      onChange={(event) =>
+                        atualizarEdit(
+                          "telefone_2",
+                          formatarTelefoneDigitado(event.target.value)
+                        )
+                      }
+                      style={inputStyle}
+                      placeholder="Telefone alternativo"
+                    />
+                  </Campo>
+                  <div className="min-w-0 md:col-span-2">
+                    <Campo label="Observações">
+                      <input
+                        value={edit.observacoes}
+                        onChange={(event) =>
+                          atualizarEdit("observacoes", event.target.value)
+                        }
+                        style={inputStyle}
+                        placeholder="Histórico, detalhes de contato, pendências..."
+                      />
+                    </Campo>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
-        </div>
+        </div>}
 
-        <div style={modalGridStyle}>
+        {abaAtiva === "eventos" && <div style={modalGridStyle}>
           <section style={modalSectionStyle}>
             <h3 style={modalSectionTitleStyle}>Eventos</h3>
 
             <form onSubmit={cadastrarEventoMapeado} style={eventFormStyle}>
-              <Campo label="Evento mapeado">
+              <Campo label="Evento Mapeado">
                 <input
                   value={novoEvento.nome}
                   onChange={(event) =>
                     atualizarNovoEvento("nome", event.target.value)
                   }
                   style={inputStyle}
-                  placeholder="Ex: Aniversario da cidade"
+                  placeholder="Ex.: Aniversário da Cidade"
                 />
               </Campo>
-              <Campo label="Data do evento">
+              <Campo label="Data do Evento">
                 <input
                   value={novoEvento.data}
                   onChange={(event) =>
-                    atualizarNovoEvento("data", event.target.value)
+                    atualizarNovoEvento(
+                      "data",
+                      formatarDiaMesDigitado(event.target.value),
+                    )
                   }
                   style={inputStyle}
-                  type="date"
+                  inputMode="numeric"
+                  maxLength={5}
+                  placeholder="dd/mm"
                 />
               </Campo>
               <Campo label="Modelo">
-                <select
+                <GibaSelect
                   value={novoEvento.modelo}
-                  onChange={(event) =>
-                    atualizarNovoEvento("modelo", event.target.value)
-                  }
-                  style={inputStyle}
-                >
-                  {MODELOS_CONTRATACAO.map((modelo) => (
-                    <option key={modelo} value={modelo}>
-                      {modelo}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => atualizarNovoEvento("modelo", value)}
+                  options={MODELOS_EVENTO.map((modelo) => ({ value: modelo, label: modelo }))}
+                  triggerStyle={inputStyle}
+                />
               </Campo>
-              <Campo label="Lembrar antes">
-                <select
+              <Campo label="Lembrar Antes">
+                <GibaSelect
                   value={novoEvento.mesesAntes}
-                  onChange={(event) =>
-                    atualizarNovoEvento("mesesAntes", event.target.value)
-                  }
-                  style={inputStyle}
-                >
-                  <option value="3">3 meses antes</option>
-                  <option value="4">4 meses antes</option>
-                  <option value="5">5 meses antes</option>
-                  <option value="6">6 meses antes</option>
-                </select>
+                  onChange={(value) => atualizarNovoEvento("mesesAntes", value)}
+                  options={[3, 4, 5, 6].map((months) => ({ value: String(months), label: `${months} Meses Antes` }))}
+                  triggerStyle={inputStyle}
+                />
               </Campo>
-              <div>
-                <span style={labelStyle}>Prioridade automatica</span>
-                <div style={autoPriorityBoxStyle}>
-                  <PrioridadeBadge
-                    value={calcularPrioridadeEvento(novoEvento.data) || "-"}
-                  />
-                  <small>
-                    {novoEvento.data
-                      ? "Calculada pela distancia ate a data do evento."
-                      : "Informe a data para calcular."}
-                  </small>
+              <div className="col-span-full grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(220px,1fr)] xl:items-end">
+                <div className="min-w-0">
+                  <span style={labelStyle}>Melhor Mês para Contato</span>
+                  <div style={calculatedMonthBoxStyle}>
+                    {formatarMelhorMesContato(
+                      calcularDataContatoEvento(
+                        novoEvento.data,
+                        Number(novoEvento.mesesAntes || 0),
+                      ),
+                    )}
+                  </div>
                 </div>
+                <div className="min-w-0">
+                  <span style={labelStyle}>Prioridade Automática</span>
+                  <div style={autoPriorityBoxStyle}>
+                    <PrioridadeBadge
+                      value={calcularPrioridadeEvento(novoEvento.data) || "-"}
+                    />
+                    <small>
+                      {novoEvento.data
+                        ? "Calculada pela distância até a data do evento."
+                        : "Informe a data para calcular."}
+                    </small>
+                  </div>
+                </div>
+                <button
+                  className="md:col-span-2 xl:col-span-1"
+                  type="submit"
+                  disabled={salvandoEvento}
+                  style={{
+                    ...eventSubmitButtonStyle,
+                    opacity: salvandoEvento ? 0.7 : 1,
+                  }}
+                >
+                  <Plus size={17} />
+                  {salvandoEvento ? "Salvando..." : "Adicionar evento"}
+                </button>
               </div>
-              <button
-                type="submit"
-                disabled={salvandoEvento}
-                style={{
-                  ...botaoSecundario,
-                  width: "fit-content",
-                  opacity: salvandoEvento ? 0.7 : 1,
-                }}
-              >
-                <Plus size={17} />
-                {salvandoEvento ? "Salvando..." : "Adicionar evento"}
-              </button>
             </form>
 
-            {eventosModal.length === 0 ? (
-              <p style={mutedTextStyle}>Nenhum evento cadastrado.</p>
-            ) : (
-              <div style={miniListStyle}>
-                {eventosModal.map((evento) => (
-                  <div key={evento.id} style={miniListItemStyle}>
-                    <strong>{evento.nome_evento}</strong>
-                    <span>
-                      {formatarData(evento.data_evento)} •{" "}
-                      {evento.modelo_contratacao || "-"} •{" "}
-                      {evento.prioridade || "Sem prioridade"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <CrmEventTable
+              events={eventosModal}
+              onDelete={(evento) => excluirEventoMapeado(evento as EventoMunicipal)}
+              formatDate={formatarDataEventoCurta}
+              normalizeModel={normalizarModeloEvento}
+              formatBestContactMonth={formatarMelhorMesContato}
+              calculateContactDate={calcularDataContatoEvento}
+              getReminderMonths={obterMesesAntesEvento}
+            />
           </section>
-        </div>
+        </div>}
 
-        <div style={modalGridStyle}>
+        {abaAtiva === "oportunidade" && <div style={modalGridStyle}>
           <section style={modalSectionStyle}>
-            <h3 style={modalSectionTitleStyle}>Resumo da oportunidade</h3>
+            <h3 style={modalSectionTitleStyle}>Resumo da Oportunidade</h3>
             <div style={formGridStyle}>
               <Campo label="Status">
-                <select
+                <GibaSelect
                   value={edit.status}
-                  onChange={(event) => atualizarEdit("status", event.target.value)}
-                  style={inputStyle}
-                >
-                  {STATUS_OPTIONS.map((status) => (
-                    <option key={status.value} value={status.value}>
-                      {status.label}
-                    </option>
-                  ))}
-                </select>
-              </Campo>
-              <Campo label="Modelo">
-                <select
-                  value={edit.modelo_contratacao}
-                  onChange={(event) =>
-                    atualizarEdit("modelo_contratacao", event.target.value)
-                  }
-                  style={inputStyle}
-                >
-                  {MODELOS_CONTRATACAO.map((modelo) => (
-                    <option key={modelo} value={modelo}>
-                      {modelo}
-                    </option>
-                  ))}
-                </select>
-              </Campo>
-              <Campo label="Prioridade">
-                <input
-                  value={edit.prioridade}
-                  onChange={(event) => atualizarEdit("prioridade", event.target.value)}
-                  style={inputStyle}
+                  onChange={(value) => {
+                    atualizarEdit("status", value);
+                    onStatusChange(oportunidade.id, value);
+                  }}
+                  options={STATUS_OPTIONS}
+                  triggerStyle={inputStyle}
                 />
               </Campo>
-              <Campo label="Valor proposto">
+              <Campo label="Modelo de Contratação">
+                <GibaSelect
+                  value={edit.modelo_contratacao}
+                  onChange={(value) => {
+                    atualizarEdit("modelo_contratacao", value);
+                    onModeloChange(oportunidade.id, value);
+                  }}
+                  options={MODELOS_CONTRATACAO.map((modelo) => ({ value: modelo, label: modelo }))}
+                  triggerStyle={inputStyle}
+                />
+              </Campo>
+              <Campo label="Prioridade">
+                <GibaSelect
+                  value={normalizarPrioridadeCrm(edit.prioridade)}
+                  onChange={(value) => atualizarEdit("prioridade", value)}
+                  options={[
+                    { value: "", label: "Sem prioridade" },
+                    ...PRIORIDADES_CRM.map((prioridade) => ({ value: prioridade, label: prioridade })),
+                  ]}
+                  placeholder="Selecione a prioridade"
+                  triggerStyle={inputStyle}
+                />
+              </Campo>
+              <Campo label="Valor Proposto">
                 <input
                   value={edit.valor_proposto}
                   onChange={(event) =>
@@ -1599,22 +1753,7 @@ function CrmModal({
                   style={inputStyle}
                 />
               </Campo>
-              <Campo label="Evento">
-                <input
-                  value={edit.nome_evento}
-                  onChange={(event) => atualizarEdit("nome_evento", event.target.value)}
-                  style={inputStyle}
-                />
-              </Campo>
-              <Campo label="Data do evento">
-                <input
-                  value={edit.data_evento}
-                  onChange={(event) => atualizarEdit("data_evento", event.target.value)}
-                  style={inputStyle}
-                  type="date"
-                />
-              </Campo>
-              <Campo label="Data de contato">
+              <Campo label="Data de Contato">
                 <input
                   value={edit.data_contato}
                   onChange={(event) => atualizarEdit("data_contato", event.target.value)}
@@ -1622,7 +1761,7 @@ function CrmModal({
                   type="date"
                 />
               </Campo>
-              <Campo label="Proximo contato">
+              <Campo label="Próximo Contato">
                 <input
                   value={edit.proximo_contato}
                   onChange={(event) =>
@@ -1635,198 +1774,71 @@ function CrmModal({
             </div>
 
             <p style={{ ...mutedTextStyle, marginTop: 12 }}>
-              Ultima atualizacao: {formatarDataHoraCurta(linha.ultimaAtualizacao)}
+              Última atualização: {formatarDataHoraCurta(linha.ultimaAtualizacao)}
             </p>
           </section>
-        </div>
+        </div>}
 
-        <div style={modalGridStyle}>
+        {abaAtiva === "historico" && <div style={modalGridStyle}>
           <section style={modalSectionStyle}>
-            <h3 style={modalSectionTitleStyle}>Historico e observacoes</h3>
-            <Campo label="Observacoes gerais">
-              <textarea
-                value={edit.observacoes}
-                onChange={(event) => atualizarEdit("observacoes", event.target.value)}
-                style={{ ...inputStyle, minHeight: 108, paddingTop: 14 }}
-              />
-            </Campo>
-            <Campo label="Observacoes do evento">
-              <textarea
-                value={edit.observacoes_evento}
-                onChange={(event) =>
-                  atualizarEdit("observacoes_evento", event.target.value)
-                }
-                style={{ ...inputStyle, minHeight: 90, paddingTop: 14 }}
-              />
-            </Campo>
-            {interacoes.length === 0 ? (
-              <p style={mutedTextStyle}>Nenhuma interacao registrada.</p>
-            ) : (
-              <div style={miniListStyle}>
-                {interacoes.slice(0, 5).map((interacao) => (
-                  <div key={interacao.id} style={miniListItemStyle}>
-                    <strong>{interacao.tipo}</strong>
-                    <span>{interacao.descricao || "-"}</span>
-                    <small>{formatarDataHoraCurta(interacao.data_interacao)}</small>
-                  </div>
-                ))}
-              </div>
-            )}
+            <h3 style={modalSectionTitleStyle}>Histórico e observações</h3>
+            <CrmHistory
+              items={interacoesModal}
+              note={novaObservacao}
+              eventNotes={edit.observacoes_evento}
+              saving={salvandoObservacao}
+              onNoteChange={setNovaObservacao}
+              onEventNotesChange={(value) =>
+                atualizarEdit("observacoes_evento", value)
+              }
+              onSubmit={adicionarObservacaoHistorico}
+              onDelete={(interacao) =>
+                excluirObservacaoHistorico(interacao as Interacao)
+              }
+              formatDateTime={formatarDataHoraCurta}
+            />
           </section>
-        </div>
-        <div style={modalFooterStyle}>
+        </div>}
+        <div className="mt-[18px] grid gap-3 sm:flex sm:justify-end">
           <button
             type="button"
             onClick={salvarAlteracoes}
             disabled={salvandoAlteracoes}
             style={{ ...botaoPrincipal, opacity: salvandoAlteracoes ? 0.7 : 1 }}
+            className="w-full sm:w-auto"
           >
             <Check size={17} />
-            {salvandoAlteracoes ? "Salvando..." : "Salvar Alteracoes"}
+            {salvandoAlteracoes ? "Salvando..." : "Salvar alterações"}
           </button>
           <button
             type="button"
             onClick={() => onDelete(oportunidade)}
-            style={botaoPerigo}
+            style={{ ...botaoPerigo, minHeight: 52 }}
+            className="w-full sm:w-auto"
           >
             <Trash2 size={17} />
             Excluir oportunidade
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function NotificacoesModal({
-  notificacoes,
-  onClose,
-  onOpen,
-}: {
-  notificacoes: Array<{
-    linha: {
-      oportunidade: Oportunidade;
-      municipio: Municipio | null;
-      eventoPrincipal: EventoMunicipal | null;
-    };
-    data: Date;
-    dias: number;
-    status: string;
-  }>;
-  onClose: () => void;
-  onOpen: (oportunidadeId: string) => void;
-}) {
-  const [ativando, setAtivando] = useState(false);
-
-  async function ativarNotificacoesNavegador() {
-    if (typeof window === "undefined" || !("Notification" in window)) {
-      alert("Este navegador nao suporta notificacoes.");
-      return;
-    }
-
-    try {
-      setAtivando(true);
-      const permissao =
-        Notification.permission === "granted"
-          ? "granted"
-          : await Notification.requestPermission();
-
-      if (permissao !== "granted") {
-        alert("Permissao de notificacao nao ativada.");
-        return;
-      }
-
-      const primeira = notificacoes[0];
-      new Notification("GIBA CRM", {
-        body: primeira
-          ? `${primeira.linha.municipio?.nome || "Prefeitura"}: contato em ${formatarData(
-              primeira.linha.oportunidade.proximo_contato,
-            )}`
-          : "Notificacoes ativadas para lembretes do CRM.",
-      });
-    } finally {
-      setAtivando(false);
-    }
-  }
-
-  return (
-    <div style={modalOverlayStyle} onMouseDown={onClose}>
-      <div
-        style={{ ...modalCardStyle, width: "min(720px, calc(100vw - 32px))" }}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div style={modalHeaderStyle}>
-          <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-            <div style={modalIconStyle}>
-              <Bell size={23} />
-            </div>
-            <div>
-              <h2 style={modalTitleStyle}>Notificacoes CRM</h2>
-              <p style={sectionSubtitleStyle}>
-                Contatos vencidos, para hoje e proximos lembretes de prefeituras.
-              </p>
-            </div>
-          </div>
-          <button type="button" onClick={onClose} style={iconButtonStyle}>
-            <X size={22} />
-          </button>
-        </div>
-
-        <button
-          type="button"
-          onClick={ativarNotificacoesNavegador}
-          disabled={ativando}
-          style={{
-            ...botaoSecundario,
-            width: "100%",
-            marginBottom: 16,
-            opacity: ativando ? 0.7 : 1,
+        <WhatsAppMessageModal
+          open={whatsappAberto}
+          onOpenChange={setWhatsappAberto}
+          contextType="crm"
+          messageType="apresentacao_comercial"
+          recipient={{
+            id: municipio?.id,
+            name: edit.prefeito || edit.secretario_cultura || edit.municipio,
+            phone: edit.telefone_1 || edit.telefone_2,
+            email: edit.email_prefeito || edit.email_cultura,
           }}
-        >
-          <Bell size={17} />
-          {ativando ? "Ativando..." : "Ativar notificacoes do navegador"}
-        </button>
-
-        {notificacoes.length === 0 ? (
-          <div style={emptyStyle}>
-            <Bell size={34} />
-            <h3 style={{ margin: "12px 0 6px" }}>Tudo em dia</h3>
-            <p style={mutedTextStyle}>
-              Nenhum contato pendente para os proximos 30 dias.
-            </p>
-          </div>
-        ) : (
-          <div style={notificationListStyle}>
-            {notificacoes.map((item) => (
-              <button
-                key={item.linha.oportunidade.id}
-                type="button"
-                onClick={() => onOpen(item.linha.oportunidade.id)}
-                style={notificationItemStyle}
-              >
-                <span>
-                  <strong>{item.linha.municipio?.nome || "Prefeitura"}</strong>
-                  <small>
-                    {item.linha.eventoPrincipal?.nome_evento ||
-                      "Oportunidade comercial"}
-                  </small>
-                </span>
-                <span style={notificationDateStyle}>
-                  {formatarData(item.linha.oportunidade.proximo_contato)}
-                </span>
-                <PrioridadeBadge
-                  value={
-                    item.status === "vencido"
-                      ? "Vencido"
-                      : item.status === "hoje"
-                        ? "Hoje"
-                        : `${item.dias} dias`
-                  }
-                />
-              </button>
-            ))}
-          </div>
-        )}
+          extraVariables={{
+            municipio: edit.municipio,
+            estado: edit.estado,
+            prefeito: edit.prefeito,
+            secretario_cultura: edit.secretario_cultura,
+            modelo_contratacao: edit.modelo_contratacao,
+          }}
+        />
       </div>
     </div>
   );
@@ -1847,97 +1859,11 @@ function Campo({
   );
 }
 
-function SelectFilter({
-  icon,
-  value,
-  onChange,
-  options,
-}: {
-  icon: React.ReactNode;
-  value: string;
-  onChange: (value: string) => void;
-  options: Array<{ value: string; label: string }>;
-}) {
-  const [open, setOpen] = useState(false);
-  const selected = options.find((option) => option.value === value) || options[0];
-
-  return (
-    <div style={filterSelectContainerStyle}>
-      <button
-        type="button"
-        onClick={() => setOpen((current) => !current)}
-        style={filterSelectWrapStyle}
-      >
-        {icon}
-        <span style={filterSelectedTextStyle}>{selected?.label || "Filtro"}</span>
-        <ChevronDown size={16} color="#94A3B8" />
-      </button>
-
-      {open && (
-        <div style={filterMenuStyle}>
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => {
-                onChange(option.value);
-                setOpen(false);
-              }}
-              style={{
-                ...filterMenuItemStyle,
-                ...(option.value === value ? filterMenuItemActiveStyle : {}),
-              }}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Detail({
-  label,
-  value,
-}: {
-  label: string;
-  value?: string | number | null;
-}) {
-  return (
-    <div style={detailItemStyle}>
-      <span>{label}</span>
-      <strong>{value || "-"}</strong>
-    </div>
-  );
-}
-
-function ContactItem({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value?: string | number | null;
-}) {
-  return (
-    <div style={contactItemStyle}>
-      <span style={contactIconStyle}>{icon}</span>
-      <span>
-        <small>{label}</small>
-        <strong>{value || "-"}</strong>
-      </span>
-    </div>
-  );
-}
-
-function Badge({ value }: { value: string }) {
-  return <span style={badgeStyle}>{value}</span>;
-}
-
 function PrioridadeBadge({ value }: { value: string }) {
-  const texto = value.toLowerCase();
+  const texto = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
   const color = texto.includes("urg")
     ? "#FF5B8A"
     : texto.includes("max")
@@ -2016,17 +1942,176 @@ function calcularUltimaAtualizacao(
   return new Date(Math.max(...datas)).toISOString();
 }
 
-function formatarMoeda(valor?: number | null) {
-  if (!valor) return "R$ 0,00";
-  return valor.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
-}
-
 function formatarData(data?: string | null) {
   if (!data) return "-";
   return new Date(`${data}T00:00:00`).toLocaleDateString("pt-BR");
+}
+
+function formatarDataEventoCurta(data?: string | null) {
+  if (!data) return "-";
+
+  if (/^\d{2}\/\d{2}$/.test(data)) return data;
+
+  const dataNormalizada = data.includes("/")
+    ? normalizarDataEventoParaBanco(data)
+    : data;
+
+  if (!dataNormalizada) return "-";
+
+  const [, mes, dia] = dataNormalizada.split("-");
+  return `${dia}/${mes}`;
+}
+
+function separarTelefones(valor: string): [string, string] {
+  if (!valor.trim()) return ["", ""];
+
+  const partes = valor
+    .split(/\s*(?:\||;|\n| \/ )\s*/)
+    .map((parte) => parte.trim())
+    .filter(Boolean);
+
+  return [partes[0] || valor.trim(), partes.slice(1).join(" | ")];
+}
+
+function combinarTelefones(telefone1: string, telefone2: string) {
+  const telefones = [telefone1.trim(), telefone2.trim()].filter(Boolean);
+  return telefones.length ? telefones.join(" | ") : null;
+}
+
+function formatarTelefoneDigitado(valor: string) {
+  const texto = valor.trimStart();
+
+  if (/[A-Za-zÀ-ÿ]/.test(texto) || texto.includes("|") || texto.includes(";")) {
+    return valor;
+  }
+
+  const digitos = texto.replace(/\D/g, "").slice(0, 11);
+
+  if (!digitos || digitos.startsWith("0800")) return valor;
+  if (digitos.length <= 2) return `(${digitos}`;
+  if (digitos.length <= 3) return `(${digitos.slice(0, 2)}) ${digitos.slice(2)}`;
+  if (digitos.length <= 7) {
+    return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 3)} ${digitos.slice(3)}`;
+  }
+
+  return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 3)} ${digitos.slice(
+    3,
+    7
+  )}-${digitos.slice(7)}`;
+}
+
+function formatarDiaMesDigitado(valor: string) {
+  const digitos = valor.replace(/\D/g, "").slice(0, 4);
+
+  if (digitos.length <= 2) return digitos;
+  return `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
+}
+
+function normalizarDataEventoParaBanco(valor: string) {
+  if (!valor) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor;
+
+  const match = valor.match(/^(\d{2})\/(\d{2})$/);
+  if (!match) return null;
+
+  const dia = Number(match[1]);
+  const mes = Number(match[2]);
+
+  if (dia < 1 || dia > 31 || mes < 1 || mes > 12) return null;
+
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+
+  const anoAtual = hoje.getFullYear();
+  let data = new Date(anoAtual, mes - 1, dia);
+
+  if (
+    data.getDate() !== dia ||
+    data.getMonth() !== mes - 1 ||
+    Number.isNaN(data.getTime())
+  ) {
+    return null;
+  }
+
+  if (data < hoje) {
+    data = new Date(anoAtual + 1, mes - 1, dia);
+  }
+
+  const ano = data.getFullYear();
+  const mesTexto = String(data.getMonth() + 1).padStart(2, "0");
+  const diaTexto = String(data.getDate()).padStart(2, "0");
+
+  return `${ano}-${mesTexto}-${diaTexto}`;
+}
+
+function criarObservacaoEvento(mesesAntes: string) {
+  return `lembrar_antes:${mesesAntes || "3"}`;
+}
+
+function obterMesesAntesEvento(observacoes?: string | null) {
+  const match = observacoes?.match(/lembrar_antes:(\d+)/);
+  return match ? Number(match[1]) : 3;
+}
+
+function formatarMelhorMesContato(dataContato: string) {
+  if (!dataContato) return "-";
+
+  const data = new Date(`${dataContato}T00:00:00`);
+  if (Number.isNaN(data.getTime())) return "-";
+
+  const mes = data.toLocaleDateString("pt-BR", { month: "long" });
+  return mes.charAt(0).toUpperCase() + mes.slice(1);
+}
+
+function normalizarModeloEvento(modelo?: string | null) {
+  const texto = (modelo || "").toUpperCase();
+
+  if (texto.includes("INEXIG")) return "Inexigibilidade";
+  if (texto.includes("LICITAR") || texto.includes("CIMVALPI")) {
+    return "Credenciamento";
+  }
+
+  return modelo || "-";
+}
+
+function normalizarPrioridadeCrm(prioridade?: string | null) {
+  const texto = obterChaveFiltro(prioridade || "");
+
+  if (texto.includes("max")) return "Máxima";
+  if (texto.includes("urg")) return "Urgência";
+  if (texto.includes("boa")) return "Boa Oportunidade";
+
+  return prioridade || "";
+}
+
+function obterChaveFiltro(valor: string) {
+  return valor
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function obterProximoContatoCrm(
+  oportunidade: Oportunidade,
+  eventoPrincipal?: EventoMunicipal | null,
+) {
+  if (oportunidade.proximo_contato) return oportunidade.proximo_contato;
+
+  if (!eventoPrincipal?.data_evento) return "";
+
+  return calcularDataContatoEvento(
+    eventoPrincipal.data_evento,
+    obterMesesAntesEvento(eventoPrincipal.observacoes),
+  );
+}
+
+function obterPesoOrdenacaoContato(data?: string | null) {
+  if (!data) return Number.MAX_SAFE_INTEGER;
+
+  const timestamp = new Date(`${data}T00:00:00`).getTime();
+  return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
 }
 
 function formatarDataHoraCurta(data?: string | null) {
@@ -2034,19 +2119,12 @@ function formatarDataHoraCurta(data?: string | null) {
   return new Date(data).toLocaleDateString("pt-BR");
 }
 
-function formatarNumero(valor?: number | null) {
-  if (!valor && valor !== 0) return "-";
-  return valor.toLocaleString("pt-BR");
-}
-
-function formatarDistancia(valor?: number | null) {
-  if (!valor && valor !== 0) return "-";
-  return `${valor.toLocaleString("pt-BR")} km`;
-}
-
 function calcularDataContatoEvento(dataEvento: string, mesesAntes: number) {
   if (!dataEvento || !mesesAntes) return "";
-  const data = new Date(`${dataEvento}T00:00:00`);
+  const dataNormalizada = normalizarDataEventoParaBanco(dataEvento);
+  if (!dataNormalizada) return "";
+
+  const data = new Date(`${dataNormalizada}T00:00:00`);
   if (Number.isNaN(data.getTime())) return "";
 
   data.setMonth(data.getMonth() - mesesAntes);
@@ -2055,11 +2133,13 @@ function calcularDataContatoEvento(dataEvento: string, mesesAntes: number) {
 
 function calcularPrioridadeEvento(dataEvento: string) {
   if (!dataEvento) return "";
+  const dataNormalizada = normalizarDataEventoParaBanco(dataEvento);
+  if (!dataNormalizada) return "";
 
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
 
-  const data = new Date(`${dataEvento}T00:00:00`);
+  const data = new Date(`${dataNormalizada}T00:00:00`);
   if (Number.isNaN(data.getTime())) return "";
 
   const mesesAteEvento =
@@ -2076,53 +2156,6 @@ const pageStyle: React.CSSProperties = {
   maxWidth: 1480,
   margin: "0 auto",
   color: "#fff",
-};
-
-const headerStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: 22,
-  flexWrap: "wrap",
-  marginBottom: 24,
-};
-
-const headerIdentityStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  gap: 16,
-};
-
-const headerIconStyle: React.CSSProperties = {
-  width: 60,
-  height: 60,
-  borderRadius: 18,
-  display: "grid",
-  placeItems: "center",
-  background: "linear-gradient(135deg,#8B35FF,#00AAFF)",
-  boxShadow: "0 18px 44px rgba(139,53,255,0.35)",
-  flex: "0 0 auto",
-};
-
-const tituloStyle: React.CSSProperties = {
-  fontSize: "clamp(34px, 4vw, 42px)",
-  lineHeight: 1,
-  margin: "2px 0 8px",
-  letterSpacing: 0,
-};
-
-const subtituloStyle: React.CSSProperties = {
-  color: "#B7C7E6",
-  fontSize: 17,
-  margin: 0,
-  lineHeight: 1.45,
-};
-
-const headerActionsStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 12,
-  flexWrap: "wrap",
-  paddingTop: 2,
 };
 
 const botaoPrincipal: React.CSSProperties = {
@@ -2169,61 +2202,6 @@ const cardStyle: React.CSSProperties = {
   boxShadow: "0 18px 50px rgba(0,0,0,0.18)",
 };
 
-const notificationButtonStyle: React.CSSProperties = {
-  position: "relative",
-  width: 52,
-  height: 52,
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "rgba(255,255,255,0.08)",
-  color: "#DDEBFF",
-  display: "grid",
-  placeItems: "center",
-  cursor: "pointer",
-};
-
-const notificationBadgeStyle: React.CSSProperties = {
-  position: "absolute",
-  top: -7,
-  right: -7,
-  minWidth: 22,
-  height: 22,
-  padding: "0 6px",
-  borderRadius: 999,
-  display: "grid",
-  placeItems: "center",
-  background: "#FF5B8A",
-  color: "#fff",
-  fontSize: 12,
-  fontWeight: 900,
-  border: "2px solid #071426",
-};
-
-const notificationListStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 12,
-};
-
-const notificationItemStyle: React.CSSProperties = {
-  minHeight: 82,
-  padding: 14,
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(5,10,24,0.48)",
-  color: "#fff",
-  display: "grid",
-  gridTemplateColumns: "1fr auto",
-  gap: 10,
-  alignItems: "center",
-  textAlign: "left",
-  cursor: "pointer",
-};
-
-const notificationDateStyle: React.CSSProperties = {
-  color: "#7DD3FC",
-  fontWeight: 900,
-};
-
 const sectionHeaderStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "flex-start",
@@ -2242,18 +2220,6 @@ const sectionSubtitleStyle: React.CSSProperties = {
   color: "#9FB2D0",
   margin: "8px 0 0",
   lineHeight: 1.4,
-};
-
-const countBadgeStyle: React.CSSProperties = {
-  minWidth: 54,
-  height: 38,
-  borderRadius: 999,
-  display: "grid",
-  placeItems: "center",
-  color: "#D9CCFF",
-  fontWeight: 900,
-  border: "1px solid rgba(139,53,255,0.45)",
-  background: "rgba(139,53,255,0.18)",
 };
 
 const formGridStyle: React.CSSProperties = {
@@ -2294,150 +2260,6 @@ const formActionsStyle: React.CSSProperties = {
   marginTop: 20,
 };
 
-const filtersStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "minmax(260px, 1fr) repeat(2, minmax(190px, 240px))",
-  gap: 12,
-  marginBottom: 18,
-};
-
-const searchWrapStyle: React.CSSProperties = {
-  minHeight: 52,
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(5,10,24,0.58)",
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  padding: "0 14px",
-};
-
-const searchInputStyle: React.CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  border: "none",
-  outline: "none",
-  background: "transparent",
-  color: "#fff",
-  fontSize: 15,
-};
-
-const filterSelectContainerStyle: React.CSSProperties = {
-  position: "relative",
-  minWidth: 0,
-};
-
-const filterSelectWrapStyle: React.CSSProperties = {
-  width: "100%",
-  minHeight: 52,
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(5,10,24,0.58)",
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  padding: "0 12px",
-  color: "#fff",
-  cursor: "pointer",
-};
-
-const filterSelectedTextStyle: React.CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-  fontWeight: 800,
-  textAlign: "left",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-const filterMenuStyle: React.CSSProperties = {
-  position: "absolute",
-  zIndex: 50,
-  top: "calc(100% + 8px)",
-  left: 0,
-  right: 0,
-  maxHeight: 230,
-  overflowY: "auto",
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "#081323",
-  boxShadow: "0 18px 45px rgba(0,0,0,0.38)",
-  padding: 6,
-};
-
-const filterMenuItemStyle: React.CSSProperties = {
-  width: "100%",
-  minHeight: 42,
-  border: "none",
-  borderRadius: 12,
-  background: "transparent",
-  color: "#CBD5E1",
-  padding: "0 12px",
-  textAlign: "left",
-  fontWeight: 800,
-  cursor: "pointer",
-};
-
-const filterMenuItemActiveStyle: React.CSSProperties = {
-  background: "linear-gradient(90deg,rgba(139,53,255,0.34),rgba(0,170,255,0.24))",
-  color: "#fff",
-};
-
-const tableWrapStyle: React.CSSProperties = {
-  overflowX: "auto",
-};
-
-const tableHeaderStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1.4fr 1fr 1fr 1fr .8fr 1fr 44px",
-  gap: 12,
-  padding: "0 16px 12px",
-  color: "#89A2C7",
-  fontSize: 12,
-  fontWeight: 900,
-  textTransform: "uppercase",
-  letterSpacing: 1,
-  minWidth: 980,
-};
-
-const tableBodyStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 10,
-  minWidth: 980,
-};
-
-const tableRowStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1.4fr 1fr 1fr 1fr .8fr 1fr 44px",
-  gap: 12,
-  alignItems: "center",
-  width: "100%",
-  minHeight: 76,
-  padding: "12px 16px",
-  borderRadius: 18,
-  border: "1px solid rgba(255,255,255,0.09)",
-  background: "rgba(5,10,24,0.48)",
-  color: "#E5EDF9",
-  textAlign: "left",
-  cursor: "pointer",
-};
-
-const municipioCellStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 4,
-};
-
-const rowActionCellStyle: React.CSSProperties = {
-  width: 38,
-  height: 38,
-  borderRadius: 12,
-  display: "grid",
-  placeItems: "center",
-  color: "#7DD3FC",
-  background: "rgba(0,170,255,0.12)",
-};
-
 const badgeStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -2455,16 +2277,6 @@ const badgeStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-const emptyStyle: React.CSSProperties = {
-  minHeight: 220,
-  borderRadius: 20,
-  display: "grid",
-  placeItems: "center",
-  textAlign: "center",
-  border: "1px dashed rgba(255,255,255,0.16)",
-  color: "#CBD5E1",
-};
-
 const mutedTextStyle: React.CSSProperties = {
   color: "#9FB2D0",
   margin: 0,
@@ -2478,18 +2290,18 @@ const modalOverlayStyle: React.CSSProperties = {
   backdropFilter: "blur(12px)",
   display: "grid",
   placeItems: "center",
-  padding: 20,
+  padding: 8,
 };
 
 const modalCardStyle: React.CSSProperties = {
-  width: "min(1080px, calc(100vw - 32px))",
-  maxHeight: "calc(100vh - 32px)",
+  width: "min(1080px, calc(100vw - 16px))",
+  maxHeight: "calc(100dvh - 16px)",
   overflowY: "auto",
   borderRadius: 28,
   border: "1px solid rgba(255,255,255,0.14)",
   background: "linear-gradient(135deg,#101224,#08263A)",
   boxShadow: "0 28px 90px rgba(0,0,0,0.48)",
-  padding: 26,
+  padding: "clamp(16px, 3vw, 26px)",
 };
 
 const modalHeaderStyle: React.CSSProperties = {
@@ -2511,7 +2323,7 @@ const modalIconStyle: React.CSSProperties = {
 
 const modalTitleStyle: React.CSSProperties = {
   margin: 0,
-  fontSize: 30,
+  fontSize: "clamp(22px, 5vw, 30px)",
   lineHeight: 1.1,
 };
 
@@ -2538,66 +2350,12 @@ const modalSectionStyle: React.CSSProperties = {
   borderRadius: 22,
   border: "1px solid rgba(255,255,255,0.1)",
   background: "rgba(5,10,24,0.48)",
-  padding: 20,
+  padding: "clamp(14px, 3vw, 20px)",
 };
 
 const modalSectionTitleStyle: React.CSSProperties = {
   margin: "0 0 14px",
   fontSize: 22,
-};
-
-const detailGridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-  gap: 12,
-};
-
-const detailItemStyle: React.CSSProperties = {
-  minHeight: 82,
-  borderRadius: 16,
-  padding: 14,
-  border: "1px solid rgba(255,255,255,0.09)",
-  background: "rgba(0,0,0,0.18)",
-  display: "grid",
-  gap: 6,
-};
-
-const modalActionsLineStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: 12,
-  marginTop: 14,
-};
-
-const contactListStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 10,
-};
-
-const contactItemStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 12,
-  alignItems: "center",
-  minHeight: 58,
-  borderRadius: 16,
-  padding: "10px 12px",
-  border: "1px solid rgba(255,255,255,0.09)",
-  background: "rgba(0,0,0,0.16)",
-};
-
-const contactIconStyle: React.CSSProperties = {
-  width: 36,
-  height: 36,
-  borderRadius: 12,
-  display: "grid",
-  placeItems: "center",
-  color: "#7DD3FC",
-  background: "rgba(0,170,255,0.12)",
-};
-
-const miniListStyle: React.CSSProperties = {
-  display: "grid",
-  gap: 10,
 };
 
 const eventFormStyle: React.CSSProperties = {
@@ -2607,6 +2365,22 @@ const eventFormStyle: React.CSSProperties = {
   marginBottom: 16,
   paddingBottom: 16,
   borderBottom: "1px solid rgba(255,255,255,0.10)",
+};
+
+const eventSubmitButtonStyle: React.CSSProperties = {
+  ...botaoSecundario,
+  width: "100%",
+  minHeight: 50,
+  alignSelf: "end",
+  justifyContent: "center",
+};
+
+const calculatedMonthBoxStyle: React.CSSProperties = {
+  ...inputStyle,
+  display: "flex",
+  alignItems: "center",
+  color: "#E2E8F0",
+  fontWeight: 900,
 };
 
 const autoPriorityBoxStyle: React.CSSProperties = {
@@ -2619,31 +2393,4 @@ const autoPriorityBoxStyle: React.CSSProperties = {
   gap: 10,
   padding: "0 12px",
   color: "#9FB2D0",
-};
-
-const miniListItemStyle: React.CSSProperties = {
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.09)",
-  background: "rgba(0,0,0,0.16)",
-  padding: 14,
-  display: "grid",
-  gap: 6,
-};
-
-const noteBoxStyle: React.CSSProperties = {
-  margin: "0 0 10px",
-  borderRadius: 16,
-  padding: 14,
-  background: "rgba(139,53,255,0.12)",
-  border: "1px solid rgba(139,53,255,0.24)",
-  color: "#E5EDF9",
-  lineHeight: 1.5,
-};
-
-const modalFooterStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: 12,
-  flexWrap: "wrap",
-  marginTop: 18,
 };

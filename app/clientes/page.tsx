@@ -4,7 +4,9 @@ import ProtectedRoute from "../../components/ProtectedRoute";
 import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import { useEffect, useMemo, useState } from "react";
 import AppLayout from "../../components/AppLayout";
+import WhatsAppMessageModal from "../../components/whatsapp/WhatsAppMessageModal";
 import { supabase } from "../../lib/supabase";
+import { getAccountAuthUser } from "../../lib/access-session";
 import {
   Users,
   Cake,
@@ -12,7 +14,6 @@ import {
   Sparkles,
   Gift,
   Search,
-  Bell,
   Plus,
   UserPlus,
   Pencil,
@@ -80,6 +81,50 @@ const statusClienteOptions = [
    ============================================================ */
 function apenasNumeros(valor: string) {
   return (valor || "").replace(/\D/g, "");
+}
+
+function limparCep(valor: string) {
+  return apenasNumeros(valor).slice(0, 8);
+}
+
+function formatarCep(valor: string) {
+  const numeros = limparCep(valor);
+  return numeros.length > 5
+    ? `${numeros.slice(0, 5)}-${numeros.slice(5)}`
+    : numeros;
+}
+
+function separarEnderecoNumero(endereco: string) {
+  const partes = (endereco || "")
+    .split(",")
+    .map((parte) => parte.trim())
+    .filter(Boolean);
+  let numero = "";
+
+  const partesSemNumero = partes.filter((parte, index) => {
+    const rotulado = parte.match(/^(?:n[ºo°]?|numero|número)\s*\.?\s*:?\s*(.+)$/i);
+    if (!numero && rotulado) {
+      numero = rotulado[1].trim();
+      return false;
+    }
+    if (!numero && index > 0 && /^\d+[a-zA-Z\/-]*$/.test(parte)) {
+      numero = parte;
+      return false;
+    }
+    return true;
+  });
+
+  return { enderecoBase: partesSemNumero.join(", "), numero };
+}
+
+function montarEnderecoCompleto(endereco: string, numero: string) {
+  const enderecoBase = (endereco || "").trim();
+  const numeroLimpo = (numero || "").trim();
+  if (!numeroLimpo) return enderecoBase;
+
+  const partes = enderecoBase.split(",").map((parte) => parte.trim()).filter(Boolean);
+  if (partes.length === 0) return `Nº ${numeroLimpo}`;
+  return [partes[0], `Nº ${numeroLimpo}`, ...partes.slice(1)].join(", ");
 }
 
 function formatarCpfCnpj(valor: string) {
@@ -171,16 +216,6 @@ function normalizarTexto(valor: string) {
     .trim();
 }
 
-function normalizarTelefoneWhatsApp(telefone: string) {
-  let limpo = apenasNumeros(telefone);
-  if (limpo.startsWith("0")) limpo = limpo.replace(/^0+/, "");
-  if (limpo.startsWith("55") && limpo.length >= 12) return limpo;
-  if (!limpo.startsWith("55") && (limpo.length === 10 || limpo.length === 11)) {
-    return `55${limpo}`;
-  }
-  return "";
-}
-
 function iniciais(nome: string) {
   const partes = (nome || "").trim().split(" ").filter(Boolean);
   if (partes.length === 0) return "?";
@@ -232,6 +267,7 @@ export default function ClientesPage() {
   const [apenasAniversariantes, setApenasAniversariantes] = useState(false);
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [formModalAberto, setFormModalAberto] = useState(false);
 
   // Campos do formulário
   const [nome, setNome] = useState("");
@@ -241,13 +277,14 @@ export default function ClientesPage() {
   const [email, setEmail] = useState("");
   const [dataAniversario, setDataAniversario] = useState("");
   const [enderecoCompleto, setEnderecoCompleto] = useState("");
+  const [cep, setCep] = useState("");
+  const [numeroEndereco, setNumeroEndereco] = useState("");
+  const [cepLoading, setCepLoading] = useState(false);
   const [origemCliente, setOrigemCliente] = useState("");
   const [statusCliente, setStatusCliente] = useState("Novo");
   const [observacoes, setObservacoes] = useState("");
   const [whatsappCliente, setWhatsappCliente] = useState<Cliente | null>(null);
-  const [whatsappTelefone, setWhatsappTelefone] = useState("");
-  const [whatsappMensagem, setWhatsappMensagem] = useState("");
-  const [whatsappAviso, setWhatsappAviso] = useState("");
+  const [whatsappTipoMensagem, setWhatsappTipoMensagem] = useState("aniversario");
 
   useEffect(() => {
     const verificarTela = () => setIsMobile(window.innerWidth <= 980);
@@ -264,7 +301,7 @@ export default function ClientesPage() {
     const {
       data: { user },
       error,
-    } = await supabase.auth.getUser();
+    } = await getAccountAuthUser();
     if (error) {
       console.error("[v0] Erro ao buscar usuário:", error);
       return null;
@@ -308,9 +345,50 @@ export default function ClientesPage() {
     setEmail("");
     setDataAniversario("");
     setEnderecoCompleto("");
+    setCep("");
+    setNumeroEndereco("");
     setOrigemCliente("");
     setStatusCliente("Novo");
     setObservacoes("");
+  }
+
+  function abrirNovoCliente() {
+    limparFormulario();
+    setFormModalAberto(true);
+  }
+
+  function fecharModalCliente() {
+    if (salvando) return;
+    setFormModalAberto(false);
+    limparFormulario();
+  }
+
+  async function buscarCep() {
+    const cepLimpo = limparCep(cep);
+    if (cepLimpo.length !== 8) {
+      alert("Digite um CEP válido com 8 números.");
+      return;
+    }
+
+    try {
+      setCepLoading(true);
+      const resposta = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+      const dadosCep = await resposta.json();
+      if (dadosCep.erro) {
+        alert("CEP não encontrado.");
+        return;
+      }
+      setEnderecoCompleto(
+        [dadosCep.logradouro, dadosCep.bairro, dadosCep.localidade, dadosCep.uf]
+          .filter(Boolean)
+          .join(", "),
+      );
+    } catch (error) {
+      console.error("Erro ao buscar CEP:", error);
+      alert("Não foi possível buscar o CEP agora.");
+    } finally {
+      setCepLoading(false);
+    }
   }
 
   /* Detecta erro de coluna inexistente para fazer fallback seguro */
@@ -342,7 +420,7 @@ export default function ClientesPage() {
       cpf_cnpj: cpfCnpj,
       celular,
       email,
-      endereco_completo: enderecoCompleto,
+      endereco_completo: montarEnderecoCompleto(enderecoCompleto, numeroEndereco),
       user_id: user.id,
     };
 
@@ -387,6 +465,7 @@ export default function ClientesPage() {
     }
 
     limparFormulario();
+    setFormModalAberto(false);
     carregarClientes();
   }
 
@@ -398,14 +477,15 @@ export default function ClientesPage() {
     setCelular(formatarCelular(cliente.celular || ""));
     setEmail(cliente.email || "");
     setDataAniversario(formatarAniversarioDiaMes(cliente.data_aniversario));
-    setEnderecoCompleto(cliente.endereco_completo || "");
+    const enderecoSeparado = separarEnderecoNumero(cliente.endereco_completo || "");
+    setEnderecoCompleto(enderecoSeparado.enderecoBase);
+    setNumeroEndereco(enderecoSeparado.numero);
+    setCep("");
     setOrigemCliente(cliente.origem_cliente || "");
     setStatusCliente(cliente.status_cliente || "Novo");
     setObservacoes(cliente.observacoes || "");
 
-    if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
+    setFormModalAberto(true);
   }
 
   async function excluirCliente(id: string) {
@@ -433,74 +513,13 @@ export default function ClientesPage() {
     carregarClientes();
   }
 
-  function modeloWhatsappSalvo() {
-    if (typeof window === "undefined") return "";
-    return localStorage.getItem("giba_clientes_whatsapp_modelo") || "";
-  }
-
-  function montarMensagemAniversario(cliente: Cliente, modelo?: string) {
-    const modeloBase =
-      modelo ||
-      modeloWhatsappSalvo() ||
-      `Olá, {nome}! Tudo bem? Passando para te desejar um feliz aniversário e deixar uma condição especial para seu próximo evento com a GIBA/Vih Ribeiro. Se quiser, posso te enviar uma proposta personalizada.`;
-
-    return modeloBase
-      .replaceAll("{nome}", cliente.nome || "")
-      .replaceAll("{telefone}", cliente.celular || "")
-      .replaceAll("{email}", cliente.email || "")
-      .replaceAll("{aniversario}", formatarAniversarioDiaMes(cliente.data_aniversario) || "")
-      .replaceAll("{tipo}", cliente.tipo_cliente || "")
-      .replaceAll("{status}", cliente.status_cliente || "");
-  }
-
   function enviarMensagemAniversario(cliente: Cliente) {
-    const telefoneBruto = cliente.celular || "";
-    const telefoneComDdi = normalizarTelefoneWhatsApp(telefoneBruto);
-
     setWhatsappCliente(cliente);
-    setWhatsappTelefone(telefoneComDdi || apenasNumeros(telefoneBruto));
-    setWhatsappMensagem(montarMensagemAniversario(cliente));
-    setWhatsappAviso(
-      telefoneComDdi
-        ? ""
-        : "Telefone não encontrado ou incompleto. Digite o WhatsApp com DDD antes de enviar."
-    );
+    setWhatsappTipoMensagem("aniversario");
   }
 
   function fecharModalWhatsapp() {
     setWhatsappCliente(null);
-    setWhatsappTelefone("");
-    setWhatsappMensagem("");
-    setWhatsappAviso("");
-  }
-
-  function salvarModeloWhatsapp() {
-    if (typeof window === "undefined") return;
-    localStorage.setItem("giba_clientes_whatsapp_modelo", whatsappMensagem);
-    alert("Modelo de mensagem salvo neste navegador.");
-  }
-
-  function confirmarEnvioWhatsapp() {
-    if (!whatsappCliente) return;
-
-    const telefoneComDdi = normalizarTelefoneWhatsApp(whatsappTelefone);
-
-    if (!telefoneComDdi) {
-      setWhatsappAviso("Telefone inválido. Digite com DDD, por exemplo: 31999999999.");
-      return;
-    }
-
-    if (!whatsappMensagem.trim()) {
-      setWhatsappAviso("A mensagem não pode ficar vazia.");
-      return;
-    }
-
-    window.open(
-      `https://wa.me/${telefoneComDdi}?text=${encodeURIComponent(whatsappMensagem)}`,
-      "_blank"
-    );
-
-    fecharModalWhatsapp();
   }
 
   function criarEvento(cliente: Cliente) {
@@ -568,7 +587,7 @@ export default function ClientesPage() {
      RENDER
      ============================================================ */
   return (
-    <ProtectedRoute adminOnly>
+    <ProtectedRoute modulo="clientes">
       <PlanProtectedRoute modulo="clientes">
         <AppLayout>
           <style>{`
@@ -591,12 +610,10 @@ export default function ClientesPage() {
                   </p>
                 </div>
               </div>
-
-              <div style={headerActionsStyle}>
-                <button style={iconButtonStyle} aria-label="Notificações de aniversário">
-                  <Bell size={18} />
-                </button>
-              </div>
+              <button type="button" style={primaryButtonStyle} onClick={abrirNovoCliente}>
+                <Plus size={18} />
+                Novo Cliente
+              </button>
             </header>
 
             {/* CARDS DE RESUMO */}
@@ -666,19 +683,29 @@ export default function ClientesPage() {
             <div
               style={{
                 ...mainGridStyle,
-                gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 420px) 1fr",
+                gridTemplateColumns: "1fr",
               }}
             >
               {/* FORMULÁRIO */}
-              <section style={panelStyle}>
-                <div style={panelHeaderStyle}>
-                  <span style={panelIconStyle}>
-                    <UserPlus size={18} />
-                  </span>
-                  <h2 style={panelTitleStyle}>
-                    {editandoId ? "Editar Cliente" : "Cadastro Cliente"}
-                  </h2>
-                </div>
+              {formModalAberto && (
+                <div style={modalOverlayStyle} onClick={fecharModalCliente}>
+                  <section style={formModalCardStyle} onClick={(event) => event.stopPropagation()}>
+                    <div style={formModalHeaderStyle}>
+                      <div style={panelHeaderStyle}>
+                        <span style={panelIconStyle}>
+                          <UserPlus size={18} />
+                        </span>
+                        <div>
+                          <h2 style={panelTitleStyle}>
+                            {editandoId ? "Editar Cliente" : "Novo Cliente"}
+                          </h2>
+                          <p style={formModalSubtitleStyle}>Preencha as informações pessoais, comerciais e de endereço.</p>
+                        </div>
+                      </div>
+                      <button type="button" style={modalCloseButtonStyle} onClick={fecharModalCliente} aria-label="Fechar">
+                        <X size={18} />
+                      </button>
+                    </div>
 
                 <form onSubmit={salvarCliente} style={formStyle}>
                   <Campo label="Nome completo" obrigatorio>
@@ -726,7 +753,7 @@ export default function ClientesPage() {
                     <div style={celularRowStyle}>
                       <input
                         style={inputStyle}
-                        placeholder="(31) 99357-5969"
+                        placeholder="(31) 9 0000-0000"
                         value={celular}
                         onChange={(e) => setCelular(formatarCelular(e.target.value))}
                         inputMode="numeric"
@@ -736,12 +763,20 @@ export default function ClientesPage() {
                         aria-label="Testar WhatsApp"
                         style={whatsappMiniStyle}
                         onClick={() => {
-                          const tel = normalizarTelefoneWhatsApp(celular);
-                          if (!tel) {
-                            alert("Digite um celular válido com DDD.");
-                            return;
-                          }
-                          window.open(`https://wa.me/${tel}`, "_blank");
+                          setWhatsappTipoMensagem("mensagem_personalizada");
+                          setWhatsappCliente({
+                            id: editandoId || "novo-cliente",
+                            nome: nome || "Cliente",
+                            cpf_cnpj: cpfCnpj,
+                            celular,
+                            email,
+                            endereco_completo: montarEnderecoCompleto(enderecoCompleto, numeroEndereco),
+                            data_aniversario: dataAniversario,
+                            tipo_cliente: tipoCliente,
+                            origem_cliente: origemCliente,
+                            status_cliente: statusCliente,
+                            observacoes,
+                          });
                         }}
                       >
                         <MessageCircle size={18} />
@@ -762,7 +797,7 @@ export default function ClientesPage() {
                   <Campo label="Data de aniversário">
                     <input
                       style={inputStyle}
-                      placeholder="dd/mm"
+                      placeholder="Dia e Mês"
                       value={dataAniversario}
                       onChange={(e) =>
                         setDataAniversario(formatarAniversarioDiaMes(e.target.value))
@@ -772,12 +807,37 @@ export default function ClientesPage() {
                     />
                   </Campo>
 
-                  <Campo label="Endereço completo">
+                  <Campo label="CEP">
+                    <div style={cepRowStyle}>
+                      <input
+                        style={inputStyle}
+                        placeholder="00000-000"
+                        value={cep}
+                        onChange={(e) => setCep(formatarCep(e.target.value))}
+                        inputMode="numeric"
+                        maxLength={9}
+                      />
+                      <button type="button" style={cepButtonStyle} onClick={buscarCep} disabled={cepLoading}>
+                        {cepLoading ? "Buscando..." : "Buscar CEP"}
+                      </button>
+                    </div>
+                  </Campo>
+
+                  <Campo label="Endereço">
                     <input
                       style={inputStyle}
-                      placeholder="Rua, número, bairro, cidade - UF"
+                      placeholder="Rua, bairro, cidade - UF"
                       value={enderecoCompleto}
                       onChange={(e) => setEnderecoCompleto(e.target.value)}
+                    />
+                  </Campo>
+
+                  <Campo label="Número">
+                    <input
+                      style={inputStyle}
+                      placeholder="Número do imóvel ou local"
+                      value={numeroEndereco}
+                      onChange={(e) => setNumeroEndereco(e.target.value)}
                     />
                   </Campo>
 
@@ -817,17 +877,17 @@ export default function ClientesPage() {
                       : "Salvar Cliente"}
                   </button>
 
-                  {editandoId && (
-                    <button
+                  <button
                       type="button"
-                      onClick={limparFormulario}
+                      onClick={fecharModalCliente}
                       style={cancelButtonStyle}
                     >
-                      Cancelar edição
-                    </button>
-                  )}
+                    Cancelar
+                  </button>
                 </form>
-              </section>
+                  </section>
+                </div>
+              )}
 
               {/* LISTA */}
               <section style={clientesColumnStyle}>
@@ -919,7 +979,7 @@ export default function ClientesPage() {
                   ) : clientesFiltrados.length === 0 ? (
                     <div style={emptyStateStyle}>
                       {clientes.length === 0
-                        ? "Nenhum cliente cadastrado ainda. Cadastre o primeiro ao lado."
+                        ? "Nenhum cliente cadastrado ainda. Use o botão Novo Cliente."
                         : "Nenhum cliente encontrado com os filtros atuais."}
                     </div>
                   ) : (
@@ -1050,75 +1110,24 @@ export default function ClientesPage() {
             </div>
           </div>
 
+            <WhatsAppMessageModal
+              open={Boolean(whatsappCliente)}
+              onOpenChange={(open) => !open && fecharModalWhatsapp()}
+              contextType="cliente"
+              messageType={whatsappTipoMensagem}
+              recipient={whatsappCliente ? {
+                id: whatsappCliente.id,
+                name: whatsappCliente.nome,
+                phone: whatsappCliente.celular,
+                email: whatsappCliente.email,
+              } : undefined}
+              extraVariables={whatsappCliente ? {
+                aniversario: formatarAniversarioDiaMes(whatsappCliente.data_aniversario),
+                tipo: whatsappCliente.tipo_cliente,
+                status: whatsappCliente.status_cliente,
+              } : undefined}
+            />
 
-            {whatsappCliente && (
-              <div style={modalOverlayStyle} onClick={fecharModalWhatsapp}>
-                <div style={whatsappModalStyle} onClick={(e) => e.stopPropagation()}>
-                  <div style={whatsappModalHeaderStyle}>
-                    <div>
-                      <p style={whatsappEyebrowStyle}>MENSAGEM AO CLIENTE</p>
-                      <h2 style={whatsappTitleStyle}>Enviar WhatsApp</h2>
-                      <p style={whatsappSubtitleStyle}>
-                        Revise a mensagem antes de abrir o WhatsApp.
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={fecharModalWhatsapp}
-                      style={modalCloseButtonStyle}
-                      aria-label="Fechar"
-                    >
-                      <X size={18} />
-                    </button>
-                  </div>
-
-                  {whatsappAviso && (
-                    <div style={whatsappWarningStyle}>{whatsappAviso}</div>
-                  )}
-
-                  <Campo label="WhatsApp do cliente">
-                    <input
-                      style={inputStyle}
-                      value={whatsappTelefone}
-                      onChange={(e) => setWhatsappTelefone(e.target.value)}
-                      placeholder="Ex: 31999999999"
-                      inputMode="numeric"
-                    />
-                  </Campo>
-
-                  <Campo label="Mensagem">
-                    <textarea
-                      style={whatsappTextareaStyle}
-                      value={whatsappMensagem}
-                      onChange={(e) => setWhatsappMensagem(e.target.value)}
-                      rows={9}
-                    />
-                  </Campo>
-
-                  <div style={whatsappHelpStyle}>
-                    Variáveis disponíveis para salvar no modelo: <strong>{"{nome}"}</strong>, <strong>{"{telefone}"}</strong>, <strong>{"{email}"}</strong>, <strong>{"{aniversario}"}</strong>, <strong>{"{tipo}"}</strong>, <strong>{"{status}"}</strong>.
-                  </div>
-
-                  <div style={whatsappActionsStyle}>
-                    <button type="button" onClick={salvarModeloWhatsapp} style={cancelButtonStyle}>
-                      Salvar modelo
-                    </button>
-                    <button type="button" onClick={fecharModalWhatsapp} style={cancelButtonStyle}>
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={confirmarEnvioWhatsapp}
-                      style={{ ...submitButtonStyle, marginTop: 0 }}
-                    >
-                      <MessageCircle size={18} />
-                      Enviar WhatsApp
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
         </AppLayout>
       </PlanProtectedRoute>
     </ProtectedRoute>
@@ -1253,10 +1262,10 @@ const headerStyle: React.CSSProperties = {
 };
 
 const headerIconBoxStyle: React.CSSProperties = {
-  width: "58px",
-  height: "58px",
-  minWidth: "58px",
-  borderRadius: "18px",
+  width: "48px",
+  height: "48px",
+  minWidth: "48px",
+  borderRadius: "16px",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -1267,36 +1276,16 @@ const headerIconBoxStyle: React.CSSProperties = {
 
 const titleStyle: React.CSSProperties = {
   margin: 0,
-  fontSize: "34px",
+  fontSize: "28px",
   lineHeight: 1.1,
-  letterSpacing: "-0.04em",
+  letterSpacing: "-0.5px",
   color: "#FFFFFF",
 };
 
 const subtitleStyle: React.CSSProperties = {
-  margin: "9px 0 0",
+  margin: "4px 0 0",
   color: "#94A3B8",
-  fontSize: "15px",
-};
-
-const headerActionsStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-  flexWrap: "wrap",
-};
-
-const iconButtonStyle: React.CSSProperties = {
-  width: "44px",
-  height: "44px",
-  borderRadius: "14px",
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.05)",
-  color: "#CBD5E1",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  cursor: "pointer",
+  fontSize: "14px",
 };
 
 const primaryButtonStyle: React.CSSProperties = {
@@ -1462,6 +1451,7 @@ const panelTitleStyle: React.CSSProperties = {
 const formStyle: React.CSSProperties = {
   display: "grid",
   gap: "15px",
+  marginTop: "18px",
 };
 
 const campoLabelStyle: React.CSSProperties = {
@@ -1480,6 +1470,23 @@ const inputStyle: React.CSSProperties = {
   fontSize: "14px",
   boxSizing: "border-box",
   outline: "none",
+};
+
+const cepRowStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  gap: "10px",
+};
+
+const cepButtonStyle: React.CSSProperties = {
+  minHeight: "44px",
+  padding: "0 16px",
+  borderRadius: "12px",
+  border: "1px solid rgba(0,170,255,0.32)",
+  background: "rgba(0,170,255,0.11)",
+  color: "#7DD3FC",
+  fontWeight: 800,
+  cursor: "pointer",
 };
 
 const chipsRowStyle: React.CSSProperties = {
@@ -1871,91 +1878,41 @@ const modalOverlayStyle: React.CSSProperties = {
   padding: "20px",
 };
 
-const whatsappModalStyle: React.CSSProperties = {
-  width: "min(680px, 100%)",
+const formModalCardStyle: React.CSSProperties = {
+  ...panelStyle,
+  width: "100%",
+  maxWidth: "760px",
   maxHeight: "90vh",
   overflowY: "auto",
-  borderRadius: "24px",
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "linear-gradient(145deg, rgba(10,15,30,0.98), rgba(13,31,49,0.98))",
-  boxShadow: "0 30px 80px rgba(0,0,0,0.55)",
-  padding: "24px",
-  color: "#FFFFFF",
+  overflowX: "hidden",
+  background: "linear-gradient(145deg, #0B0F1C, #0A1426)",
+  boxShadow: "0 40px 90px rgba(0,0,0,0.55)",
 };
 
-const whatsappModalHeaderStyle: React.CSSProperties = {
+const formModalHeaderStyle: React.CSSProperties = {
   display: "flex",
-  justifyContent: "space-between",
   alignItems: "flex-start",
+  justifyContent: "space-between",
   gap: "16px",
-  marginBottom: "18px",
+  paddingBottom: "16px",
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
 };
 
-const whatsappEyebrowStyle: React.CSSProperties = {
-  margin: 0,
-  color: "#37E884",
-  fontSize: "11px",
-  fontWeight: 900,
-  letterSpacing: "0.08em",
-};
-
-const whatsappTitleStyle: React.CSSProperties = {
-  margin: "6px 0 0",
-  fontSize: "24px",
-  fontWeight: 900,
-};
-
-const whatsappSubtitleStyle: React.CSSProperties = {
-  margin: "6px 0 0",
+const formModalSubtitleStyle: React.CSSProperties = {
+  margin: "4px 0 0",
   color: "#94A3B8",
-  fontSize: "14px",
+  fontSize: "13px",
 };
 
 const modalCloseButtonStyle: React.CSSProperties = {
-  width: "42px",
-  height: "42px",
-  borderRadius: "14px",
+  width: "40px",
+  minWidth: "40px",
+  height: "40px",
+  borderRadius: "13px",
   border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.06)",
-  color: "#CBD5E1",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  cursor: "pointer",
-};
-
-const whatsappWarningStyle: React.CSSProperties = {
-  padding: "12px 14px",
-  borderRadius: "14px",
-  border: "1px solid rgba(245,158,11,0.35)",
-  background: "rgba(245,158,11,0.12)",
-  color: "#FBBF24",
-  fontSize: "13px",
-  fontWeight: 700,
-  marginBottom: "14px",
-};
-
-const whatsappTextareaStyle: React.CSSProperties = {
-  ...inputStyle,
-  minHeight: "220px",
-  resize: "vertical",
-  lineHeight: 1.55,
-};
-
-const whatsappHelpStyle: React.CSSProperties = {
-  marginTop: "12px",
-  padding: "12px 14px",
-  borderRadius: "14px",
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.045)",
-  color: "#94A3B8",
-  fontSize: "12px",
-  lineHeight: 1.5,
-};
-
-const whatsappActionsStyle: React.CSSProperties = {
+  background: "rgba(255,255,255,0.05)",
+  color: "#E2E8F0",
   display: "grid",
-  gridTemplateColumns: "1fr 1fr 1.4fr",
-  gap: "10px",
-  marginTop: "18px",
+  placeItems: "center",
+  cursor: "pointer",
 };

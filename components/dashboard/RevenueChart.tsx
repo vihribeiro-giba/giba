@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import GibaSelect from "../GibaSelect";
 
 type Financeiro = {
   id: string;
@@ -21,11 +22,14 @@ function formatCurrency(value: number) {
 }
 
 export default function RevenueChart({ financeiro }: RevenueChartProps) {
+  const [period, setPeriod] = useState<6 | 12>(12);
+  const [hovered, setHovered] = useState<number | null>(null);
+
   const data = useMemo(() => {
     const now = new Date();
 
-    return Array.from({ length: 12 }).map((_, index) => {
-      const date = new Date(now.getFullYear(), now.getMonth() - 11 + index, 1);
+    return Array.from({ length: period }).map((_, index) => {
+      const date = new Date(now.getFullYear(), now.getMonth() - (period - 1) + index, 1);
       const month = date.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
       const monthNumber = date.getMonth();
       const year = date.getFullYear();
@@ -42,23 +46,34 @@ export default function RevenueChart({ financeiro }: RevenueChartProps) {
       return {
         label: month.charAt(0).toUpperCase() + month.slice(1),
         value,
-        highlight: index === 11,
+        highlight: index === period - 1,
       };
     });
-  }, [financeiro]);
+  }, [financeiro, period]);
 
   const maxValue = Math.max(...data.map((item) => item.value), 1000);
-  const [hovered, setHovered] = useState(data.length - 1);
+  const activeIndex = hovered ?? data.length - 1;
 
   return (
     <section style={cardStyle}>
       <div style={headerStyle}>
         <div>
           <h2 style={titleStyle}>Faturamento</h2>
-          <p style={subtitleStyle}>últimos 12 meses</p>
+          <p style={subtitleStyle}>últimos {period} meses</p>
         </div>
 
-        <button style={buttonStyle}>Últimos 12 meses ▾</button>
+        <GibaSelect
+          ariaLabel="Período do faturamento"
+          value={period}
+          onChange={(nextPeriod) => setPeriod(Number(nextPeriod) as 6 | 12)}
+          options={[
+            { value: "6", label: "Últimos 6 meses" },
+            { value: "12", label: "Últimos 12 meses" },
+          ]}
+          className="w-[178px]"
+          align="right"
+          triggerStyle={buttonStyle}
+        />
       </div>
 
       <div style={chartAreaStyle}>
@@ -71,14 +86,14 @@ export default function RevenueChart({ financeiro }: RevenueChartProps) {
         <div style={barsWrapperStyle}>
           {data.map((item, index) => {
             const height = Math.max((item.value / maxValue) * 100, item.value > 0 ? 8 : 2);
-            const isActive = hovered === index;
+            const isActive = activeIndex === index;
 
             return (
               <div
                 key={`${item.label}-${index}`}
                 style={barColumnStyle}
                 onMouseEnter={() => setHovered(index)}
-                onMouseLeave={() => setHovered(data.length - 1)}
+                onMouseLeave={() => setHovered(null)}
               >
                 {isActive && (
                   <div style={tooltipStyle}>
@@ -147,11 +162,7 @@ const subtitleStyle: React.CSSProperties = {
 };
 
 const buttonStyle: React.CSSProperties = {
-  color: "#FFFFFF",
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  borderRadius: "12px",
-  padding: "8px 12px",
+  minHeight: 42,
   fontSize: "12px",
 };
 

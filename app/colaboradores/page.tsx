@@ -18,6 +18,15 @@ import EstadoVazio from "../../components/colaboradores/EstadoVazio";
 import ColaboradorForm from "../../components/colaboradores/ColaboradorForm";
 import ColaboradorFilters from "../../components/colaboradores/ColaboradorFilters";
 import ColaboradorCard from "../../components/colaboradores/ColaboradorCard";
+import WhatsAppMessageModal from "../../components/whatsapp/WhatsAppMessageModal";
+import {
+  ACCESS_MODULES,
+  extractProfessionalDomain,
+  isValidEmailIdentifier,
+  normalizeEmailIdentifier,
+  sanitizeAllowedModules,
+  type AccessModuleKey,
+} from "../../lib/access-modules";
 
 export default function ColaboradoresPage() {
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
@@ -25,14 +34,20 @@ export default function ColaboradoresPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  const [whatsappColaborador, setWhatsappColaborador] = useState<Colaborador | null>(null);
 
   // Campos do formulário
   const [nome, setNome] = useState("");
   const [funcao, setFuncao] = useState("");
   const [celular, setCelular] = useState("");
-  const [email, setEmail] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [accessIdentifier, setAccessIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [professionalDomain, setProfessionalDomain] = useState("");
+  const [domainError, setDomainError] = useState("");
+  const [allowedModules, setAllowedModules] = useState<AccessModuleKey[]>([]);
+  const [availableModules, setAvailableModules] = useState<AccessModuleKey[]>([]);
   const [instagram, setInstagram] = useState("");
-  const [senha, setSenha] = useState("");
   const [status, setStatus] = useState("Ativo");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [enviandoFoto, setEnviandoFoto] = useState(false);
@@ -74,6 +89,27 @@ export default function ColaboradoresPage() {
     return user;
   }
 
+  async function carregarConfiguracaoAcesso(userId: string, authEmail?: string) {
+    const [{ data: company }, { data: subscription }] = await Promise.all([
+      supabase.from("company_settings").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from("subscriptions").select("plano").eq("user_id", userId).eq("status", "ativo").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    const domain = extractProfessionalDomain(company?.professional_domain, company?.email, authEmail);
+    setProfessionalDomain(domain);
+    setDomainError(domain ? "" : "Configure um domínio profissional em Configurações. E-mails públicos como Gmail, Hotmail e Outlook não podem ser usados como domínio de acesso.");
+
+    const selectable = ACCESS_MODULES.filter((item) => !item.ownerOnly);
+    if (subscription?.plano === "owner") {
+      const modules = selectable.map((item) => item.key);
+      setAvailableModules(modules);
+      return;
+    }
+    const { data: features } = await supabase.from("plan_features").select("modulo").eq("plano", subscription?.plano || "teste").eq("ativo", true);
+    const enabledFeatures = new Set((features || []).map((item) => String(item.modulo)));
+    const modules = selectable.filter((item) => !item.planFeature || enabledFeatures.has(item.planFeature)).map((item) => item.key);
+    setAvailableModules(modules);
+  }
+
   async function carregarColaboradores() {
     setCarregando(true);
     const user = await obterUsuarioLogado();
@@ -81,6 +117,8 @@ export default function ColaboradoresPage() {
       setCarregando(false);
       return;
     }
+
+    await carregarConfiguracaoAcesso(user.id, user.email);
 
     const { data, error } = await supabase
       .from("collaborators")
@@ -106,79 +144,60 @@ export default function ColaboradoresPage() {
   /* ---------- salvar (mantém CRUD + novos campos) ---------- */
   async function salvarColaborador(e: React.FormEvent) {
     e.preventDefault();
-
-    const user = await obterUsuarioLogado();
-    if (!user) return;
-
-    if (!editandoId && !senha.trim()) {
-      alert("Informe uma senha para o colaborador.");
+    const identifier = normalizeEmailIdentifier(accessIdentifier);
+    if (!professionalDomain) {
+      alert("Configure um domínio profissional antes de criar o acesso.");
+      return;
+    }
+    if (!isValidEmailIdentifier(identifier)) {
+      alert("Informe um identificador de e-mail válido usando letras, números, ponto, hífen ou sublinhado.");
+      return;
+    }
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      alert("Sua sessão expirou. Entre novamente para administrar colaboradores.");
       return;
     }
 
     setSalvando(true);
-
-    const dados: {
-      user_id?: string;
-      nome: string;
-      funcao: string;
-      celular: string;
-      email: string;
-      senha?: string;
-      status: string;
-      photo_url: string | null;
-      pix_key: string | null;
-      pix_type: string | null;
-      instagram: string | null;
-      pix_favorecido: string | null;
-      observacoes: string | null;
-    } = {
-      nome,
-      funcao,
-      celular,
-      email,
-      status,
-      photo_url: photoUrl,
-      pix_key: pixChave.trim() ? pixChave.trim() : null,
-      pix_type: pixChave.trim() ? pixTipo : null,
-      instagram: instagram.trim() ? instagram.trim() : null,
-      pix_favorecido: pixFavorecido.trim() ? pixFavorecido.trim() : null,
-      observacoes: observacoes.trim() ? observacoes.trim() : null,
-    };
-
-    if (senha.trim()) {
-      dados.senha = senha;
-    }
-
-    if (editandoId) {
-      const { error } = await supabase
-        .from("collaborators")
-        .update(dados)
-        .eq("id", editandoId)
-        .eq("user_id", user.id);
-
-      if (error) {
-        console.error("[v0] Erro ao atualizar colaborador:", error);
-        alert("Erro ao atualizar colaborador.");
-        setSalvando(false);
-        return;
-      }
-    } else {
-      const { error } = await supabase.from("collaborators").insert({
-        ...dados,
-        user_id: user.id,
+    try {
+      const response = await fetch("/api/collaborators/access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          id: editandoId,
+          nome,
+          funcao,
+          celular,
+          contact_email: contactEmail,
+          access_identifier: identifier,
+          password,
+          status,
+          photo_url: photoUrl,
+          pix_key: pixChave,
+          pix_type: pixChave.trim() ? pixTipo : null,
+          instagram,
+          pix_favorecido: pixFavorecido,
+          observacoes,
+          access_profile: "personalizado",
+          allowed_modules: allowedModules,
+        }),
       });
-
-      if (error) {
-        console.error("[v0] Erro ao cadastrar colaborador:", error);
-        alert("Erro ao cadastrar colaborador.");
-        setSalvando(false);
-        return;
-      }
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Erro ao salvar colaborador.");
+      alert(result.account_created
+        ? `Colaborador salvo. O acesso foi criado para ${result.access_email} com a senha inicial informada.`
+        : result.password_updated
+          ? "Colaborador e senha atualizados com sucesso."
+          : "Colaborador atualizado com sucesso.");
+      limparFormulario();
+      await carregarColaboradores();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Erro ao salvar colaborador.");
+    } finally {
+      setSalvando(false);
     }
-
-    limparFormulario();
-    setSalvando(false);
-    carregarColaboradores();
   }
 
   function editarColaborador(colaborador: Colaborador) {
@@ -186,9 +205,16 @@ export default function ColaboradoresPage() {
     setNome(colaborador.nome || "");
     setFuncao(colaborador.funcao || "");
     setCelular(colaborador.celular || "");
-    setEmail(colaborador.email || "");
+    const currentEmail = colaborador.email || "";
+    const currentEmailDomain = currentEmail.split("@")[1]?.toLowerCase() || "";
+    setContactEmail(colaborador.contact_email || (currentEmailDomain && currentEmailDomain !== professionalDomain ? currentEmail : ""));
+    setAccessIdentifier(normalizeEmailIdentifier(currentEmail.split("@")[0] || ""));
+    setPassword("");
+    const savedModules = sanitizeAllowedModules(colaborador.allowed_modules).length
+      ? sanitizeAllowedModules(colaborador.allowed_modules)
+      : colaborador.senha ? ["agenda_colaborador" as AccessModuleKey] : [];
+    setAllowedModules(savedModules.filter((key) => availableModules.includes(key)));
     setInstagram(colaborador.instagram || "");
-    setSenha("");
     setStatus(colaborador.status || "Ativo");
     setPhotoUrl(colaborador.photo_url || null);
     setPixTipo((colaborador.pix_type as PixTipo) || "CPF");
@@ -210,17 +236,12 @@ export default function ColaboradoresPage() {
 
     const alvo = colaboradores.find((c) => c.id === id);
 
-    const { error } = await supabase
-      .from("collaborators")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", user.id);
-
-    if (error) {
-      console.error("[v0] Erro ao excluir colaborador:", error);
-      alert("Erro ao excluir colaborador.");
-      return;
-    }
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) return alert("Sua sessão expirou. Entre novamente.");
+    const response = await fetch(`/api/collaborators/access?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+    const result = await response.json();
+    if (!response.ok) return alert(result.error || "Erro ao excluir colaborador.");
 
     // Limpa a foto associada no Storage (se existir).
     const caminhoFoto = caminhoDaUrlPublica(alvo?.photo_url);
@@ -236,9 +257,11 @@ export default function ColaboradoresPage() {
     setNome("");
     setFuncao("");
     setCelular("");
-    setEmail("");
+    setContactEmail("");
+    setAccessIdentifier("");
+    setPassword("");
+    setAllowedModules([]);
     setInstagram("");
-    setSenha("");
     setStatus("Ativo");
     setPhotoUrl(null);
     setPixTipo("CPF");
@@ -318,29 +341,21 @@ export default function ColaboradoresPage() {
 
   /* ---------- ações dos cards ---------- */
   function abrirWhatsApp(colaborador: Colaborador) {
-    const numero = (colaborador.celular || "").replace(/\D/g, "");
-    if (!numero) {
-      alert("Este colaborador não possui celular cadastrado.");
-      return;
-    }
-    const comDDI = numero.length <= 11 ? `55${numero}` : numero;
-    const texto = encodeURIComponent(`Olá, ${colaborador.nome}! Tudo bem?`);
-    window.open(`https://wa.me/${comDDI}?text=${texto}`, "_blank");
+    setWhatsappColaborador(colaborador);
   }
 
   async function copiarAcesso(colaborador: Colaborador) {
     const mensagem = `Olá, ${colaborador.nome}.
 
-Seu acesso à Agenda do Colaborador GIBA foi liberado.
+Seu acesso à Plataforma GIBA foi liberado.
 
 Link:
-https://plataformagiba.com.br/login-colaborador
+https://www.plataformagiba.com.br/login
 
-E-mail:
+E-mail de acesso:
 ${colaborador.email || "-"}
 
-Senha:
-${colaborador.senha || "(senha cadastrada no sistema)"}`;
+Use a senha inicial definida pelo titular. Depois de entrar, você poderá alterá-la pela opção "Alterar senha" no menu.`;
 
     try {
       await navigator.clipboard.writeText(mensagem);
@@ -353,11 +368,17 @@ ${colaborador.senha || "(senha cadastrada no sistema)"}`;
   }
 
   /* ---------- métricas ---------- */
+  function possuiAcesso(colaborador: Colaborador) {
+    const modules = sanitizeAllowedModules(colaborador.allowed_modules);
+    const effectiveModules = modules.length ? modules : colaborador.senha ? ["agenda_colaborador"] : [];
+    return colaborador.status === "Ativo" && Boolean(colaborador.auth_user_id || colaborador.senha) && effectiveModules.length > 0;
+  }
+
   const metricas = useMemo(() => {
     const total = colaboradores.length;
     const ativos = colaboradores.filter((c) => c.status === "Ativo").length;
     const inativos = colaboradores.filter((c) => c.status !== "Ativo").length;
-    const semAcesso = colaboradores.filter((c) => !c.senha).length;
+    const semAcesso = colaboradores.filter((c) => !possuiAcesso(c)).length;
     return { total, ativos, inativos, semAcesso };
   }, [colaboradores]);
 
@@ -373,7 +394,7 @@ ${colaborador.senha || "(senha cadastrada no sistema)"}`;
           ? c.status === "Ativo"
           : filtro === "inativos"
           ? c.status !== "Ativo"
-          : !c.senha; // sem-acesso
+          : !possuiAcesso(c);
 
       if (!passaFiltro) return false;
       if (!termo) return true;
@@ -383,6 +404,7 @@ ${colaborador.senha || "(senha cadastrada no sistema)"}`;
         (c.funcao || "").toLowerCase().includes(termo) ||
         (c.celular || "").toLowerCase().includes(termo) ||
         (c.email || "").toLowerCase().includes(termo) ||
+        (c.contact_email || "").toLowerCase().includes(termo) ||
         (c.instagram || "").toLowerCase().includes(termo) ||
         (c.pix_favorecido || "").toLowerCase().includes(termo)
       );
@@ -410,7 +432,7 @@ ${colaborador.senha || "(senha cadastrada no sistema)"}`;
             <header style={headerStyle}>
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                 <div style={headerIconBoxStyle}>
-                  <Users size={26} />
+                  <Users size={24} />
                 </div>
                 <div>
                   <h1 style={titleStyle}>Colaboradores</h1>
@@ -463,7 +485,7 @@ ${colaborador.senha || "(senha cadastrada no sistema)"}`;
                 color="#F59E0B"
                 label="Sem acesso"
                 value={metricas.semAcesso}
-                detail="Sem senha cadastrada"
+                detail="Sem conta ativa ou módulos"
               />
             </section>
 
@@ -471,7 +493,7 @@ ${colaborador.senha || "(senha cadastrada no sistema)"}`;
             <section
               style={{
                 display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "420px 1fr",
+                gridTemplateColumns: isMobile ? "1fr" : "minmax(520px, 0.9fr) minmax(0, 1.1fr)",
                 gap: 22,
                 alignItems: "start",
               }}
@@ -487,22 +509,25 @@ ${colaborador.senha || "(senha cadastrada no sistema)"}`;
                 setFuncao={setFuncao}
                 celular={celular}
                 setCelular={setCelular}
-                email={email}
-                setEmail={setEmail}
+                accessIdentifier={accessIdentifier}
+                setAccessIdentifier={(value) => setAccessIdentifier(normalizeEmailIdentifier(value))}
+                password={password}
+                setPassword={setPassword}
+                professionalDomain={professionalDomain}
+                domainError={domainError}
                 instagram={instagram}
                 setInstagram={setInstagram}
-                senha={senha}
-                setSenha={setSenha}
                 status={status}
                 setStatus={setStatus}
                 pixTipo={pixTipo}
                 setPixTipo={setPixTipo}
                 pixChave={pixChave}
                 setPixChave={setPixChave}
-                pixFavorecido={pixFavorecido}
-                setPixFavorecido={setPixFavorecido}
                 observacoes={observacoes}
                 setObservacoes={setObservacoes}
+                allowedModules={allowedModules}
+                setAllowedModules={setAllowedModules}
+                availableModules={availableModules}
                 photoUrl={photoUrl}
                 fileInputRef={fileInputRef}
                 onSelecionarFoto={aoSelecionarFoto}
@@ -568,6 +593,19 @@ ${colaborador.senha || "(senha cadastrada no sistema)"}`;
               </div>
             </section>
           </div>
+          <WhatsAppMessageModal
+            open={Boolean(whatsappColaborador)}
+            onOpenChange={(open) => !open && setWhatsappColaborador(null)}
+            contextType="colaborador"
+            messageType="mensagem_personalizada"
+            recipient={whatsappColaborador ? {
+              id: whatsappColaborador.id,
+              name: whatsappColaborador.nome,
+              phone: whatsappColaborador.celular,
+              email: whatsappColaborador.email,
+            } : undefined}
+            extraVariables={{ tipo: whatsappColaborador?.funcao, status: whatsappColaborador?.status }}
+          />
         </AppLayout>
       </PlanProtectedRoute>
     </ProtectedRoute>
@@ -594,10 +632,10 @@ const headerStyle: React.CSSProperties = {
 };
 
 const headerIconBoxStyle: React.CSSProperties = {
-  width: 54,
-  height: 54,
-  minWidth: 54,
-  borderRadius: 18,
+  width: 48,
+  height: 48,
+  minWidth: 48,
+  borderRadius: 16,
   background: "linear-gradient(135deg, #8B35FF, #00AAFF)",
   display: "flex",
   alignItems: "center",
@@ -608,14 +646,14 @@ const headerIconBoxStyle: React.CSSProperties = {
 
 const titleStyle: React.CSSProperties = {
   margin: 0,
-  fontSize: 32,
+  fontSize: 28,
   lineHeight: 1.1,
-  letterSpacing: "-0.04em",
+  letterSpacing: "-0.5px",
   color: "#FFFFFF",
 };
 
 const subtitleStyle: React.CSSProperties = {
-  margin: "8px 0 0",
+  margin: "4px 0 0",
   color: "#94A3B8",
   fontSize: 14,
   maxWidth: 560,
@@ -682,8 +720,8 @@ const contadorStyle: React.CSSProperties = {
 const listaColaboradoresScrollStyle: React.CSSProperties = {
   marginTop: 18,
   display: "grid",
-  gap: 14,
-  maxHeight: 620,
+  gap: 10,
+  maxHeight: 720,
   overflowY: "auto",
   overflowX: "hidden",
   paddingRight: 4,

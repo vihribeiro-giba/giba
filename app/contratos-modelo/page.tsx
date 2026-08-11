@@ -1,749 +1,506 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "../../lib/supabase";
-import AppLayout from "../../components/AppLayout";
-import ProtectedRoute from "../../components/ProtectedRoute";
-import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import {
+  ArrowDown,
   ArrowLeft,
-  BadgeDollarSign,
-  Building2,
+  ArrowUp,
+  Braces,
   CalendarDays,
   FileText,
-  Gavel,
-  MapPin,
+  Plus,
   Save,
   ScrollText,
   ShieldCheck,
-  Sparkles,
+  Trash2,
   User,
 } from "lucide-react";
+import AppLayout from "../../components/AppLayout";
+import PlanProtectedRoute from "../../components/PlanProtectedRoute";
+import ProtectedRoute from "../../components/ProtectedRoute";
+import ContractTemplatePreview from "../../components/contratos/ContractTemplatePreview";
+import { getAccountAuthUser } from "../../lib/access-session";
+import {
+  CONTRACT_VARIABLES,
+  countClausesBefore,
+  createContractClause,
+  normalizeContractTopics,
+  type ContractClause,
+  type ContractTopic,
+  type LegacyContractFields,
+} from "../../lib/contracts/template";
+import { supabase } from "../../lib/supabase";
 
-type ContractSettings = {
+type ContractSettings = LegacyContractFields & {
   id?: string;
   user_id?: string;
   titulo: string;
   contratado_texto: string;
-  objeto_base: string;
-  remuneracao_base: string;
-  obrigacao_contratado: string;
-  obrigacao_contratante: string;
-  multa_contratado: string;
-  multa_contratante: string;
-  foro: string;
-  texto_final: string;
   cidade_assinatura: string;
+  topicos: ContractTopic[];
 };
+
+const emptyLegacy: Required<LegacyContractFields> = {
+  objeto_base: "",
+  remuneracao_base: "",
+  obrigacao_contratado: "",
+  obrigacao_contratante: "",
+  multa_contratado: "",
+  multa_contratante: "",
+  foro: "",
+  texto_final: "",
+};
+
+function createInitialForm(): ContractSettings {
+  return {
+    ...emptyLegacy,
+    titulo: "Contrato de Prestação de Serviços Artísticos",
+    contratado_texto: "",
+    cidade_assinatura: "",
+    topicos: normalizeContractTopics([], emptyLegacy),
+  };
+}
 
 export default function ContratosModeloPage() {
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [form, setForm] = useState<ContractSettings>(createInitialForm);
 
-  const [form, setForm] = useState<ContractSettings>({
-    titulo: "",
-    contratado_texto: "",
-    objeto_base: "",
-    remuneracao_base: "",
-    obrigacao_contratado: "",
-    obrigacao_contratante: "",
-    multa_contratado: "",
-    multa_contratante: "",
-    foro: "",
-    texto_final: "",
-    cidade_assinatura: "",
-  });
-
-  function atualizarCampo(campo: keyof ContractSettings, valor: string) {
-    setForm((atual) => ({ ...atual, [campo]: valor }));
-  }
+  useEffect(() => {
+    void carregarModelo();
+  }, []);
 
   async function obterUsuarioLogado() {
-    const { data, error } = await supabase.auth.getUser();
-
+    const { data, error } = await getAccountAuthUser();
     if (error || !data.user) {
       alert("Usuário não autenticado.");
       window.location.href = "/login";
       return null;
     }
-
     return data.user;
   }
 
   async function carregarModelo() {
     try {
       const user = await obterUsuarioLogado();
+      if (!user) return;
 
-      if (!user) {
-        setLoading(false);
+      const [modeloRes, empresaRes] = await Promise.all([
+        supabase
+          .from("contract_settings")
+          .select("*")
+          .eq("user_id", user.id),
+        supabase
+          .from("company_settings")
+          .select("cidade")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      const { error } = modeloRes;
+
+      if (error) throw error;
+      if (empresaRes.error) throw empresaRes.error;
+
+      const data = [...(modeloRes.data || [])].sort((first, second) => {
+        const firstTopics = Array.isArray(first.topicos) ? first.topicos.length : 0;
+        const secondTopics = Array.isArray(second.topicos) ? second.topicos.length : 0;
+        return secondTopics - firstTopics;
+      })[0] || null;
+      const cidadeEmpresa = empresaRes.data?.cidade?.trim() || "";
+      if (!data) {
+        setForm((current) => ({ ...current, cidade_assinatura: cidadeEmpresa }));
         return;
       }
 
-      const { data, error } = await supabase
-        .from("contract_settings")
-        .select("*")
-        .eq("user_id", user.id)
-        .limit(1)
-        .maybeSingle();
+      const legacy: LegacyContractFields = {
+        objeto_base: data.objeto_base || "",
+        remuneracao_base: data.remuneracao_base || "",
+        obrigacao_contratado: data.obrigacao_contratado || "",
+        obrigacao_contratante: data.obrigacao_contratante || "",
+        multa_contratado: data.multa_contratado || "",
+        multa_contratante: data.multa_contratante || "",
+        foro: data.foro || "",
+        texto_final: data.texto_final || "",
+      };
 
-      if (error) {
-        console.error(error);
-        alert("Erro ao carregar modelo de contrato.");
-        return;
-      }
-
-      if (data) {
-        setForm({
-          id: data.id,
-          titulo: data.titulo || "",
-          contratado_texto: data.contratado_texto || "",
-          objeto_base: data.objeto_base || "",
-          remuneracao_base: data.remuneracao_base || "",
-          obrigacao_contratado: data.obrigacao_contratado || "",
-          obrigacao_contratante: data.obrigacao_contratante || "",
-          multa_contratado: data.multa_contratado || "",
-          multa_contratante: data.multa_contratante || "",
-          foro: data.foro || "",
-          texto_final: data.texto_final || "",
-          cidade_assinatura: data.cidade_assinatura || "",
-        });
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Erro inesperado.");
+      setForm({
+        id: data.id,
+        user_id: user.id,
+        titulo: data.titulo || "Contrato de Prestação de Serviços Artísticos",
+        contratado_texto: data.contratado_texto || "",
+        cidade_assinatura: cidadeEmpresa,
+        ...legacy,
+        topicos: normalizeContractTopics(data.topicos, legacy),
+      });
+    } catch (error) {
+      console.error(error);
+      setFeedback("Não foi possível carregar o modelo de contrato.");
     } finally {
       setLoading(false);
     }
   }
 
+  function updateTopic(index: number, changes: Partial<ContractTopic>) {
+    setForm((current) => ({
+      ...current,
+      topicos: current.topicos.map((topic, topicIndex) =>
+        topicIndex === index ? { ...topic, ...changes } : topic,
+      ),
+    }));
+  }
+
+  function addTopic() {
+    setForm((current) => ({
+      ...current,
+      topicos: [
+        ...current.topicos,
+        {
+          id: crypto.randomUUID(),
+          title: "NOVO TÓPICO",
+          clauses: [createContractClause()],
+        },
+      ],
+    }));
+  }
+
+  function removeTopic(index: number) {
+    if (form.topicos.length === 1) {
+      setFeedback("O modelo precisa manter pelo menos um tópico.");
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      topicos: current.topicos.filter((_, topicIndex) => topicIndex !== index),
+    }));
+  }
+
+  function moveTopic(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= form.topicos.length) return;
+    setForm((current) => {
+      const next = [...current.topicos];
+      [next[index], next[target]] = [next[target], next[index]];
+      return { ...current, topicos: next };
+    });
+  }
+
+  function updateClause(
+    topicIndex: number,
+    clauseIndex: number,
+    changes: Partial<ContractClause>,
+  ) {
+    const topic = form.topicos[topicIndex];
+    updateTopic(topicIndex, {
+      clauses: topic.clauses.map((clause, index) =>
+        index === clauseIndex ? { ...clause, ...changes } : clause,
+      ),
+    });
+  }
+
+  function addClause(topicIndex: number) {
+    const topic = form.topicos[topicIndex];
+    updateTopic(topicIndex, {
+      clauses: [...topic.clauses, createContractClause()],
+    });
+  }
+
+  function removeClause(topicIndex: number, clauseIndex: number) {
+    const topic = form.topicos[topicIndex];
+    if (topic.clauses.length === 1) {
+      setFeedback("Cada tópico precisa manter pelo menos uma cláusula.");
+      return;
+    }
+    updateTopic(topicIndex, {
+      clauses: topic.clauses.filter((_, index) => index !== clauseIndex),
+    });
+  }
+
+  function moveClause(topicIndex: number, clauseIndex: number, direction: -1 | 1) {
+    const topic = form.topicos[topicIndex];
+    const target = clauseIndex + direction;
+    if (target < 0 || target >= topic.clauses.length) return;
+    const clauses = [...topic.clauses];
+    [clauses[clauseIndex], clauses[target]] = [clauses[target], clauses[clauseIndex]];
+    updateTopic(topicIndex, { clauses });
+  }
+
+  function insertVariable(topicIndex: number, clauseIndex: number, key: string) {
+    const clause = form.topicos[topicIndex].clauses[clauseIndex];
+    const spacer = clause.content && !clause.content.endsWith(" ") ? " " : "";
+    updateClause(topicIndex, clauseIndex, {
+      content: `${clause.content}${spacer}{${key}}`,
+    });
+  }
+
   async function salvarModelo() {
+    setFeedback("");
+    if (!form.titulo.trim()) return setFeedback("Informe o título do contrato.");
+    if (!form.topicos.length) return setFeedback("Adicione pelo menos um tópico.");
+
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+    setSaving(true);
+
+    const payload = {
+      user_id: user.id,
+      titulo: form.titulo.trim(),
+      contratado_texto: form.contratado_texto || "",
+      objeto_base: form.objeto_base || "",
+      remuneracao_base: form.remuneracao_base || "",
+      obrigacao_contratado: form.obrigacao_contratado || "",
+      obrigacao_contratante: form.obrigacao_contratante || "",
+      multa_contratado: form.multa_contratado || "",
+      multa_contratante: form.multa_contratante || "",
+      foro: form.foro || "",
+      texto_final: form.texto_final || "",
+      cidade_assinatura: form.cidade_assinatura.trim(),
+      topicos: form.topicos,
+    };
+
     try {
-      const user = await obterUsuarioLogado();
-
-      if (!user) {
-        return;
-      }
-
-      const dados = {
-        user_id: user.id,
-        titulo: form.titulo,
-        contratado_texto: form.contratado_texto,
-        objeto_base: form.objeto_base,
-        remuneracao_base: form.remuneracao_base,
-        obrigacao_contratado: form.obrigacao_contratado,
-        obrigacao_contratante: form.obrigacao_contratante,
-        multa_contratado: form.multa_contratado,
-        multa_contratante: form.multa_contratante,
-        foro: form.foro,
-        texto_final: form.texto_final,
-        cidade_assinatura: form.cidade_assinatura,
-      };
-
       if (form.id) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("contract_settings")
-          .update(dados)
-          .eq("id", form.id)
-          .eq("user_id", user.id);
-
-        if (error) {
-          console.error(error);
-          alert("Erro ao salvar contrato.");
-          return;
+          .update(payload)
+          .eq("user_id", user.id)
+          .select("id");
+        if (error) throw error;
+        if (!data?.length) {
+          throw new Error("Nenhum modelo foi atualizado. Verifique as permissões de escrita do perfil.");
         }
+        const currentId = data.find((row) => row.id === form.id)?.id || data[0].id;
+        setForm((current) => ({ ...current, id: currentId, user_id: user.id }));
       } else {
         const { data, error } = await supabase
           .from("contract_settings")
-          .insert([dados])
+          .insert(payload)
           .select("id")
           .single();
-
-        if (error) {
-          console.error(error);
-          alert("Erro ao criar contrato.");
-          return;
-        }
-
-        if (data?.id) {
-          setForm((formAtual) => ({
-            ...formAtual,
-            id: data.id,
-            user_id: user.id,
-          }));
-        }
+        if (error) throw error;
+        setForm((current) => ({ ...current, id: data.id, user_id: user.id }));
       }
+      setFeedback("Modelo salvo com sucesso.");
+    } catch (error) {
+      const errorData =
+        typeof error === "object" && error !== null
+          ? (error as Record<string, unknown>)
+          : {};
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof errorData.message === "string"
+            ? errorData.message
+            : String(error);
+      const details = typeof errorData.details === "string" ? errorData.details : "";
+      const hint = typeof errorData.hint === "string" ? errorData.hint : "";
+      const code = typeof errorData.code === "string" ? errorData.code : "";
+      const diagnostic = [message, details, hint, code].join(" ").toLowerCase();
 
-      alert("Modelo salvo com sucesso!");
-    } catch (err) {
-      console.error(err);
-      alert("Erro inesperado.");
+      console.groupCollapsed("Falha ao salvar o modelo de contrato");
+      console.warn("Mensagem:", message);
+      console.warn("Detalhes:", details);
+      console.warn("Hint:", hint);
+      console.warn("Código:", code);
+      console.groupEnd();
+
+      setFeedback(
+        diagnostic.includes("topicos") ||
+          diagnostic.includes("schema cache") ||
+          code === "PGRST204"
+          ? "A atualização de tópicos ainda não foi aplicada no Supabase. Execute a migration 20260810120000_contract_settings_topics.sql."
+          : `Não foi possível salvar o modelo${message && message !== "[object Object]" ? `: ${message}` : "."}`,
+      );
+    } finally {
+      setSaving(false);
     }
   }
 
-  useEffect(() => {
-    carregarModelo();
-  }, []);
-
   return (
-    <ProtectedRoute adminOnly>
+    <ProtectedRoute modulo="contratos">
       <PlanProtectedRoute modulo="contratos-modelo">
         <AppLayout>
-          <div className="modelo-page">
-            <header className="page-header">
-              <div className="header-left">
-                <div className="header-icon" aria-hidden="true">
-                  <ScrollText size={26} />
+          <main className="mx-auto w-full max-w-[1500px] text-white">
+            <header className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-[14px] bg-gradient-to-br from-violet-600 to-sky-500 shadow-[0_10px_24px_rgba(76,29,149,.24)]">
+                  <ScrollText size={22} />
                 </div>
                 <div>
-                  <h1>Modelo de Contrato</h1>
-                  <p>Configure as partes fixas e veja quais dados são preenchidos automaticamente por contrato.</p>
+                  <h1 className="text-[26px] font-black tracking-tight">Modelo de Contrato</h1>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Monte o modelo único, organize os tópicos e acompanhe a pré-visualização.
+                  </p>
                 </div>
               </div>
-
-              <div className="header-actions">
-                <Link href="/contratos" className="btn-secondary">
-                  <ArrowLeft size={17} aria-hidden="true" />
-                  Voltar
+              <div className="flex flex-wrap gap-2">
+                <Link href="/contratos" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-400/15 bg-slate-400/[.04] px-4 text-sm font-extrabold text-slate-200 transition hover:border-slate-400/25 hover:bg-slate-400/[.08] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400">
+                  <ArrowLeft size={17} /> Voltar
                 </Link>
-                <button type="button" onClick={salvarModelo} className="btn-primary" disabled={loading}>
-                  <Save size={17} aria-hidden="true" />
-                  Salvar Modelo
+                <button type="button" onClick={() => void salvarModelo()} disabled={saving || loading} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-sky-500 px-4 text-sm font-black transition hover:opacity-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 disabled:cursor-not-allowed disabled:opacity-50">
+                  <Save size={17} /> {saving ? "Salvando..." : "Salvar Modelo"}
                 </button>
               </div>
             </header>
 
-            <section className="panel editor-panel">
-              <div className="panel-header">
-                <div>
-                  <h2>Modelo único do contrato</h2>
-                  <p>Os blocos automáticos ficam bloqueados. Edite apenas os textos fixos do modelo.</p>
-                </div>
-                <span className="status-badge">{form.id ? "Modelo salvo" : "Modelo novo"}</span>
+            {feedback && (
+              <div className={`mb-5 rounded-2xl border px-4 py-3 text-sm font-bold ${feedback.includes("sucesso") ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200" : "border-amber-400/20 bg-amber-400/10 text-amber-100"}`}>
+                {feedback}
               </div>
+            )}
 
-              {loading ? (
-                <div className="loading-state">
-                  <div className="spinner" aria-hidden="true" />
-                  <p>Carregando modelo...</p>
-                </div>
-              ) : (
-                <div className="template-flow">
-                  <Field label="Título do contrato" icon={<FileText size={16} />}>
-                    <input
-                      type="text"
-                      value={form.titulo}
-                      onChange={(e) => atualizarCampo("titulo", e.target.value)}
-                      placeholder="Contrato de Prestação de Serviços Artísticos"
-                    />
-                  </Field>
+            {loading ? (
+              <div className="grid min-h-64 place-items-center rounded-[18px] border border-slate-400/10 bg-white/[.025] text-slate-400">Carregando modelo...</div>
+            ) : (
+              <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,.92fr)_minmax(520px,1.08fr)]">
+                <section className="min-w-0 space-y-5">
+                  <section className="rounded-[18px] border border-slate-400/[.12] bg-white/[.025] p-4 sm:p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h2 className="text-lg font-black">Configuração do modelo</h2>
+                        <p className="mt-0.5 text-xs text-slate-500">Um único modelo ativo por perfil.</p>
+                      </div>
+                      <span className="rounded-full border border-emerald-400/20 bg-emerald-400/[.07] px-2.5 py-1 text-[11px] font-extrabold text-emerald-300">
+                        {form.id ? "Modelo salvo" : "Modelo novo"}
+                      </span>
+                    </div>
+                    <div className="mt-4 grid gap-3">
+                      <Field label="Título do contrato">
+                        <input value={form.titulo} onChange={(event) => setForm((current) => ({ ...current, titulo: event.target.value }))} className={inputClass} />
+                      </Field>
+                    </div>
+                  </section>
 
-                  <ReadonlyField
-                    label="Contratante"
-                    icon={<User size={16} />}
-                    value="Preenchido automaticamente com nome, CPF/CNPJ e endereço do cliente selecionado no evento."
-                  />
+                  <section className="rounded-[18px] border border-slate-400/[.12] bg-white/[.025] p-4 sm:p-5">
+                    <div className="flex items-center gap-3">
+                      <ShieldCheck size={18} className="text-cyan-300" />
+                      <div>
+                        <h2 className="text-base font-black">Informações automáticas</h2>
+                        <p className="text-xs text-slate-400">Preenchidos automaticamente ao gerar o contrato.</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-x-4 gap-y-1 sm:grid-cols-2">
+                      <AutomaticInfo icon={<User size={16} />} title="Contratante" text="Nome, CPF/CNPJ e endereço do cliente." />
+                      <AutomaticInfo icon={<FileText size={16} />} title="Contratado" text="Empresa, artista e responsável das Configurações." />
+                      <AutomaticInfo icon={<CalendarDays size={16} />} title="Assinatura" text={`${form.cidade_assinatura || "Cidade da empresa não informada"} + data atual.`} />
+                      <AutomaticInfo icon={<Braces size={16} />} title="Evento" text="Dados inseridos pelas variáveis abaixo." />
+                    </div>
+                  </section>
 
-                  <Field label="Contratado" icon={<Building2 size={16} />}>
-                    <textarea
-                      rows={5}
-                      value={form.contratado_texto}
-                      onChange={(e) => atualizarCampo("contratado_texto", e.target.value)}
-                      placeholder="Dados fixos da empresa/artista contratado"
-                    />
-                  </Field>
+                  <p className="flex items-center gap-2 px-1 text-xs leading-5 text-slate-500">
+                    <span aria-hidden="true" className="text-cyan-300">ⓘ</span>
+                    A numeração das cláusulas é automática em todo o contrato.
+                  </p>
 
-                  <Field label="Objeto do contrato" icon={<Sparkles size={16} />}>
-                    <textarea
-                      rows={5}
-                      value={form.objeto_base}
-                      onChange={(e) => atualizarCampo("objeto_base", e.target.value)}
-                    />
-                  </Field>
+                  <div className="space-y-4">
+                    {form.topicos.map((topic, index) => {
+                      const firstClauseNumber = countClausesBefore(form.topicos, index) + 1;
+                      return (
+                      <article key={topic.id} className="rounded-[18px] border border-slate-400/[.12] bg-white/[.025] p-4 sm:p-5">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <h2 className="text-sm font-black text-white">Tópico {index + 1}</h2>
+                          <div className="flex gap-1.5">
+                            <IconButton label="Mover para cima" disabled={index === 0} onClick={() => moveTopic(index, -1)}><ArrowUp size={15} /></IconButton>
+                            <IconButton label="Mover para baixo" disabled={index === form.topicos.length - 1} onClick={() => moveTopic(index, 1)}><ArrowDown size={15} /></IconButton>
+                            <IconButton label="Excluir tópico" danger onClick={() => removeTopic(index)}><Trash2 size={15} /></IconButton>
+                          </div>
+                        </div>
+                        <div className="grid gap-3">
+                          <Field label="Título do tópico">
+                            <input value={topic.title} onChange={(event) => updateTopic(index, { title: event.target.value })} className={inputClass} />
+                          </Field>
+                        </div>
+                        <div className="mt-4">
+                          {topic.clauses.map((clause, clauseIndex) => {
+                            const clauseNumber = firstClauseNumber + clauseIndex;
+                            return (
+                              <section key={clause.id} className="border-t border-slate-400/10 py-4 first:mt-1">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                  <strong className="text-sm text-white">Cláusula {clauseNumber}ª</strong>
+                                  <div className="flex gap-1.5">
+                                    <IconButton label="Mover cláusula para cima" disabled={clauseIndex === 0} onClick={() => moveClause(index, clauseIndex, -1)}><ArrowUp size={14} /></IconButton>
+                                    <IconButton label="Mover cláusula para baixo" disabled={clauseIndex === topic.clauses.length - 1} onClick={() => moveClause(index, clauseIndex, 1)}><ArrowDown size={14} /></IconButton>
+                                    <IconButton label="Excluir cláusula" danger onClick={() => removeClause(index, clauseIndex)}><Trash2 size={14} /></IconButton>
+                                  </div>
+                                </div>
+                                <Field label="Texto da cláusula e seus parágrafos">
+                                  <textarea
+                                    rows={7}
+                                    value={clause.content}
+                                    onChange={(event) => updateClause(index, clauseIndex, { content: event.target.value })}
+                                    placeholder="Digite o texto principal. Para subdivisões, inicie novas linhas com §1º., §2º. e assim por diante."
+                                    className={`${inputClass} min-h-[150px] resize-y py-3 font-normal leading-6`}
+                                  />
+                                </Field>
+                                <div className="mt-3">
+                                  <p className="mb-2 text-xs font-bold text-slate-500">Variáveis</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {CONTRACT_VARIABLES.map((variable) => (
+                                      <button key={variable.key} type="button" title={variable.description} onClick={() => insertVariable(index, clauseIndex, variable.key)} className="inline-flex min-h-8 items-center rounded-lg border border-slate-400/15 bg-transparent px-2.5 text-[11px] font-extrabold text-slate-300 transition hover:border-violet-400/40 hover:text-violet-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400">
+                                        {variable.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              </section>
+                            );
+                          })}
+                          <button type="button" onClick={() => addClause(index)} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-400/20 bg-transparent text-xs font-extrabold text-slate-300 transition hover:border-violet-400/35 hover:bg-violet-400/[.05] hover:text-violet-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-400">
+                            <Plus size={15} /> Adicionar cláusula
+                          </button>
+                        </div>
+                      </article>
+                      );
+                    })}
+                  </div>
 
-                  <ReadonlyField
-                    label="Dados da apresentação"
-                    icon={<CalendarDays size={16} />}
-                    value="Local, data, horário de início, horário final, duração e formato são preenchidos pela Agenda e Formatos."
-                  />
-
-                  <Field label="Remuneração" icon={<BadgeDollarSign size={16} />}>
-                    <textarea
-                      rows={5}
-                      value={form.remuneracao_base}
-                      onChange={(e) => atualizarCampo("remuneracao_base", e.target.value)}
-                    />
-                  </Field>
-
-                  <ReadonlyField
-                    label="Valores e pagamento"
-                    icon={<BadgeDollarSign size={16} />}
-                    value="Valor do cachê, valor por extenso e forma de pagamento vêm do evento selecionado."
-                  />
-
-                  <Field label="Obrigação do contratado" icon={<ShieldCheck size={16} />}>
-                    <textarea
-                      rows={5}
-                      value={form.obrigacao_contratado}
-                      onChange={(e) => atualizarCampo("obrigacao_contratado", e.target.value)}
-                    />
-                  </Field>
-
-                  <Field label="Obrigação do contratante" icon={<User size={16} />}>
-                    <textarea
-                      rows={5}
-                      value={form.obrigacao_contratante}
-                      onChange={(e) => atualizarCampo("obrigacao_contratante", e.target.value)}
-                    />
-                  </Field>
-
-                  <Field label="Multa do contratado" icon={<Gavel size={16} />}>
-                    <textarea
-                      rows={5}
-                      value={form.multa_contratado}
-                      onChange={(e) => atualizarCampo("multa_contratado", e.target.value)}
-                    />
-                  </Field>
-
-                  <Field label="Multa do contratante" icon={<Gavel size={16} />}>
-                    <textarea
-                      rows={5}
-                      value={form.multa_contratante}
-                      onChange={(e) => atualizarCampo("multa_contratante", e.target.value)}
-                    />
-                  </Field>
-
-                  <Field label="Foro" icon={<MapPin size={16} />}>
-                    <textarea
-                      rows={4}
-                      value={form.foro}
-                      onChange={(e) => atualizarCampo("foro", e.target.value)}
-                    />
-                  </Field>
-
-                  <Field label="Texto final" icon={<FileText size={16} />}>
-                    <textarea
-                      rows={4}
-                      value={form.texto_final}
-                      onChange={(e) => atualizarCampo("texto_final", e.target.value)}
-                    />
-                  </Field>
-
-                  <Field label="Cidade da assinatura" icon={<MapPin size={16} />}>
-                    <input
-                      type="text"
-                      value={form.cidade_assinatura}
-                      onChange={(e) => atualizarCampo("cidade_assinatura", e.target.value)}
-                      placeholder="Sabará"
-                    />
-                  </Field>
-
-                  <ReadonlyField
-                    label="Data de assinatura"
-                    icon={<CalendarDays size={16} />}
-                    value="A data atual é inserida automaticamente no momento em que o contrato é gerado."
-                  />
-
-                  <button type="button" onClick={salvarModelo} className="btn-primary save-bottom">
-                    <Save size={17} aria-hidden="true" />
-                    Salvar Modelo de Contrato
+                  <button type="button" onClick={addTopic} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-400/20 bg-transparent text-sm font-extrabold text-slate-300 transition hover:border-cyan-400/35 hover:bg-cyan-400/[.04] hover:text-cyan-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-400">
+                    <Plus size={16} /> Novo tópico
                   </button>
-                </div>
-              )}
-            </section>
-          </div>
+                </section>
 
-          <style jsx>{`
-            .modelo-page {
-              width: 100%;
-              max-width: 1320px;
-              margin: 0 auto;
-              color: #ffffff;
-            }
-
-            .page-header {
-              display: flex;
-              align-items: flex-start;
-              justify-content: space-between;
-              gap: 18px;
-              flex-wrap: wrap;
-              margin-bottom: 24px;
-            }
-
-            .header-left {
-              display: flex;
-              align-items: center;
-              gap: 16px;
-            }
-
-            .header-icon {
-              width: 62px;
-              height: 62px;
-              border-radius: 20px;
-              background: linear-gradient(135deg, #8b35ff, #00aaff);
-              display: grid;
-              place-items: center;
-              color: #fff;
-              box-shadow: 0 18px 38px rgba(139, 53, 255, 0.35);
-              flex-shrink: 0;
-            }
-
-            .header-actions {
-              display: flex;
-              align-items: center;
-              gap: 10px;
-              flex-wrap: wrap;
-            }
-
-            h1,
-            h2,
-            h3,
-            p {
-              margin: 0;
-            }
-
-            h1 {
-              font-size: 32px;
-              line-height: 1.1;
-              font-weight: 900;
-              letter-spacing: -0.5px;
-            }
-
-            .page-header p,
-            .panel-header p {
-              color: #94a3b8;
-              font-size: 14px;
-              line-height: 1.5;
-              margin-top: 4px;
-            }
-
-            .panel {
-              border-radius: 24px;
-              background: rgba(255, 255, 255, 0.04);
-              border: 1px solid rgba(255, 255, 255, 0.09);
-              box-shadow: 0 22px 50px rgba(0, 0, 0, 0.22);
-              backdrop-filter: blur(18px);
-            }
-
-            .panel {
-              padding: 22px;
-            }
-
-            .panel-header {
-              display: flex;
-              align-items: flex-start;
-              justify-content: space-between;
-              gap: 14px;
-              margin-bottom: 18px;
-            }
-
-            .panel-header.compact {
-              display: block;
-            }
-
-            .panel-header h2 {
-              color: #fff;
-              font-size: 21px;
-              font-weight: 900;
-              letter-spacing: -0.02em;
-            }
-
-            .status-badge {
-              display: inline-flex;
-              align-items: center;
-              min-height: 30px;
-              padding: 0 12px;
-              border-radius: 999px;
-              color: #37e884;
-              background: rgba(55, 232, 132, 0.12);
-              border: 1px solid rgba(55, 232, 132, 0.26);
-              font-size: 12px;
-              font-weight: 900;
-              white-space: nowrap;
-            }
-
-            .template-flow {
-              display: grid;
-              gap: 16px;
-            }
-
-            .field {
-              display: grid;
-              gap: 8px;
-            }
-
-            .field-label {
-              display: flex;
-              align-items: center;
-              gap: 8px;
-              color: #cbd5e1;
-              font-size: 13px;
-              font-weight: 900;
-            }
-
-            .readonly-label small {
-              margin-left: 4px;
-              padding: 3px 9px;
-              border-radius: 999px;
-              color: #38bdf8;
-              background: rgba(14, 165, 233, 0.12);
-              border: 1px solid rgba(14, 165, 233, 0.22);
-              font-size: 11px;
-              font-weight: 900;
-            }
-
-            .field-label :global(svg) {
-              color: #93c5fd;
-            }
-
-            input,
-            textarea {
-              width: 100%;
-              box-sizing: border-box;
-              border-radius: 14px;
-              border: 1px solid rgba(255, 255, 255, 0.1);
-              background: rgba(2, 6, 23, 0.45);
-              color: #fff;
-              outline: 0;
-              font-size: 14px;
-              padding: 14px 16px;
-              line-height: 1.55;
-              transition: 0.18s ease;
-            }
-
-            textarea {
-              resize: vertical;
-              min-height: 118px;
-            }
-
-            input::placeholder,
-            textarea::placeholder {
-              color: rgba(148, 163, 184, 0.65);
-            }
-
-            input:focus,
-            textarea:focus {
-              border-color: rgba(139, 53, 255, 0.7);
-              box-shadow: 0 0 0 4px rgba(139, 53, 255, 0.14);
-            }
-
-            textarea:disabled {
-              color: #cbd5e1;
-              background: rgba(15, 23, 42, 0.58);
-              border-style: dashed;
-              border-color: rgba(148, 163, 184, 0.24);
-              cursor: not-allowed;
-              opacity: 1;
-              resize: none;
-            }
-
-            .btn-primary,
-            .btn-secondary {
-              display: inline-flex;
-              align-items: center;
-              justify-content: center;
-              gap: 8px;
-              min-height: 42px;
-              padding: 0 16px;
-              border-radius: 14px;
-              color: #fff;
-              font-size: 14px;
-              font-weight: 900;
-              border: 1px solid transparent;
-              cursor: pointer;
-              text-decoration: none;
-              transition: transform 0.16s ease, opacity 0.16s ease;
-            }
-
-            .btn-primary {
-              background: linear-gradient(135deg, #8b35ff, #00aaff);
-              box-shadow: 0 16px 32px rgba(139, 53, 255, 0.28);
-            }
-
-            .btn-secondary {
-              background: rgba(255, 255, 255, 0.07);
-              border-color: rgba(255, 255, 255, 0.12);
-            }
-
-            .btn-primary:hover,
-            .btn-secondary:hover {
-              transform: translateY(-1px);
-              opacity: 0.94;
-            }
-
-            .btn-primary:disabled {
-              opacity: 0.58;
-              cursor: not-allowed;
-              transform: none;
-            }
-
-            .save-bottom {
-              width: 100%;
-              margin-top: 4px;
-            }
-
-            .loading-state {
-              display: grid;
-              place-items: center;
-              min-height: 280px;
-              color: #94a3b8;
-              text-align: center;
-            }
-
-            .spinner {
-              width: 38px;
-              height: 38px;
-              border-radius: 999px;
-              border: 3px solid rgba(255, 255, 255, 0.12);
-              border-top-color: #8b35ff;
-              animation: spin 0.8s linear infinite;
-              margin-bottom: 14px;
-            }
-
-            @keyframes spin {
-              to {
-                transform: rotate(360deg);
-              }
-            }
-
-            @media (max-width: 720px) {
-              .page-header {
-                align-items: flex-start;
-              }
-
-              .header-actions,
-              .btn-primary,
-              .btn-secondary {
-                width: 100%;
-              }
-
-              h1 {
-                font-size: 30px;
-              }
-
-              .panel {
-                border-radius: 20px;
-                padding: 18px;
-              }
-            }
-          `}</style>
-
-          <style jsx global>{`
-            .modelo-page .field {
-              display: grid;
-              gap: 8px;
-              width: 100%;
-            }
-
-            .modelo-page .field-label {
-              display: flex;
-              align-items: center;
-              gap: 8px;
-              color: #cbd5e1;
-              font-size: 13px;
-              font-weight: 900;
-            }
-
-            .modelo-page .field-label svg {
-              color: #93c5fd;
-              flex-shrink: 0;
-            }
-
-            .modelo-page .readonly-label small {
-              margin-left: 4px;
-              padding: 3px 9px;
-              border-radius: 999px;
-              color: #38bdf8;
-              background: rgba(14, 165, 233, 0.12);
-              border: 1px solid rgba(14, 165, 233, 0.22);
-              font-size: 11px;
-              font-weight: 900;
-            }
-
-            .modelo-page input,
-            .modelo-page textarea {
-              width: 100%;
-              box-sizing: border-box;
-              border-radius: 14px;
-              border: 1px solid rgba(255, 255, 255, 0.1);
-              background: rgba(2, 6, 23, 0.45);
-              color: #fff;
-              outline: 0;
-              font-size: 14px;
-              padding: 14px 16px;
-              line-height: 1.55;
-              transition: 0.18s ease;
-            }
-
-            .modelo-page textarea {
-              resize: vertical;
-              min-height: 118px;
-            }
-
-            .modelo-page input::placeholder,
-            .modelo-page textarea::placeholder {
-              color: rgba(148, 163, 184, 0.65);
-            }
-
-            .modelo-page input:focus,
-            .modelo-page textarea:focus {
-              border-color: rgba(139, 53, 255, 0.7);
-              box-shadow: 0 0 0 4px rgba(139, 53, 255, 0.14);
-            }
-
-            .modelo-page textarea:disabled {
-              min-height: 82px;
-              color: #cbd5e1;
-              background: rgba(15, 23, 42, 0.58);
-              border-style: dashed;
-              border-color: rgba(148, 163, 184, 0.24);
-              cursor: not-allowed;
-              opacity: 1;
-              resize: none;
-            }
-          `}</style>
+                <aside className="min-w-0 xl:sticky xl:top-5">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-black">Pré-visualização</h2>
+                      <p className="text-xs text-slate-400">Dados de exemplo são usados nesta tela.</p>
+                    </div>
+                    <span className="rounded-full border border-violet-400/15 bg-violet-400/[.06] px-2.5 py-1 text-[11px] font-extrabold text-violet-200">Ao vivo</span>
+                  </div>
+                  <ContractTemplatePreview title={form.titulo} city={form.cidade_assinatura} topics={form.topicos} />
+                </aside>
+              </div>
+            )}
+          </main>
         </AppLayout>
       </PlanProtectedRoute>
     </ProtectedRoute>
   );
 }
 
-function Field({
-  label,
-  icon,
-  children,
-}: {
-  label: string;
-  icon: ReactNode;
-  children: ReactNode;
-}) {
+const inputClass = "min-h-11 w-full rounded-xl border border-slate-400/15 bg-[#071122] px-3.5 text-sm font-semibold text-white outline-none transition placeholder:text-slate-600 focus:border-violet-400/50 focus:ring-4 focus:ring-violet-400/10";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="grid gap-2 text-sm font-bold text-slate-300"><span>{label}</span>{children}</label>;
+}
+
+function AutomaticInfo({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
   return (
-    <label className="field">
-      <span className="field-label">
-        {icon}
-        {label}
-      </span>
-      {children}
-    </label>
+    <div className="flex min-w-0 gap-2.5 py-2" title={text}>
+      <span className="mt-0.5 shrink-0 text-cyan-300">{icon}</span>
+      <div className="min-w-0"><strong className="block text-xs text-slate-200">{title}</strong><span className="block text-[11px] leading-4 text-slate-500">{text}</span></div>
+    </div>
   );
 }
 
-function ReadonlyField({
-  label,
-  icon,
-  value,
-}: {
-  label: string;
-  icon: ReactNode;
-  value: string;
-}) {
+function IconButton({ label, onClick, children, disabled, danger = false }: { label: string; onClick: () => void; children: React.ReactNode; disabled?: boolean; danger?: boolean }) {
   return (
-    <label className="field">
-      <span className="field-label readonly-label">
-        {icon}
-        {label}
-        <small>Automático</small>
-      </span>
-      <textarea rows={3} value={value} disabled readOnly />
-    </label>
+    <button type="button" aria-label={label} title={label} onClick={onClick} disabled={disabled} className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400 disabled:cursor-not-allowed disabled:opacity-30 ${danger ? "border-transparent text-rose-300 hover:border-rose-400/20 hover:bg-rose-400/[.07]" : "border-slate-400/10 text-slate-400 hover:border-slate-400/20 hover:bg-white/[.05] hover:text-slate-200"}`}>
+      {children}
+    </button>
   );
 }

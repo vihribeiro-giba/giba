@@ -129,4 +129,40 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Padrão GIBA para caixas de seleção nativas em todos os módulos. */
+  select {
+    color-scheme: dark;
+    color: #f8fafc;
+    background-color: #111c30;
+    border-color: rgba(255, 255, 255, 0.12);
+    transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+  }
+
+  select:hover:not(:disabled) {
+    border-color: rgba(56, 189, 248, 0.32);
+    background-color: #142039;
+  }
+
+  select:focus-visible {
+    border-color: rgba(56, 189, 248, 0.72);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+    outline: none;
+  }
+
+  select:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  select option,
+  select optgroup {
+    color: #f8fafc;
+    background: #0b1424;
+  }
+
+  select option:checked {
+    color: #ffffff;
+    background: #4c1d95;
+  }
 }

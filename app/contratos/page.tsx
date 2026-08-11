@@ -3,7 +3,16 @@
 import ProtectedRoute from "../../components/ProtectedRoute";
 import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import AppLayout from "../../components/AppLayout";
+import ContractDocumentPreview from "../../components/contratos/ContractDocumentPreview";
+import ContractEventSelect, { type ContractEventOption } from "../../components/contratos/ContractEventSelect";
 import { supabase } from "../../lib/supabase";
+import { getAccountAuthUser } from "../../lib/access-session";
+import {
+  buildContractText,
+  normalizeContractTopics,
+  type ContractTopic,
+} from "../../lib/contracts/template";
+import { createContractPdfDocument } from "../../lib/contracts/pdf";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import jsPDF from "jspdf";
@@ -17,11 +26,13 @@ import {
   FileCheck2,
   FileText,
   MapPin,
-  Plus,
+  Save,
   Search,
   Settings2,
   Sparkles,
+  Trash2,
   User,
+  X,
 } from "lucide-react";
 
 type Evento = {
@@ -78,12 +89,30 @@ type ContractSettings = {
   foro: string;
   texto_final: string;
   cidade_assinatura: string;
+  topicos: ContractTopic[];
 };
 
-type WordToken = {
-  text: string;
-  bold: boolean;
+type ContractRecord = {
+  id: string;
+  user_id: string;
+  event_id: string | null;
+  contract_number: string;
+  title: string;
+  status: string;
+  content: string;
+  client_name: string;
+  format_name: string;
+  event_date: string | null;
+  location: string;
+  pdf_url?: string | null;
+  client_snapshot?: Record<string, unknown>;
+  company_snapshot?: Record<string, unknown>;
+  event_snapshot?: Record<string, unknown>;
+  created_at: string;
+  updated_at?: string | null;
 };
+
+type WordToken = { text: string; bold: boolean };
 
 const modeloPadrao: ContractSettings = {
   titulo: "Contrato de Prestação de Serviços Artísticos",
@@ -106,6 +135,7 @@ const modeloPadrao: ContractSettings = {
   texto_final:
     "E, por estarem assim de comum acordo, as partes assinam o presente CONTRATO em 02 (duas) vias de igual teor e forma, para um mesmo fim.",
   cidade_assinatura: "Sabará",
+  topicos: [],
 };
 
 function ContratosContent() {
@@ -115,13 +145,20 @@ function ContratosContent() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
   const [modeloContrato, setModeloContrato] = useState<ContractSettings>(modeloPadrao);
+  const [contratos, setContratos] = useState<ContractRecord[]>([]);
   const [eventoSelecionado, setEventoSelecionado] = useState("");
   const [textoContrato, setTextoContrato] = useState("");
+  const [contratoSelecionado, setContratoSelecionado] = useState<ContractRecord | null>(null);
+  const [textoEdicao, setTextoEdicao] = useState("");
+  const [modoEdicao, setModoEdicao] = useState(false);
+  const [salvandoContrato, setSalvandoContrato] = useState(false);
+  const [gerandoContrato, setGerandoContrato] = useState(false);
+  const [snapshotDisponivel, setSnapshotDisponivel] = useState(true);
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState("");
 
   async function obterUsuarioLogado() {
-    const { data, error } = await supabase.auth.getUser();
+    const { data, error } = await getAccountAuthUser();
 
     if (error || !data.user) {
       alert("Usuário não autenticado.");
@@ -168,9 +205,23 @@ function ContratosContent() {
       .limit(1)
       .maybeSingle();
 
+    const contratosRes = await supabase
+      .from("contracts")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
     setEventos(eventosRes.data || []);
     setClientes(clientesRes.data || []);
     setEmpresa(empresaRes.data || null);
+    if (contratosRes.error) {
+      console.info("Snapshots de contratos ainda não estão disponíveis:", contratosRes.error.message);
+      setSnapshotDisponivel(false);
+      setContratos([]);
+    } else {
+      setSnapshotDisponivel(true);
+      setContratos((contratosRes.data || []) as ContractRecord[]);
+    }
 
     if (modeloRes.data) {
       setModeloContrato({
@@ -189,8 +240,16 @@ function ContratosContent() {
         foro: modeloRes.data.foro || modeloPadrao.foro,
         texto_final: modeloRes.data.texto_final || modeloPadrao.texto_final,
         cidade_assinatura:
-          modeloRes.data.cidade_assinatura || modeloPadrao.cidade_assinatura,
+          empresaRes.data?.cidade?.trim() ||
+          modeloRes.data.cidade_assinatura ||
+          modeloPadrao.cidade_assinatura,
+        topicos: normalizeContractTopics(modeloRes.data.topicos, modeloRes.data),
       });
+    } else if (empresaRes.data?.cidade?.trim()) {
+      setModeloContrato((current) => ({
+        ...current,
+        cidade_assinatura: empresaRes.data.cidade.trim(),
+      }));
     }
 
     const eventIdUrl = searchParams.get("eventId");
@@ -207,6 +266,14 @@ function ContratosContent() {
   function normalizar(texto: string) {
     return (texto || "").toLowerCase().trim();
   }
+
+  const contratoPorEvento = useMemo(() => {
+    const map = new Map<string, ContractRecord>();
+    contratos.forEach((contrato) => {
+      if (contrato.event_id) map.set(contrato.event_id, contrato);
+    });
+    return map;
+  }, [contratos]);
 
   const eventosFiltrados = useMemo(() => {
     const termo = normalizar(busca);
@@ -232,42 +299,64 @@ function ContratosContent() {
       .sort((a, b) => {
         const hoje = new Date();
         hoje.setHours(0, 0, 0, 0);
-
         const dataA = a.event_date ? new Date(`${a.event_date}T00:00:00`).getTime() : Number.MAX_SAFE_INTEGER;
         const dataB = b.event_date ? new Date(`${b.event_date}T00:00:00`).getTime() : Number.MAX_SAFE_INTEGER;
-        const aPassado = dataA < hoje.getTime();
-        const bPassado = dataB < hoje.getTime();
-
-        if (aPassado !== bPassado) return aPassado ? 1 : -1;
-        return dataA - dataB;
+        return Math.abs(dataA - hoje.getTime()) - Math.abs(dataB - hoje.getTime());
       });
-  }, [eventos, busca, textoContrato, eventoSelecionado]);
+  }, [eventos, busca, contratos]);
+
+  const contratosAssinados = useMemo(
+    () => eventos.filter((evento) => statusContrato(evento) === "Assinado").length,
+    [eventos, contratos],
+  );
+
+  const contratosSemAssinatura = useMemo(
+    () => eventos.filter((evento) => statusContrato(evento) !== "Assinado").length,
+    [eventos, contratos],
+  );
 
   const eventoAtual = useMemo(
     () => eventos.find((evento) => evento.id === eventoSelecionado) || null,
     [eventos, eventoSelecionado]
   );
 
+  const opcoesEventos = useMemo<ContractEventOption[]>(
+    () => eventos.map((evento) => ({
+      id: evento.id,
+      date: evento.event_date,
+      client: evento.client_name,
+      event: evento.event_type,
+      format: evento.show_format,
+      city: cidadeEvento(evento),
+    })),
+    [eventos],
+  );
+
+  const nomeClientePreview = contratoSelecionado?.client_name || eventoAtual?.client_name || "CONTRATANTE";
+  const nomeContratadoPreview = empresa?.responsavel || empresa?.razao_social || "CONTRATADO";
+
   function numeroContratoEvento(evento: Evento) {
-    return `CTR-${String(evento.id || "").slice(0, 8).toUpperCase()}`;
+    return contratoPorEvento.get(evento.id)?.contract_number || `CTR-${String(evento.id || "").slice(0, 8).toUpperCase()}`;
   }
 
   function dataCriacaoEvento(evento: Evento) {
-    if (!evento.created_at) return "Data não informada";
-    return new Date(evento.created_at).toLocaleDateString("pt-BR");
+    const createdAt = contratoPorEvento.get(evento.id)?.created_at || evento.created_at;
+    if (!createdAt) return "";
+    return new Date(createdAt).toLocaleDateString("pt-BR");
   }
 
   function cidadeEvento(evento: Evento) {
-    return (evento.location || "").split(",").map((item) => item.trim()).filter(Boolean).slice(-2).join(", ") || "Local não informado";
+    return (evento.location || "").split(",").map((item) => item.trim()).filter(Boolean).slice(-2).join(", ");
   }
 
   function statusContrato(evento: Evento) {
-    const status = normalizar(evento.status || "");
+    const snapshot = contratoPorEvento.get(evento.id);
+    const status = normalizar(snapshot?.status || evento.status || "");
 
     if (status.includes("cancel")) return "Cancelado";
     if (status.includes("assin")) return "Assinado";
     if (status.includes("envi")) return "Enviado";
-    if (textoContrato && evento.id === eventoSelecionado) return "Gerado";
+    if (snapshot || (textoContrato && evento.id === eventoSelecionado)) return "Gerado";
 
     return "Pendente";
   }
@@ -275,16 +364,24 @@ function ContratosContent() {
   function selecionarEvento(id: string) {
     setEventoSelecionado(id);
     setTextoContrato("");
+    setContratoSelecionado(null);
+    setTextoEdicao("");
+    setModoEdicao(false);
   }
 
   async function marcarComoAssinado(id: string) {
+    const contrato = contratoPorEvento.get(id);
+    if (!contrato) {
+      alert("Gere e revise o contrato antes de marcá-lo como assinado.");
+      return;
+    }
     const user = await obterUsuarioLogado();
     if (!user) return;
 
     const { error } = await supabase
-      .from("events")
+      .from("contracts")
       .update({ status: "assinado" })
-      .eq("id", id)
+      .eq("id", contrato.id)
       .eq("user_id", user.id);
 
     if (error) {
@@ -293,11 +390,10 @@ function ContratosContent() {
       return;
     }
 
-    setEventos((atuais) =>
-      atuais.map((evento) => (evento.id === id ? { ...evento, status: "assinado" } : evento))
+    setContratos((atuais) =>
+      atuais.map((item) => item.id === contrato.id ? { ...item, status: "assinado" } : item),
     );
-
-    if (eventoSelecionado === id) setTextoContrato("");
+    setContratoSelecionado((current) => current?.id === contrato.id ? { ...current, status: "assinado" } : current);
   }
 
   function formatarDataBR(data: string) {
@@ -360,6 +456,12 @@ function ContratosContent() {
 
   function formatarPagamentoContrato(pagamentoOriginal: string, dataEvento: string) {
     const pagamento = pagamentoOriginal || "Sinal de 50% e o restante na data do evento";
+
+    if (!dataEvento) {
+      return pagamento
+        .replace(/data do evento/gi, "data a definir")
+        .replace(/dia do evento/gi, "dia a definir");
+    }
 
     return pagamento
       .replace(/data do evento/gi, `data de ${dataEvento}`)
@@ -518,14 +620,35 @@ function ContratosContent() {
   }
 
   function textoContratado() {
-    if (modeloContrato.contratado_texto) return modeloContrato.contratado_texto;
+    if (!empresa) return modeloContrato.contratado_texto || "";
 
-    if (!empresa) return "";
-
-    return `**${empresa.razao_social}**, de CNPJ **${empresa.cnpj}**, com Sede na **${empresa.endereco_completo}**, **${empresa.cidade}**. Representado por **${empresa.responsavel}**, portador do CPF nº **${empresa.cpf}**, residente e domiciliado na **${empresa.endereco_completo}**, **${empresa.cidade}, ${empresa.estado}**.`;
+    const nome = empresa.razao_social || empresa.nome_artistico || "CONTRATADO";
+    const endereco = [empresa.endereco_completo, empresa.cidade, empresa.estado].filter(Boolean).join(", ");
+    const partes = [`**${nome}**`];
+    partes.push(empresa.cnpj ? `de CNPJ **${empresa.cnpj}**` : "com CNPJ não informado");
+    if (endereco) partes.push(`com sede em **${endereco}**`);
+    if (empresa.responsavel) {
+      partes.push(`representado por **${empresa.responsavel}**${empresa.cpf ? `, CPF nº **${empresa.cpf}**` : ", com CPF não informado"}`);
+    }
+    return `${partes.join(", ")}.`;
   }
 
-  function gerarContrato(eventoId = eventoSelecionado) {
+  function textoContratante(cliente: Cliente) {
+    const partes = [`**${cliente.nome || "CONTRATANTE"}**`];
+    partes.push(cliente.cpf_cnpj ? `inscrito(a) no CPF/CNPJ sob **${cliente.cpf_cnpj}**` : "com CPF/CNPJ não informado");
+    if (cliente.endereco_completo) partes.push(`residente em **${cliente.endereco_completo}**`);
+    return `${partes.join(", ")}.`;
+  }
+
+  function corrigirDadosAusentes(texto: string) {
+    return texto
+      .replace(/iniciando-se às \*\*a definir\*\* e terminando às \*\*a definir\*\*/gi, "com horário a definir")
+      .replace(/iniciando às \*\*a definir\*\* e terminando às \*\*a definir\*\*/gi, "com horário a definir")
+      .replace(/iniciando-se às (\*\*.*?\*\*) e terminando às \*\*a definir\*\*/gi, "iniciando-se às $1, com término a definir")
+      .replace(/iniciando às (\*\*.*?\*\*) e terminando às \*\*a definir\*\*/gi, "iniciando às $1, com término a definir");
+  }
+
+  async function gerarContrato(eventoId = eventoSelecionado, editarDepois = false) {
     const evento = eventos.find((e) => e.id === eventoId);
 
     if (!evento) {
@@ -549,6 +672,19 @@ function ContratosContent() {
       return;
     }
 
+    const existente = contratoPorEvento.get(evento.id);
+    if (existente?.content) {
+      abrirContrato(existente, editarDepois);
+      return;
+    }
+
+    if (!snapshotDisponivel) {
+      alert("A estrutura de snapshots de contratos ainda precisa ser criada no Supabase.");
+      return;
+    }
+
+    setGerandoContrato(true);
+
     const dataEvento = formatarDataBR(evento.event_date);
     const horaInicio = formatarHora(evento.event_time);
     const horaFim = calcularHorarioFinal(evento.event_time, evento.show_duration);
@@ -559,47 +695,173 @@ function ContratosContent() {
       dataEvento
     );
 
-    const objetoEditavel = modeloContrato.objeto_base || modeloPadrao.objeto_base;
-    const remuneracaoEditavel = modeloContrato.remuneracao_base || modeloPadrao.remuneracao_base;
+    const topics = normalizeContractTopics(modeloContrato.topicos, modeloContrato);
+    const texto = corrigirDadosAusentes(buildContractText({
+      title: modeloContrato.titulo || modeloPadrao.titulo,
+      client: textoContratante(cliente),
+      contractor: textoContratado(),
+      topics,
+      variables: {
+        local: `**${evento.location || "a definir"}**`,
+        data_evento: `**${dataEvento || "a definir"}**`,
+        hora_inicio: `**${horaInicio || "a definir"}**`,
+        hora_fim: `**${horaFim || "a definir"}**`,
+        duracao: `**${evento.show_duration || "a definir"}**`,
+        formato: `**${evento.show_format || evento.event_type || "a definir"}**`,
+        valor: `**${valor}**`,
+        valor_extenso: `**${valorExtenso}**`,
+        pagamento: `**${pagamento}**`,
+      },
+      city: modeloContrato.cidade_assinatura || "Sabará",
+      signatureDate: dataAtualContrato(),
+    }));
 
-    const texto = `${modeloContrato.titulo || modeloPadrao.titulo}
+    const user = await obterUsuarioLogado();
+    if (!user) {
+      setGerandoContrato(false);
+      return;
+    }
 
-CONTRATANTE:
+    const payload = {
+      user_id: user.id,
+      event_id: evento.id,
+      contract_number: numeroContratoEvento(evento),
+      title: modeloContrato.titulo || modeloPadrao.titulo,
+      status: normalizar(evento.status || "").includes("assin") ? "assinado" : "gerado",
+      content: texto,
+      client_name: cliente.nome || evento.client_name || "",
+      format_name: evento.show_format || evento.event_type || "",
+      event_date: evento.event_date || null,
+      location: evento.location || "",
+      client_snapshot: cliente,
+      company_snapshot: empresa,
+      event_snapshot: evento,
+    };
 
-**${cliente.nome}** com moradia na **${cliente.endereco_completo}**, inscrito(a) no CPF/CNPJ sob **${cliente.cpf_cnpj}**.
+    const camposObrigatorios = [
+      "user_id",
+      "contract_number",
+      "title",
+      "content",
+      "client_name",
+      "format_name",
+      "location",
+      "status",
+      "client_snapshot",
+      "company_snapshot",
+      "event_snapshot",
+    ] as const;
 
-CONTRATADO:
+    const camposAusentes = camposObrigatorios.filter(
+      (campo) => !Object.prototype.hasOwnProperty.call(payload, campo) || payload[campo] === null || payload[campo] === undefined,
+    );
+    const camposTextuaisVazios = (["user_id", "contract_number", "title", "content", "client_name", "status"] as const)
+      .filter((campo) => !String(payload[campo] || "").trim());
 
-${textoContratado()}
+    if (camposAusentes.length || camposTextuaisVazios.length) {
+      console.group("Erro ao criar contrato");
+      console.error("Mensagem:", "O payload do snapshot está incompleto.");
+      console.error("Campos ausentes:", camposAusentes);
+      console.error("Campos obrigatórios vazios:", camposTextuaisVazios);
+      console.error("Objeto enviado:", payload);
+      console.groupEnd();
+      setGerandoContrato(false);
+      alert("Não foi possível gerar o contrato porque o snapshot está incompleto.");
+      return;
+    }
 
-DO OBJETO DO CONTRATO
+    const { data, error } = await supabase
+      .from("contracts")
+      .insert(payload)
+      .select("id,user_id,event_id,contract_number,title,content,client_name,format_name,event_date,location,status,pdf_url,client_snapshot,company_snapshot,event_snapshot,created_at,updated_at")
+      .single();
 
-Cláusula 1ª. ${objetoEditavel} A apresentação será realizada no local **${evento.location}**, no dia **${dataEvento}**, iniciando-se às **${horaInicio}**, e terminando às **${horaFim}**, sendo o show de **${evento.show_duration}**, sendo feito o trabalho de **${evento.show_format}**, Incluso Equipamento de Som para a Apresentação.
+    setGerandoContrato(false);
+    if (error) {
+      console.group("Erro ao criar contrato");
+      console.error("Mensagem:", error.message);
+      console.error("Detalhes:", error.details);
+      console.error("Hint:", error.hint);
+      console.error("Código:", error.code);
+      console.error("Objeto enviado:", payload);
+      console.error("Erro completo:", error);
+      console.groupEnd();
+      alert("Não foi possível criar o contrato. Consulte o console para ver os detalhes do Supabase.");
+      return;
+    }
 
-DA REMUNERAÇÃO
+    if (!data) {
+      console.group("Erro ao criar contrato");
+      console.error("Mensagem:", "O Supabase não retornou o contrato após o insert.");
+      console.error("Objeto enviado:", payload);
+      console.groupEnd();
+      alert("O contrato foi enviado ao Supabase, mas o registro criado não foi retornado.");
+      return;
+    }
 
-Cláusula 2ª. ${remuneracaoEditavel} O CONTRATANTE pagará o valor de **${valor} (${valorExtenso})** pela apresentação do artista contratado, efetuando o pagamento de **${pagamento}**.
+    const novo = data as ContractRecord;
+    setContratos((atuais) => [novo, ...atuais.filter((item) => item.id !== novo.id)]);
+    abrirContrato(novo, editarDepois);
+  }
 
-DAS OBRIGAÇÕES
+  function abrirContrato(contrato: ContractRecord, editar = false) {
+    setContratoSelecionado(contrato);
+    setEventoSelecionado(contrato.event_id || "");
+    setTextoContrato(contrato.content);
+    setTextoEdicao(contrato.content);
+    setModoEdicao(editar);
+    window.setTimeout(() => document.getElementById("contract-preview")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  }
 
-Cláusula 3ª. ${modeloContrato.obrigacao_contratado || modeloPadrao.obrigacao_contratado}
+  async function visualizarContrato(evento: Evento, editar = false) {
+    const contrato = contratoPorEvento.get(evento.id);
+    if (contrato?.content) abrirContrato(contrato, editar);
+    else await gerarContrato(evento.id, editar);
+  }
 
-Cláusula 4ª. ${modeloContrato.obrigacao_contratante || modeloPadrao.obrigacao_contratante}
+  async function salvarAlteracoesContrato() {
+    if (!contratoSelecionado) return;
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+    setSalvandoContrato(true);
+    const { data, error } = await supabase
+      .from("contracts")
+      .update({ content: textoEdicao })
+      .eq("id", contratoSelecionado.id)
+      .eq("user_id", user.id)
+      .select("*")
+      .single();
+    setSalvandoContrato(false);
+    if (error || !data) {
+      console.error("Erro ao salvar contrato:", error);
+      alert("Não foi possível salvar as alterações do contrato.");
+      return;
+    }
+    const atualizado = data as ContractRecord;
+    setContratos((atuais) => atuais.map((item) => item.id === atualizado.id ? atualizado : item));
+    setContratoSelecionado(atualizado);
+    setTextoContrato(atualizado.content);
+    setTextoEdicao(atualizado.content);
+    setModoEdicao(false);
+  }
 
-DA MULTA
-
-Cláusula 5ª. ${modeloContrato.multa_contratado || modeloPadrao.multa_contratado}
-
-Cláusula 6ª. ${modeloContrato.multa_contratante || modeloPadrao.multa_contratante}
-
-Cláusula 7ª. ${modeloContrato.foro || modeloPadrao.foro}
-
-${modeloContrato.texto_final || modeloPadrao.texto_final}
-
-**${modeloContrato.cidade_assinatura || "Sabará"}, ${dataAtualContrato()}.**`;
-
-    setEventoSelecionado(evento.id);
-    setTextoContrato(texto);
+  async function excluirContrato(contrato: ContractRecord) {
+    if (!confirm(`Excluir o contrato ${contrato.contract_number}? O evento da Agenda será preservado.`)) return;
+    const user = await obterUsuarioLogado();
+    if (!user) return;
+    const { error } = await supabase.from("contracts").delete().eq("id", contrato.id).eq("user_id", user.id);
+    if (error) {
+      console.error("Erro ao excluir contrato:", error);
+      alert("Não foi possível excluir o contrato.");
+      return;
+    }
+    setContratos((atuais) => atuais.filter((item) => item.id !== contrato.id));
+    if (contratoSelecionado?.id === contrato.id) {
+      setContratoSelecionado(null);
+      setTextoContrato("");
+      setTextoEdicao("");
+      setModoEdicao(false);
+    }
   }
 
   function parseBoldText(texto: string): WordToken[] {
@@ -670,10 +932,17 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
   ) {
     let y = yInicial;
     const paragrafos = texto.split("\n");
+    const garantirEspaco = () => {
+      if (y > 277) {
+        doc.addPage();
+        y = 20;
+      }
+    };
 
     paragrafos.forEach((paragrafo) => {
       if (!paragrafo.trim()) {
         y += lineHeight;
+        garantirEspaco();
         return;
       }
 
@@ -687,6 +956,7 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
         const larguraComEspaco = linhaAtual.length > 0 ? largura + larguraEspaco : largura;
 
         if (larguraLinha + larguraComEspaco > larguraMaxima && linhaAtual.length > 0) {
+          garantirEspaco();
           renderizarLinhaJustificada(doc, linhaAtual, x, y, larguraMaxima, true);
           y += lineHeight;
           linhaAtual = [token];
@@ -698,6 +968,7 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
       });
 
       if (linhaAtual.length > 0) {
+        garantirEspaco();
         renderizarLinhaJustificada(doc, linhaAtual, x, y, larguraMaxima, false);
         y += lineHeight;
       }
@@ -706,13 +977,15 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
     return y;
   }
 
-  function baixarPDF() {
-  if (!textoContrato) {
-    alert("Gere o contrato antes de baixar o PDF.");
+  function baixarPDF(contrato = contratoSelecionado) {
+  const conteudo = contrato?.content || textoContrato;
+  if (!conteudo) {
+    alert("Abra e revise o contrato antes de baixar o PDF.");
     return;
   }
 
-  const evento = eventos.find((e) => e.id === eventoSelecionado);
+  const eventoId = contrato?.event_id || eventoSelecionado;
+  const evento = eventos.find((e) => e.id === eventoId);
 
   const cliente = evento
     ? clientes.find((c) => normalizar(c.nome) === normalizar(evento.client_name))
@@ -721,6 +994,15 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
   const nomeContratante = cliente?.nome || "CONTRATANTE";
   const nomeContratado =
     empresa?.responsavel || empresa?.razao_social || "CONTRATADO";
+
+  const documento = createContractPdfDocument({
+    text: conteudo,
+    title: contrato?.title || modeloContrato.titulo || modeloPadrao.titulo,
+    clientName: nomeContratante,
+    contractorName: nomeContratado,
+  });
+  documento.save(`Contrato-Prestação-de-Serviços(${nomeContratante}).pdf`);
+  return;
 
   const doc = new jsPDF("p", "mm", "a4");
   doc.setFont("times", "normal");
@@ -746,7 +1028,7 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
       blocoLimpo === (modeloContrato.titulo || modeloPadrao.titulo);
 
     const isSecao =
-      blocoLimpo === blocoLimpo.toUpperCase() && blocoLimpo.length < 45;
+      blocoLimpo === blocoLimpo.toUpperCase() && blocoLimpo.length < 90;
 
     if (isTitulo) {
       doc.setFontSize(14);
@@ -837,14 +1119,14 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
   }
 
   return (
-    <ProtectedRoute adminOnly>
+    <ProtectedRoute modulo="contratos">
       <PlanProtectedRoute modulo="contratos">
         <AppLayout>
         <div className="contratos-page">
           <header className="page-header">
             <div className="header-left">
               <div className="header-icon" aria-hidden="true">
-                <FileText size={26} />
+                <FileText size={24} />
               </div>
               <div>
                 <h1>Contratos</h1>
@@ -852,32 +1134,30 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
               </div>
             </div>
 
-            <button type="button" className="btn-primary header-btn" onClick={() => gerarContrato()}>
-              <Plus size={18} aria-hidden="true" />
-              Novo Contrato
-            </button>
           </header>
 
           <section className="hero-grid">
-            <div className="metric-card">
-              <div>
-                <span>Eventos disponíveis</span>
-                <strong>{eventos.length}</strong>
-                <p>Base da agenda</p>
+            <div className="metrics-pair">
+              <div className="metric-card">
+                <div>
+                  <span>Contratos Assinados</span>
+                  <strong>{contratosAssinados}</strong>
+                  <p>Contratos finalizados</p>
+                </div>
+                <CheckCircle2 size={24} aria-hidden="true" />
               </div>
-              <CalendarDays size={24} aria-hidden="true" />
+
+              <div className="metric-card">
+                <div>
+                  <span>Contratos sem Assinatura</span>
+                  <strong>{contratosSemAssinatura}</strong>
+                  <p>Aguardando assinatura</p>
+                </div>
+                <FileCheck2 size={24} aria-hidden="true" />
+              </div>
             </div>
 
-            <div className="metric-card">
-              <div>
-                <span>Contratos filtrados</span>
-                <strong>{eventosFiltrados.length}</strong>
-                <p>Resultado atual</p>
-              </div>
-              <Search size={24} aria-hidden="true" />
-            </div>
-
-            <Link href="/contratos-modelo" className="config-card-link">
+            <Link href="/contratos-modelo" className="config-card-link" aria-label="Visualizar e configurar o modelo de contrato">
               <div className="config-card">
                 <div>
                   <span>Modelo ativo</span>
@@ -902,6 +1182,7 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
               <div className="search-box">
                 <Search size={18} aria-hidden="true" />
                 <input
+                  aria-label="Buscar contratos"
                   value={busca}
                   onChange={(e) => setBusca(e.target.value)}
                   placeholder="Buscar por cliente, evento, cidade ou número..."
@@ -943,32 +1224,40 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
                             <span><User size={14} aria-hidden="true" />{evento.client_name || "Cliente não informado"}</span>
                             <span><FileCheck2 size={14} aria-hidden="true" />{evento.show_format || "Evento sem formato"}</span>
                             <span><CalendarDays size={14} aria-hidden="true" />{formatarDataBR(evento.event_date)}</span>
-                            <span><MapPin size={14} aria-hidden="true" />{cidadeEvento(evento)}</span>
+                            {cidadeEvento(evento) && <span><MapPin size={14} aria-hidden="true" />{cidadeEvento(evento)}</span>}
                           </div>
 
                           <div className="contract-meta">
                             <span className={`status-badge status-${status.toLowerCase()}`}>{status}</span>
-                            <span>Criado em {dataCriacaoEvento(evento)}</span>
+                            {dataCriacaoEvento(evento) && <span>Criado em {dataCriacaoEvento(evento)}</span>}
                           </div>
                         </div>
 
                         <div className="card-actions">
-                          <button type="button" onClick={() => gerarContrato(evento.id)} className="icon-action">
+                          <button type="button" onClick={() => void visualizarContrato(evento)} className="icon-action primary-action">
                             <Eye size={15} aria-hidden="true" />
                             Visualizar
                           </button>
-                          <button type="button" onClick={baixarPDF} className="icon-action">
-                            <Download size={15} aria-hidden="true" />
-                            Baixar PDF
-                          </button>
-                          <button type="button" onClick={() => selecionarEvento(evento.id)} className="icon-action">
+                          <button type="button" onClick={() => void visualizarContrato(evento, true)} className="icon-action">
                             <Edit3 size={15} aria-hidden="true" />
                             Editar
                           </button>
-                          <button type="button" onClick={() => marcarComoAssinado(evento.id)} className="icon-action success">
-                            <CheckCircle2 size={15} aria-hidden="true" />
-                            Assinado
+                          <button type="button" disabled={!contratoPorEvento.get(evento.id)} onClick={() => baixarPDF(contratoPorEvento.get(evento.id) || null)} className="icon-action">
+                            <Download size={15} aria-hidden="true" />
+                            Baixar PDF
                           </button>
+                          {status !== "Assinado" && (
+                            <button type="button" disabled={!contratoPorEvento.get(evento.id)} onClick={() => void marcarComoAssinado(evento.id)} className="icon-action success">
+                              <CheckCircle2 size={15} aria-hidden="true" />
+                              Marcar como assinado
+                            </button>
+                          )}
+                          {contratoPorEvento.get(evento.id) && (
+                            <button type="button" onClick={() => void excluirContrato(contratoPorEvento.get(evento.id)!)} className="icon-action danger">
+                              <Trash2 size={15} aria-hidden="true" />
+                              Excluir
+                            </button>
+                          )}
                         </div>
                       </article>
                     );
@@ -978,35 +1267,28 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
             </section>
 
             <aside className="side-stack">
-              <section className="panel quick-panel">
+              <section className="panel quick-panel" id="contract-quick-actions">
                 <div className="panel-header compact">
                   <div>
                     <h2>Ações rápidas</h2>
-                    <p>Selecione um evento, gere a prévia e baixe o PDF.</p>
+                    <p>Selecione um evento para gerar o contrato.</p>
                   </div>
                 </div>
 
             <label className="field-label">Selecione o evento</label>
 
-            <select
-              className="select-field"
+            <ContractEventSelect
               value={eventoSelecionado}
-              onChange={(e) => selecionarEvento(e.target.value)}
-            >
-              <option value="">Selecione um evento</option>
-
-              {eventos.map((evento) => (
-                <option key={evento.id} value={evento.id}>
-                  {evento.event_date} - {evento.client_name} - {evento.show_format}
-                </option>
-              ))}
-            </select>
+              events={opcoesEventos}
+              onChange={selecionarEvento}
+              disabled={carregando}
+            />
 
             {eventoAtual && (
               <div className="selected-event">
                 <span>{numeroContratoEvento(eventoAtual)}</span>
                 <strong>{eventoAtual.client_name}</strong>
-                <p>{formatarDataBR(eventoAtual.event_date)} - {cidadeEvento(eventoAtual)}</p>
+                <p>{formatarDataBR(eventoAtual.event_date)}{cidadeEvento(eventoAtual) ? ` · ${cidadeEvento(eventoAtual)}` : ""}</p>
                 <div className="selected-status">
                   <span className={`status-badge status-${statusContrato(eventoAtual).toLowerCase()}`}>
                     {statusContrato(eventoAtual)}
@@ -1017,23 +1299,15 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
             )}
 
             <div className="quick-actions">
-              <button type="button" onClick={() => gerarContrato()} className="btn-primary">
+              <button type="button" disabled={!eventoSelecionado || gerandoContrato} onClick={() => void gerarContrato()} className="btn-primary">
                 <Sparkles size={17} aria-hidden="true" />
-                Gerar Contrato
+                {gerandoContrato ? "Gerando..." : "Gerar Contrato"}
               </button>
-
-              <button type="button" onClick={baixarPDF} className="btn-secondary">
-                <Download size={17} aria-hidden="true" />
-                Baixar PDF
-              </button>
-
-              {eventoAtual && (
-                <button type="button" onClick={() => marcarComoAssinado(eventoAtual.id)} className="btn-success">
-                  <CheckCircle2 size={17} aria-hidden="true" />
-                  Marcar como assinado
-                </button>
-              )}
             </div>
+
+            {!snapshotDisponivel && (
+              <p className="snapshot-warning">Execute a migration de snapshots no Supabase para gerar e editar contratos.</p>
+            )}
 
             {carregando && (
               <p style={{ color: "#b8b8d8", marginTop: "16px" }}>
@@ -1046,28 +1320,39 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
           </div>
 
           {textoContrato && (
-            <section className="panel preview-panel">
+            <section className="panel preview-panel" id="contract-preview">
               <div className="panel-header">
                 <div>
                   <h2>Prévia do Contrato</h2>
-                  <p>Revise o documento antes de baixar o PDF.</p>
+                  <p>{modoEdicao ? "Faça ajustes somente neste contrato." : "A prévia utiliza o mesmo conteúdo e formatação do PDF."}</p>
                 </div>
-                <button type="button" onClick={baixarPDF} className="btn-secondary small">
-                  <Download size={16} aria-hidden="true" />
-                  Baixar PDF
-                </button>
+                <div className="preview-actions">
+                  {modoEdicao ? (
+                    <>
+                      <button type="button" onClick={() => { setTextoEdicao(textoContrato); setModoEdicao(false); }} className="btn-secondary small"><X size={16} />Cancelar</button>
+                      <button type="button" disabled={salvandoContrato} onClick={() => void salvarAlteracoesContrato()} className="btn-primary small"><Save size={16} />{salvandoContrato ? "Salvando..." : "Salvar alterações"}</button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" onClick={() => { setTextoEdicao(textoContrato); setModoEdicao(true); }} className="btn-secondary small"><Edit3 size={16} />Editar contrato</button>
+                      <button type="button" onClick={() => baixarPDF()} className="btn-secondary small"><Download size={16} />Baixar PDF</button>
+                    </>
+                  )}
+                </div>
               </div>
 
-              <div className="preview-box">
-                {textoPreviewSemMarkdown(textoContrato)}
-              </div>
+              {modoEdicao ? (
+                <textarea value={textoEdicao} onChange={(event) => setTextoEdicao(event.target.value)} className="preview-editor" aria-label="Conteúdo editável do contrato" />
+              ) : (
+                <ContractDocumentPreview text={textoContrato} title={contratoSelecionado?.title || modeloContrato.titulo || modeloPadrao.titulo} clientName={nomeClientePreview} contractorName={nomeContratadoPreview} />
+              )}
             </section>
           )}
 
           <style jsx>{`
             .contratos-page {
               width: 100%;
-              max-width: 1320px;
+              max-width: 1360px;
               margin: 0 auto;
               color: #ffffff;
             }
@@ -1076,9 +1361,9 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
               display: flex;
               align-items: flex-start;
               justify-content: space-between;
-              gap: 18px;
+              gap: 16px;
               flex-wrap: wrap;
-              margin-bottom: 24px;
+              margin-bottom: 22px;
             }
 
             .header-left {
@@ -1088,14 +1373,14 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
             }
 
             .header-icon {
-              width: 62px;
-              height: 62px;
-              border-radius: 20px;
+              width: 46px;
+              height: 46px;
+              border-radius: 14px;
               background: linear-gradient(135deg, #8b35ff, #00aaff);
               display: grid;
               place-items: center;
               color: #fff;
-              box-shadow: 0 18px 38px rgba(139, 53, 255, 0.35);
+              box-shadow: 0 10px 24px rgba(76, 29, 149, 0.24);
               flex-shrink: 0;
             }
 
@@ -1107,7 +1392,7 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
             }
 
             h1 {
-              font-size: 32px;
+              font-size: 27px;
               line-height: 1.1;
               font-weight: 900;
               letter-spacing: -0.5px;
@@ -1125,19 +1410,31 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
 
             .hero-grid {
               display: grid;
-              grid-template-columns: repeat(3, minmax(0, 1fr));
-              gap: 18px;
-              margin-bottom: 22px;
+              grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.8fr);
+              align-items: stretch;
+              gap: 16px;
+              margin-bottom: 16px;
+            }
+
+            .metrics-pair {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 16px;
+              min-width: 0;
+            }
+
+            .hero-grid > * {
+              min-width: 0;
+              height: 100%;
             }
 
             .metric-card,
             .config-card,
             .panel {
-              border-radius: 24px;
-              background: rgba(255, 255, 255, 0.04);
-              border: 1px solid rgba(255, 255, 255, 0.09);
-              box-shadow: 0 22px 50px rgba(0, 0, 0, 0.22);
-              backdrop-filter: blur(18px);
+              border-radius: 18px;
+              background: rgba(10, 18, 33, 0.62);
+              border: 1px solid rgba(148, 163, 184, 0.14);
+              box-shadow: none;
             }
 
             .metric-card,
@@ -1145,81 +1442,202 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
               display: flex;
               align-items: flex-start;
               justify-content: space-between;
-              gap: 14px;
-              padding: 20px;
+              gap: 12px;
+              padding: 18px;
+              min-height: 122px;
+              height: 100%;
+              box-sizing: border-box;
               text-decoration: none;
+            }
+
+            .metric-card > div,
+            .config-card > div {
+              display: flex;
+              min-width: 0;
+              flex: 1;
+              flex-direction: column;
+              align-items: flex-start;
             }
 
             .config-card-link {
               display: block;
               min-width: 0;
+              height: 100%;
               color: inherit;
               text-decoration: none;
+              cursor: pointer;
+              border-radius: 18px;
+              transition: border-color 0.16s ease, background-color 0.16s ease;
+            }
+
+            .config-card-link:hover {
+              transform: none;
+              filter: none;
+            }
+
+            .config-card-link:hover .config-card {
+              border-color: rgba(56, 189, 248, 0.34);
+              background: rgba(15, 29, 48, 0.78);
+            }
+
+            .config-action {
+              display: flex;
+              align-items: center;
+              gap: 5px;
+              margin-top: auto !important;
+              color: #67e8f9 !important;
+              font-weight: 800;
+            }
+
+            .config-card .model-card-title {
+              max-width: 100%;
+              margin-top: 0;
+              font-size: 22px;
+              line-height: 1.25;
+            }
+
+            .config-action svg {
+              width: 14px !important;
+              height: 14px !important;
+              padding: 0 !important;
+              border: 0 !important;
+              border-radius: 0 !important;
+              background: transparent !important;
+            }
+
+            .config-card-link:focus-visible {
+              outline: 2px solid rgba(56, 189, 248, 0.72);
+              outline-offset: 2px;
+            }
+
+            .contract-modal-overlay {
+              position: fixed;
+              inset: 0;
+              z-index: 3000;
+              display: grid;
+              place-items: center;
+              padding: 20px;
+              background: rgba(2, 6, 23, 0.76);
+              backdrop-filter: blur(8px);
+            }
+
+            .contract-modal {
+              width: min(620px, 100%);
+              max-height: 90vh;
+              overflow: visible;
+              padding: 24px;
+              border-radius: 26px;
+              border: 1px solid rgba(255, 255, 255, 0.12);
+              background: linear-gradient(145deg, #0b0f1c, #0a1426);
+              box-shadow: 0 40px 90px rgba(0, 0, 0, 0.58);
+            }
+
+            .contract-modal-header {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 16px;
+              margin-bottom: 22px;
+              padding-bottom: 18px;
+              border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+            }
+
+            .contract-modal-header span {
+              color: #67e8f9;
+              font-size: 11px;
+              font-weight: 900;
+              letter-spacing: 0.14em;
+            }
+
+            .contract-modal-header h2 { margin: 5px 0 0; font-size: 24px; }
+            .contract-modal-header p { margin-top: 5px; color: #94a3b8; font-size: 14px; }
+            .contract-modal-header button {
+              width: 40px;
+              height: 40px;
+              flex-shrink: 0;
+              border-radius: 13px;
+              border: 1px solid rgba(255, 255, 255, 0.12);
+              background: rgba(255, 255, 255, 0.05);
+              color: #e2e8f0;
+              font-size: 24px;
+              cursor: pointer;
+            }
+
+            .contract-modal-actions {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 10px;
+              margin-top: 20px;
             }
 
             .metric-card span,
             .config-card span {
               display: block;
-              color: #94a3b8;
-              font-size: 13px;
-              font-weight: 700;
+              color: #9aa9bd;
+              font-size: 12px;
+              font-weight: 750;
             }
 
             .metric-card strong,
             .config-card strong {
               display: block;
-              margin-top: 8px;
+              margin-top: 7px;
               color: #ffffff;
-              font-size: 26px;
+              font-size: 25px;
               font-weight: 900;
             }
 
             .config-card strong {
-              font-size: 20px;
+              font-size: 18px;
+              line-height: 1.25;
             }
 
             .metric-card p,
             .config-card p {
               margin-top: 5px;
-              color: #64748b;
+              color: #718198;
               font-size: 12px;
               line-height: 1.4;
             }
 
-            .metric-card svg,
-            .config-card svg {
-              width: 50px;
-              height: 50px;
-              padding: 13px;
-              border-radius: 16px;
-              color: #8b35ff;
-              background: rgba(139, 53, 255, 0.16);
-              border: 1px solid rgba(139, 53, 255, 0.28);
+            .metric-card p {
+              margin-top: auto;
+            }
+
+            .metric-card > svg,
+            .config-card > svg {
+              width: 38px;
+              height: 38px;
+              padding: 8px;
+              border-radius: 12px;
+              color: #b6c5d8;
+              background: rgba(148, 163, 184, 0.07);
+              border: 1px solid rgba(148, 163, 184, 0.13);
               flex-shrink: 0;
             }
 
             .main-grid {
               display: grid;
               grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.8fr);
-              gap: 22px;
+              gap: 16px;
               align-items: start;
             }
 
             .panel {
-              padding: 22px;
+              padding: 20px;
             }
 
             .side-stack {
               display: grid;
-              gap: 22px;
+              gap: 16px;
             }
 
             .panel-header {
               display: flex;
               align-items: flex-start;
               justify-content: space-between;
-              gap: 14px;
-              margin-bottom: 18px;
+              gap: 12px;
+              margin-bottom: 16px;
             }
 
             .panel-header.compact {
@@ -1228,7 +1646,7 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
 
             .panel-header h2 {
               color: #fff;
-              font-size: 21px;
+              font-size: 20px;
               font-weight: 900;
               letter-spacing: -0.02em;
             }
@@ -1237,14 +1655,14 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
               display: inline-flex;
               align-items: center;
               justify-content: center;
-              min-width: 34px;
-              height: 30px;
-              padding: 0 12px;
+              min-width: 30px;
+              height: 28px;
+              padding: 0 10px;
               border-radius: 999px;
-              color: #c4b5fd;
-              background: rgba(139, 53, 255, 0.16);
-              border: 1px solid rgba(139, 53, 255, 0.28);
-              font-size: 13px;
+              color: #cbd5e1;
+              background: rgba(148, 163, 184, 0.08);
+              border: 1px solid rgba(148, 163, 184, 0.14);
+              font-size: 12px;
               font-weight: 900;
             }
 
@@ -1252,13 +1670,19 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
               display: flex;
               align-items: center;
               gap: 10px;
-              height: 50px;
-              padding: 0 16px;
-              border-radius: 16px;
-              background: rgba(255, 255, 255, 0.05);
-              border: 1px solid rgba(255, 255, 255, 0.1);
+              height: 44px;
+              padding: 0 14px;
+              border-radius: 12px;
+              background: rgba(2, 8, 23, 0.38);
+              border: 1px solid rgba(148, 163, 184, 0.14);
               color: #94a3b8;
-              margin-bottom: 18px;
+              margin-bottom: 14px;
+              transition: border-color 0.16s ease, background-color 0.16s ease;
+            }
+
+            .search-box:focus-within {
+              border-color: rgba(56, 189, 248, 0.42);
+              background: rgba(6, 15, 30, 0.72);
             }
 
             .search-box input,
@@ -1277,8 +1701,8 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
 
             .contracts-list {
               display: grid;
-              gap: 14px;
-              max-height: 590px;
+              gap: 8px;
+              max-height: 620px;
               overflow-y: auto;
               padding-right: 4px;
               scrollbar-width: none;
@@ -1291,59 +1715,60 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
 
             .contract-card {
               display: grid;
-              grid-template-columns: minmax(0, 1fr) 150px;
-              gap: 16px;
-              padding: 18px;
-              border-radius: 20px;
-              background: rgba(15, 23, 42, 0.58);
-              border: 1px solid rgba(255, 255, 255, 0.09);
-              transition: border-color 0.18s ease, transform 0.18s ease;
+              grid-template-columns: minmax(0, 1fr);
+              gap: 12px;
+              padding: 15px;
+              border-radius: 14px;
+              background: rgba(15, 23, 42, 0.32);
+              border: 1px solid rgba(148, 163, 184, 0.1);
+              transition: border-color 0.16s ease, background-color 0.16s ease;
             }
 
             .contract-card:hover,
             .contract-card.active {
-              border-color: rgba(139, 53, 255, 0.35);
-              transform: translateY(-1px);
+              border-color: rgba(56, 189, 248, 0.24);
+              background: rgba(15, 27, 45, 0.56);
+              transform: none;
             }
 
             .contract-top {
               display: flex;
               align-items: center;
-              gap: 12px;
-              margin-bottom: 14px;
+              gap: 10px;
+              margin-bottom: 11px;
             }
 
             .doc-icon {
-              width: 44px;
-              height: 44px;
-              border-radius: 14px;
+              width: 38px;
+              height: 38px;
+              border-radius: 11px;
               display: grid;
               place-items: center;
-              color: #c4b5fd;
-              background: rgba(139, 53, 255, 0.14);
-              border: 1px solid rgba(139, 53, 255, 0.22);
+              color: #b8c8dd;
+              background: rgba(139, 92, 246, 0.08);
+              border: 1px solid rgba(139, 92, 246, 0.15);
               flex-shrink: 0;
             }
 
             .contract-card h3 {
               color: #fff;
-              font-size: 17px;
+              font-size: 16px;
               font-weight: 900;
               line-height: 1.25;
             }
 
             .contract-top p {
               margin-top: 4px;
-              color: #38bdf8;
-              font-size: 12px;
+              color: #67c9ef;
+              font-size: 11px;
               font-weight: 800;
             }
 
             .contract-info {
               display: grid;
               grid-template-columns: repeat(2, minmax(0, 1fr));
-              gap: 9px;
-              margin-bottom: 14px;
+              gap: 7px 16px;
+              margin-bottom: 11px;
             }
 
             .contract-info span {
@@ -1351,8 +1776,8 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
               align-items: center;
               gap: 7px;
               min-width: 0;
-              color: #cbd5e1;
-              font-size: 13px;
+              color: #b7c3d3;
+              font-size: 12px;
               line-height: 1.35;
               overflow: hidden;
               text-overflow: ellipsis;
@@ -1360,59 +1785,59 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
             }
 
             .contract-info svg {
-              color: #93c5fd;
+              color: #7f93aa;
               flex-shrink: 0;
             }
 
             .contract-meta {
               display: flex;
               align-items: center;
-              gap: 10px;
+              gap: 8px;
               flex-wrap: wrap;
-              color: #64748b;
-              font-size: 12px;
+              color: #718198;
+              font-size: 11px;
               font-weight: 700;
             }
 
             .status-badge {
               display: inline-flex;
               align-items: center;
-              min-height: 26px;
-              padding: 0 10px;
+              min-height: 22px;
+              padding: 0 8px;
               border-radius: 999px;
-              font-size: 12px;
-              font-weight: 900;
+              font-size: 10px;
+              font-weight: 800;
               border: 1px solid transparent;
             }
 
             .status-gerado {
-              color: #38bdf8;
-              background: rgba(14, 165, 233, 0.14);
-              border-color: rgba(14, 165, 233, 0.28);
+              color: #7dd3fc;
+              background: rgba(14, 165, 233, 0.08);
+              border-color: rgba(14, 165, 233, 0.18);
             }
 
             .status-enviado {
               color: #c4b5fd;
-              background: rgba(139, 53, 255, 0.16);
-              border-color: rgba(139, 53, 255, 0.3);
+              background: rgba(139, 92, 246, 0.09);
+              border-color: rgba(139, 92, 246, 0.18);
             }
 
             .status-assinado {
               color: #37e884;
-              background: rgba(55, 232, 132, 0.12);
-              border-color: rgba(55, 232, 132, 0.26);
+              background: rgba(52, 211, 153, 0.08);
+              border-color: rgba(52, 211, 153, 0.17);
             }
 
             .status-pendente {
               color: #ffb454;
-              background: rgba(255, 180, 84, 0.12);
-              border-color: rgba(255, 180, 84, 0.28);
+              background: rgba(245, 158, 11, 0.08);
+              border-color: rgba(245, 158, 11, 0.18);
             }
 
             .status-cancelado {
               color: #fb7185;
-              background: rgba(244, 63, 94, 0.14);
-              border-color: rgba(244, 63, 94, 0.28);
+              background: rgba(244, 63, 94, 0.08);
+              border-color: rgba(244, 63, 94, 0.18);
             }
 
             .card-actions,
@@ -1422,6 +1847,80 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
               align-content: start;
             }
 
+            .card-actions {
+              position: relative;
+              display: flex;
+              flex-wrap: wrap;
+              gap: 6px;
+              padding-top: 11px;
+              border-top: 1px solid rgba(148, 163, 184, 0.1);
+            }
+
+            .card-actions .icon-action {
+              flex: 1 1 132px;
+              min-height: 34px;
+              padding: 0 10px;
+              font-size: 11px;
+            }
+
+            .primary-action {
+              color: #fff;
+              border-color: rgba(56, 189, 248, 0.24);
+              background: rgba(14, 165, 233, 0.1);
+            }
+
+            .actions-menu {
+              position: relative;
+            }
+
+            .actions-menu summary {
+              width: 42px;
+              min-height: 42px;
+              display: grid;
+              place-items: center;
+              list-style: none;
+              border-radius: 14px;
+              border: 1px solid rgba(255, 255, 255, 0.12);
+              background: rgba(255, 255, 255, 0.07);
+              color: #dbeafe;
+              cursor: pointer;
+            }
+
+            .actions-menu summary::-webkit-details-marker { display: none; }
+
+            .actions-popover {
+              position: absolute;
+              z-index: 50;
+              top: calc(100% + 7px);
+              right: 0;
+              width: 210px;
+              padding: 7px;
+              border-radius: 14px;
+              border: 1px solid rgba(255, 255, 255, 0.14);
+              background: #0b1424;
+              box-shadow: 0 22px 54px rgba(0, 0, 0, 0.5);
+            }
+
+            .actions-popover button {
+              width: 100%;
+              min-height: 38px;
+              display: flex;
+              align-items: center;
+              gap: 9px;
+              padding: 0 10px;
+              border: 0;
+              border-radius: 9px;
+              background: transparent;
+              color: #dbeafe;
+              font-size: 12px;
+              font-weight: 800;
+              cursor: pointer;
+            }
+
+            .actions-popover button:hover { background: rgba(255, 255, 255, 0.07); }
+            .actions-popover button.danger { color: #fb7185; }
+            .actions-popover button:disabled { opacity: .38; }
+
             .btn-primary,
             .btn-secondary,
             .icon-action,
@@ -1430,29 +1929,29 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
               align-items: center;
               justify-content: center;
               gap: 8px;
-              min-height: 42px;
-              border-radius: 14px;
+              min-height: 38px;
+              border-radius: 10px;
               border: 1px solid transparent;
               color: #fff;
-              font-size: 14px;
-              font-weight: 900;
+              font-size: 12px;
+              font-weight: 800;
               cursor: pointer;
               text-decoration: none;
-              transition: transform 0.16s ease, opacity 0.16s ease;
+              transition: border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease;
             }
 
             .btn-primary:hover,
             .btn-secondary:hover,
             .icon-action:hover,
             .btn-success:hover {
-              transform: translateY(-1px);
-              opacity: 0.94;
+              transform: none;
+              opacity: 1;
             }
 
             .btn-primary {
               width: 100%;
-              background: linear-gradient(135deg, #8b35ff, #00aaff);
-              box-shadow: 0 16px 32px rgba(139, 53, 255, 0.28);
+              background: linear-gradient(135deg, #7138d8, #168ecb);
+              box-shadow: none;
               padding: 0 16px;
             }
 
@@ -1463,13 +1962,26 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
             .btn-secondary,
             .icon-action,
             .btn-success {
-              background: rgba(255, 255, 255, 0.07);
-              border-color: rgba(255, 255, 255, 0.12);
+              background: rgba(148, 163, 184, 0.045);
+              border-color: rgba(148, 163, 184, 0.14);
+            }
+
+            .btn-secondary:hover,
+            .icon-action:hover,
+            .btn-success:hover {
+              background: rgba(148, 163, 184, 0.09);
+              border-color: rgba(148, 163, 184, 0.24);
             }
 
             .btn-secondary.small {
               width: auto;
               padding: 0 16px;
+            }
+
+            .btn-primary.small {
+              width: auto;
+              padding: 0 16px;
+              min-height: 42px;
             }
 
             .icon-action {
@@ -1478,15 +1990,23 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
 
             .icon-action.danger {
               color: #fb7185;
-              background: rgba(244, 63, 94, 0.12);
-              border-color: rgba(244, 63, 94, 0.22);
+              background: transparent;
+              border-color: rgba(244, 63, 94, 0.16);
             }
 
             .icon-action.success,
             .btn-success {
               color: #37e884;
-              background: rgba(55, 232, 132, 0.12);
-              border-color: rgba(55, 232, 132, 0.26);
+              background: rgba(52, 211, 153, 0.055);
+              border-color: rgba(52, 211, 153, 0.16);
+            }
+
+            .btn-primary:focus-visible,
+            .btn-secondary:focus-visible,
+            .icon-action:focus-visible,
+            .btn-success:focus-visible {
+              outline: 2px solid rgba(56, 189, 248, 0.72);
+              outline-offset: 2px;
             }
 
             button:disabled {
@@ -1497,10 +2017,10 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
 
             .field-label {
               display: block;
-              margin: 18px 0 8px;
+              margin: 14px 0 7px;
               color: #cbd5e1;
-              font-size: 13px;
-              font-weight: 900;
+              font-size: 12px;
+              font-weight: 800;
             }
 
             .select-field {
@@ -1517,11 +2037,11 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
             }
 
             .selected-event {
-              margin-top: 14px;
-              padding: 14px;
-              border-radius: 16px;
-              background: rgba(15, 23, 42, 0.58);
-              border: 1px solid rgba(255, 255, 255, 0.08);
+              margin-top: 12px;
+              padding: 12px;
+              border-radius: 12px;
+              background: rgba(15, 23, 42, 0.42);
+              border: 1px solid rgba(148, 163, 184, 0.12);
             }
 
             .selected-event > span {
@@ -1532,9 +2052,9 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
 
             .selected-event strong {
               display: block;
-              margin-top: 4px;
+              margin-top: 3px;
               color: #fff;
-              font-size: 16px;
+              font-size: 14px;
             }
 
             .selected-status {
@@ -1542,9 +2062,9 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
               align-items: center;
               justify-content: space-between;
               gap: 10px;
-              margin-top: 12px;
-              padding-top: 12px;
-              border-top: 1px solid rgba(255, 255, 255, 0.08);
+              margin-top: 10px;
+              padding-top: 10px;
+              border-top: 1px solid rgba(148, 163, 184, 0.1);
             }
 
             .selected-status small {
@@ -1554,11 +2074,48 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
             }
 
             .quick-actions {
-              margin-top: 16px;
+              margin-top: 12px;
+            }
+
+            .snapshot-warning {
+              margin-top: 12px;
+              padding: 11px 12px;
+              border-radius: 12px;
+              border: 1px solid rgba(251, 191, 36, .22);
+              background: rgba(251, 191, 36, .08);
+              color: #fde68a;
+              font-size: 12px;
+              line-height: 1.5;
             }
 
             .preview-panel {
-              margin-top: 22px;
+              margin-top: 16px;
+            }
+
+            .preview-actions {
+              display: flex;
+              flex-wrap: wrap;
+              justify-content: flex-end;
+              gap: 8px;
+            }
+
+            .preview-editor {
+              width: 100%;
+              min-height: 720px;
+              box-sizing: border-box;
+              resize: vertical;
+              padding: 20px;
+              border-radius: 14px;
+              border: 1px solid rgba(56, 189, 248, .22);
+              background: rgba(2, 6, 23, 0.62);
+              color: #fff;
+              font: 15px/1.7 Georgia, "Times New Roman", serif;
+              outline: none;
+            }
+
+            .preview-editor:focus {
+              border-color: rgba(56, 189, 248, .55);
+              box-shadow: 0 0 0 4px rgba(56, 189, 248, .09);
             }
 
             .preview-box {
@@ -1577,14 +2134,14 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
             }
 
             .empty-state {
-              min-height: 280px;
+              min-height: 220px;
               display: grid;
               place-items: center;
               text-align: center;
-              padding: 32px;
-              border-radius: 20px;
-              border: 1px dashed rgba(255, 255, 255, 0.14);
-              background: rgba(2, 6, 23, 0.3);
+              padding: 24px;
+              border-radius: 14px;
+              border: 1px dashed rgba(148, 163, 184, 0.16);
+              background: rgba(2, 6, 23, 0.22);
               color: #94a3b8;
             }
 
@@ -1625,9 +2182,16 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
               .main-grid {
                 grid-template-columns: 1fr;
               }
+
+              .side-stack { order: 1; }
+              .contracts-panel { order: 2; }
             }
 
             @media (max-width: 720px) {
+              .metrics-pair {
+                grid-template-columns: 1fr;
+              }
+
               .page-header {
                 align-items: flex-start;
               }
@@ -1637,13 +2201,14 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
               }
 
               h1 {
-                font-size: 30px;
+                font-size: 25px;
               }
 
               .panel,
-              .metric-card {
-                border-radius: 20px;
-                padding: 18px;
+              .metric-card,
+              .config-card {
+                border-radius: 16px;
+                padding: 16px;
               }
 
               .contract-card {
@@ -1655,7 +2220,52 @@ ${modeloContrato.texto_final || modeloPadrao.texto_final}
               }
 
               .card-actions {
+                display: grid;
                 grid-template-columns: repeat(2, minmax(0, 1fr));
+              }
+
+              .preview-actions { width: 100%; justify-content: stretch; }
+              .preview-actions button { flex: 1; }
+
+              .preview-editor {
+                min-height: 560px;
+                padding: 16px;
+                font-size: 14px;
+              }
+            }
+
+            @media (max-width: 480px) {
+              .page-header,
+              .panel-header {
+                gap: 12px;
+              }
+
+              .header-left {
+                gap: 12px;
+              }
+
+              .header-icon {
+                width: 42px;
+                height: 42px;
+                border-radius: 12px;
+              }
+
+              .page-header p,
+              .panel-header p,
+              .config-card p,
+              .selected-event p {
+                font-size: 12px;
+              }
+
+              .card-actions,
+              .preview-actions {
+                grid-template-columns: 1fr;
+              }
+
+              .card-actions .icon-action,
+              .preview-actions button {
+                width: 100%;
+                flex-basis: auto;
               }
             }
           `}</style>

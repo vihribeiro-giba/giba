@@ -3,18 +3,17 @@ import {
   Briefcase,
   Phone,
   Mail,
-  CreditCard,
-  Instagram,
-  UserCircle,
-  StickyNote,
   MessageCircle,
   Copy,
   Check,
   Pencil,
   Trash2,
+  ShieldCheck,
+  LockKeyhole,
 } from "lucide-react";
 import type { Colaborador } from "./types";
 import { corAvatar, iniciais } from "./utils";
+import { sanitizeAllowedModules, summarizeAllowedModules } from "../../lib/access-modules";
 
 type ColaboradorCardProps = {
   colaborador: Colaborador;
@@ -34,6 +33,9 @@ export default function ColaboradorCard({
   onExcluir,
 }: ColaboradorCardProps) {
   const ativo = colaborador.status === "Ativo";
+  const configuredModules = sanitizeAllowedModules(colaborador.allowed_modules);
+  const effectiveModules = configuredModules.length ? configuredModules : colaborador.senha ? ["agenda_colaborador" as const] : [];
+  const possuiAcesso = ativo && Boolean(colaborador.auth_user_id || colaborador.senha) && effectiveModules.length > 0;
 
   return (
     <article className="col-card-anim" style={cardColaboradorStyle}>
@@ -73,7 +75,7 @@ export default function ColaboradorCard({
           >
             {colaborador.status}
           </span>
-          {!colaborador.senha && <span style={semAcessoBadge}>Sem acesso</span>}
+          {!possuiAcesso && <span style={semAcessoBadge}>{effectiveModules.length ? "Acesso ainda não criado" : "Sem acesso"}</span>}
         </div>
 
         <div style={infoLinhasStyle}>
@@ -92,36 +94,15 @@ export default function ColaboradorCard({
           {colaborador.email && (
             <span style={infoItemStyle}>
               <Mail size={14} color="#38BDF8" />
-              {colaborador.email}
-            </span>
-          )}
-          {colaborador.instagram && (
-            <span style={infoItemStyle}>
-              <Instagram size={14} color="#E879A6" />
-              {colaborador.instagram}
-            </span>
-          )}
-          {colaborador.pix_key && (
-            <span style={infoItemStyle}>
-              <CreditCard size={14} color="#37E884" />
-              {colaborador.pix_type ? `PIX (${colaborador.pix_type}): ` : "PIX: "}
-              {colaborador.pix_key}
-            </span>
-          )}
-          {colaborador.pix_favorecido && (
-            <span style={infoItemStyle}>
-              <UserCircle size={14} color="#37E884" />
-              Favorecido: {colaborador.pix_favorecido}
+              Acesso: {colaborador.email}
             </span>
           )}
         </div>
 
-        {colaborador.observacoes && (
-          <div style={obsStyle}>
-            <StickyNote size={14} color="#FBBF24" style={{ marginTop: 2, minWidth: 14 }} />
-            <span style={obsTextoStyle}>{colaborador.observacoes}</span>
-          </div>
-        )}
+        <div style={accessStyle}>
+          <ShieldCheck size={14} color={effectiveModules.length ? "#67E8F9" : "#94A3B8"} />
+          <span>{summarizeAllowedModules(effectiveModules)}</span>
+        </div>
 
         {/* Ações */}
         <div style={acoesWrapStyle}>
@@ -136,9 +117,15 @@ export default function ColaboradorCard({
           <button
             type="button"
             onClick={() => onCopiar(colaborador)}
-            style={btnCopiarStyle}
+            disabled={!possuiAcesso}
+            style={{ ...btnCopiarStyle, opacity: possuiAcesso ? 1 : 0.5, cursor: possuiAcesso ? "pointer" : "not-allowed" }}
           >
-            {copiado ? (
+            {!possuiAcesso ? (
+              <>
+                <LockKeyhole size={15} />
+                Acesso não criado
+              </>
+            ) : copiado ? (
               <>
                 <Check size={15} />
                 Copiado!
@@ -174,19 +161,19 @@ export default function ColaboradorCard({
 
 const cardColaboradorStyle: React.CSSProperties = {
   display: "flex",
-  gap: 16,
-  padding: 18,
-  borderRadius: 20,
+  gap: 12,
+  padding: 14,
+  borderRadius: 16,
   background: "rgba(255,255,255,0.04)",
   border: "1px solid rgba(255,255,255,0.10)",
   boxShadow: "0 14px 34px rgba(0,0,0,0.20)",
 };
 
 const cardAvatarWrapStyle: React.CSSProperties = {
-  width: 60,
-  height: 60,
-  minWidth: 60,
-  borderRadius: 18,
+  width: 48,
+  height: 48,
+  minWidth: 48,
+  borderRadius: 14,
   overflow: "hidden",
   border: "1px solid rgba(255,255,255,0.14)",
 };
@@ -206,32 +193,32 @@ const cardAvatarStyle: React.CSSProperties = {
   justifyContent: "center",
   color: "#FFFFFF",
   fontWeight: 900,
-  fontSize: 20,
+  fontSize: 17,
 };
 
 const cardTopStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-  gap: 10,
+  gap: 8,
   flexWrap: "wrap",
 };
 
 const cardNomeStyle: React.CSSProperties = {
   margin: 0,
-  fontSize: 17,
+  fontSize: 16,
   fontWeight: 800,
   color: "#FFFFFF",
 };
 
 const statusBadge: React.CSSProperties = {
-  padding: "5px 11px",
+  padding: "4px 9px",
   borderRadius: 999,
   fontSize: 12,
   fontWeight: 800,
 };
 
 const semAcessoBadge: React.CSSProperties = {
-  padding: "5px 11px",
+  padding: "4px 9px",
   borderRadius: 999,
   fontSize: 12,
   fontWeight: 700,
@@ -242,8 +229,8 @@ const semAcessoBadge: React.CSSProperties = {
 const infoLinhasStyle: React.CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
-  gap: "8px 18px",
-  margin: "12px 0 4px",
+  gap: "6px 14px",
+  margin: "8px 0 2px",
 };
 
 const infoItemStyle: React.CSSProperties = {
@@ -251,42 +238,35 @@ const infoItemStyle: React.CSSProperties = {
   alignItems: "center",
   gap: 7,
   color: "#CBD5E1",
-  fontSize: 13.5,
-};
-
-const obsStyle: React.CSSProperties = {
-  display: "flex",
-  gap: 8,
-  marginTop: 10,
-  padding: "10px 12px",
-  borderRadius: 12,
-  background: "rgba(245,158,11,0.08)",
-  border: "1px solid rgba(245,158,11,0.18)",
-};
-
-const obsTextoStyle: React.CSSProperties = {
-  color: "#E2E8F0",
   fontSize: 13,
-  lineHeight: 1.5,
-  whiteSpace: "pre-wrap",
+};
+
+const accessStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  marginTop: 7,
+  color: "#CBD5E1",
+  fontSize: 12.5,
+  fontWeight: 700,
 };
 
 const acoesWrapStyle: React.CSSProperties = {
   display: "flex",
   flexWrap: "wrap",
   gap: 8,
-  marginTop: 14,
+  marginTop: 10,
 };
 
 const acaoBaseStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 6,
-  height: 38,
-  padding: "0 14px",
-  borderRadius: 11,
+  height: 34,
+  padding: "0 11px",
+  borderRadius: 10,
   border: "1px solid transparent",
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 700,
   cursor: "pointer",
 };

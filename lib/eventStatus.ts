@@ -2,7 +2,11 @@ export type EventStatus = "realizado" | "hoje" | "proximo";
 
 export function getEventStatus(eventDate: string): EventStatus {
   const hoje = new Date();
-  const evento = new Date(eventDate);
+  const evento = criarDataLocal(eventDate);
+
+  if (Number.isNaN(evento.getTime())) {
+    return "proximo";
+  }
 
   hoje.setHours(0, 0, 0, 0);
   evento.setHours(0, 0, 0, 0);
@@ -16,6 +20,15 @@ export function getEventStatus(eventDate: string): EventStatus {
   }
 
   return "proximo";
+}
+
+function criarDataLocal(eventDate: string) {
+  const partes = eventDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+  if (!partes) return new Date(eventDate);
+
+  const [, ano, mes, dia] = partes;
+  return new Date(Number(ano), Number(mes) - 1, Number(dia));
 }
 
 export function getEventStatusLabel(status: EventStatus) {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { supabase } from "../../lib/supabase";
+import { clearCollaboratorSession, collaboratorHome, storeCollaboratorSession } from "../../lib/access-session";
 
 type ModoAuth = "login" | "recuperar";
 
@@ -151,7 +152,7 @@ export default function LoginPage() {
 
     setCarregando(true);
 
-    localStorage.removeItem("giba_colaborador_session");
+    clearCollaboratorSession();
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email: emailTratado,
@@ -164,25 +165,26 @@ export default function LoginPage() {
       const { data: colaborador } = await supabase
         .from("collaborators")
         .select("*")
-        .eq("email", userEmail)
-        .eq("status", "Ativo")
+        .or(`auth_user_id.eq.${data.user?.id},email.eq.${userEmail}`)
         .maybeSingle();
 
       if (colaborador) {
+        if (colaborador.status !== "Ativo") {
+          await supabase.auth.signOut();
+          setCarregando(false);
+          setErro("Este acesso de colaborador está inativo. Fale com o administrador da conta.");
+          return;
+        }
         setCarregando(false);
-        localStorage.setItem(
-          "giba_colaborador_session",
-          JSON.stringify({
-            id: colaborador.id,
-            nome: colaborador.nome,
-            email: colaborador.email,
-            funcao: colaborador.funcao,
-            user_id: colaborador.user_id,
-            tipo: "colaborador",
-          })
-        );
+        const session = storeCollaboratorSession(colaborador);
+        window.location.href = collaboratorHome(session);
+        return;
+      }
 
-        window.location.href = "/agenda-colaborador";
+      if (data.user?.user_metadata?.giba_role === "collaborator") {
+        await supabase.auth.signOut();
+        setCarregando(false);
+        setErro("O acesso do colaborador não está mais vinculado a uma conta ativa.");
         return;
       }
 
@@ -226,19 +228,8 @@ export default function LoginPage() {
       return;
     }
 
-    localStorage.setItem(
-      "giba_colaborador_session",
-      JSON.stringify({
-        id: colaborador.id,
-        nome: colaborador.nome,
-        email: colaborador.email,
-        funcao: colaborador.funcao,
-        user_id: colaborador.user_id,
-        tipo: "colaborador",
-      })
-    );
-
-    window.location.href = "/agenda-colaborador";
+    const collaboratorSession = storeCollaboratorSession(colaborador);
+    window.location.href = collaboratorHome(collaboratorSession);
   }
 
   async function enviarRecuperacao(e: React.FormEvent) {

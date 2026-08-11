@@ -4,15 +4,15 @@ import ProtectedRoute from "../../components/ProtectedRoute"
 import PlanProtectedRoute from "../../components/PlanProtectedRoute"
 import { useEffect, useMemo, useRef, useState } from "react"
 import AppLayout from "../../components/AppLayout"
+import WhatsAppMessageModal from "../../components/whatsapp/WhatsAppMessageModal"
 import { supabase } from "../../lib/supabase"
+import { getAccountAuthUser } from "../../lib/access-session"
 import { getEventStatus, getStageConfig, EVENT_STAGE_ORDER } from "../../lib/eventStatus"
 import {
   Search,
-  Bell,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  SlidersHorizontal,
   Plus,
   CalendarCheck,
   Mic2,
@@ -21,7 +21,6 @@ import {
   CalendarRange,
   TrendingUp,
   ChevronDown,
-  ChevronUp,
   MoreVertical,
   FileText,
   Wallet,
@@ -227,10 +226,7 @@ export default function AgendaPage() {
   const [anoAtual, setAnoAtual] = useState(hoje.getFullYear())
   const [diaSelecionado, setDiaSelecionado] = useState(hojeStr)
   const [vista, setVista] = useState<Vista>("mes")
-  const [busca, setBusca] = useState("")
-  const [filtroStatus, setFiltroStatus] = useState<string>("todos")
-  const [mostrarFiltros, setMostrarFiltros] = useState(false)
-  const [formAberto, setFormAberto] = useState(true)
+  const [formModalAberto, setFormModalAberto] = useState(false)
 
   // Campos do formulário
   const [clientName, setClientName] = useState("")
@@ -247,9 +243,6 @@ export default function AgendaPage() {
   const [numeroEndereco, setNumeroEndereco] = useState("")
   const [cepLoading, setCepLoading] = useState(false)
   const [whatsappEvento, setWhatsappEvento] = useState<Evento | null>(null)
-  const [whatsappTelefone, setWhatsappTelefone] = useState("")
-  const [whatsappMensagem, setWhatsappMensagem] = useState("")
-  const [whatsappAviso, setWhatsappAviso] = useState("")
 
   const diasCalendario = useMemo(() => {
     const primeiroDia = new Date(anoAtual, mesAtual, 1).getDay()
@@ -295,7 +288,7 @@ export default function AgendaPage() {
   }, [eventos, diaSelecionado])
 
   async function obterUsuarioLogado() {
-    const { data: { user }, error } = await supabase.auth.getUser()
+    const { data: { user }, error } = await getAccountAuthUser()
     if (error) {
       console.error("Erro ao buscar usuário logado:", error)
       return null
@@ -393,6 +386,16 @@ export default function AgendaPage() {
     setColaboradoresSelecionados([])
   }
 
+  function abrirNovoEvento() {
+    limparFormulario()
+    setFormModalAberto(true)
+  }
+
+  function fecharModalEvento() {
+    setFormModalAberto(false)
+    limparFormulario()
+  }
+
   function alternarColaborador(id: string) {
     setColaboradoresSelecionados((atual) =>
       atual.includes(id) ? atual.filter((i) => i !== id) : [...atual, id],
@@ -481,6 +484,7 @@ export default function AgendaPage() {
     }
 
     limparFormulario()
+    setFormModalAberto(false)
     await carregarEventos()
     await carregarVinculos()
   }
@@ -488,12 +492,6 @@ export default function AgendaPage() {
   function eventosDoDia(data: string) {
     return eventos
       .filter((e) => e.event_date === data)
-      .filter((e) => (filtroStatus === "todos" ? true : statusParaExibicaoEvento(e) === filtroStatus))
-      .filter((e) =>
-        busca.trim() === ""
-          ? true
-          : (e.title + e.client_name + e.location).toLowerCase().includes(busca.toLowerCase()),
-      )
       .sort((a, b) => a.event_time.localeCompare(b.event_time))
   }
 
@@ -519,7 +517,7 @@ export default function AgendaPage() {
     setDiaSelecionado(evento.event_date)
     setColaboradoresSelecionados(colaboradoresDoEvento(evento.id).map((c) => c.id))
     setEventoSelecionado(null)
-    setFormAberto(true)
+    setFormModalAberto(true)
   }
 
   async function excluirEvento(id: string) {
@@ -538,108 +536,12 @@ export default function AgendaPage() {
     return clientes.find((cliente) => normalizarTexto(cliente.nome) === normalizarTexto(evento.client_name))
   }
 
-  function normalizarTelefoneWhatsApp(telefone: string) {
-    let limpo = telefone.replace(/\D/g, "")
-
-    // Se vier com 0 na frente, remove. Ex.: 031999999999
-    if (limpo.startsWith("0")) limpo = limpo.replace(/^0+/, "")
-
-    // Com DDI Brasil completo: 55 + DDD + número
-    if (limpo.startsWith("55") && limpo.length >= 12) return limpo
-
-    // Sem DDI: DDD + número, normalmente 10 ou 11 dígitos
-    if (!limpo.startsWith("55") && (limpo.length === 10 || limpo.length === 11)) {
-      return `55${limpo}`
-    }
-
-    return ""
-  }
-
-  function montarMensagemConfirmacao(evento: Evento) {
-    const dataFormatada = new Date(evento.event_date + "T00:00:00").toLocaleDateString("pt-BR")
-
-    return (
-      `Olá, ${evento.client_name}! Tudo bem?\n\n` +
-      `Passando para confirmar os dados do evento:\n\n` +
-      `📅 Data: ${dataFormatada}\n` +
-      `🕒 Horário: ${evento.event_time || "A confirmar"}\n` +
-      `🎤 Formato: ${evento.show_format || evento.event_type || "A confirmar"}\n` +
-      `📍 Local: ${evento.location || "A confirmar"}\n` +
-      `💰 Cachê: ${formatarMoeda(evento.fee || 0)}\n` +
-      `💳 Pagamento: ${evento.payment_format || "A confirmar"}\n\n` +
-      `Qualquer ajuste, fico à disposição.\n\n` +
-      `Vih Ribeiro\nEnergia que Contagia 🔥`
-    )
-  }
-
-  function modeloWhatsappSalvo() {
-    if (typeof window === "undefined") return ""
-    return localStorage.getItem("giba_whatsapp_confirmacao_modelo") || ""
-  }
-
-  function aplicarModeloWhatsapp(evento: Evento, modelo?: string) {
-    const dataFormatada = new Date(evento.event_date + "T00:00:00").toLocaleDateString("pt-BR")
-    const modeloBase =
-      modelo ||
-      modeloWhatsappSalvo() ||
-      montarMensagemConfirmacao(evento)
-
-    return modeloBase
-      .replaceAll("{cliente}", evento.client_name || "")
-      .replaceAll("{data}", dataFormatada)
-      .replaceAll("{horario}", evento.event_time || "A confirmar")
-      .replaceAll("{formato}", evento.show_format || evento.event_type || "A confirmar")
-      .replaceAll("{local}", evento.location || "A confirmar")
-      .replaceAll("{cache}", formatarMoeda(evento.fee || 0))
-      .replaceAll("{pagamento}", evento.payment_format || "A confirmar")
-  }
-
   function enviarWhatsAppConfirmacao(evento: Evento) {
-    const cliente = buscarClienteDoEvento(evento)
-    const telefoneBruto = cliente?.celular || cliente?.telefone || ""
-    const telefoneComDdi = normalizarTelefoneWhatsApp(telefoneBruto)
-
     setWhatsappEvento(evento)
-    setWhatsappTelefone(telefoneComDdi || telefoneBruto.replace(/\D/g, ""))
-    setWhatsappMensagem(aplicarModeloWhatsapp(evento))
-    setWhatsappAviso(
-      telefoneComDdi
-        ? ""
-        : "Telefone não encontrado ou incompleto. Digite o WhatsApp com DDD antes de enviar."
-    )
   }
 
   function fecharModalWhatsapp() {
     setWhatsappEvento(null)
-    setWhatsappTelefone("")
-    setWhatsappMensagem("")
-    setWhatsappAviso("")
-  }
-
-  function salvarModeloWhatsapp() {
-    if (typeof window === "undefined") return
-    localStorage.setItem("giba_whatsapp_confirmacao_modelo", whatsappMensagem)
-    setWhatsappAviso("Modelo salvo neste navegador. Você pode usar este texto nos próximos envios.")
-  }
-
-  function confirmarEnvioWhatsapp() {
-    if (!whatsappEvento) return
-
-    const telefoneComDdi = normalizarTelefoneWhatsApp(whatsappTelefone)
-
-    if (!telefoneComDdi) {
-      setWhatsappAviso("Telefone inválido. Digite com DDD, por exemplo: 31999999999.")
-      return
-    }
-
-    if (!whatsappMensagem.trim()) {
-      setWhatsappAviso("A mensagem não pode ficar vazia.")
-      return
-    }
-
-    const mensagem = encodeURIComponent(whatsappMensagem)
-    window.open(`https://wa.me/${telefoneComDdi}?text=${mensagem}`, "_blank")
-    fecharModalWhatsapp()
   }
 
   function gerarContrato(evento: Evento) {
@@ -780,18 +682,12 @@ export default function AgendaPage() {
   const eventosFiltradosLista = useMemo(
     () =>
       eventosDoMes
-        .filter((e) => (filtroStatus === "todos" ? true : statusParaExibicaoEvento(e) === filtroStatus))
-        .filter((e) =>
-          busca.trim() === ""
-            ? true
-            : (e.title + e.client_name + e.location).toLowerCase().includes(busca.toLowerCase()),
-        )
         .sort((a, b) => (a.event_date + a.event_time).localeCompare(b.event_date + b.event_time)),
-    [eventosDoMes, filtroStatus, busca],
+    [eventosDoMes],
   )
 
   return (
-    <ProtectedRoute adminOnly>
+    <ProtectedRoute modulo="agenda">
       <PlanProtectedRoute modulo="agenda">
         <AppLayout>
           {/* ===== HEADER ===== */}
@@ -807,16 +703,6 @@ export default function AgendaPage() {
             </div>
 
             <div style={isMobile ? mobileHeaderActions : { display: "flex", alignItems: "center", gap: 10 }}>
-              <button style={iconButton} aria-label="Buscar">
-                <Search size={18} />
-              </button>
-              <button style={{ ...iconButton, position: "relative" }} aria-label="Notificações">
-                <Bell size={18} />
-                <span style={notifBadge}>3</span>
-              </button>
-              <button style={iconButton} aria-label="Abrir calendário">
-                <CalendarDays size={18} />
-              </button>
               <div style={datePill}>
                 <CalendarDays size={16} />
                 {hoje.getDate()} de {meses[hoje.getMonth()]}, {hoje.getFullYear()}
@@ -856,50 +742,15 @@ export default function AgendaPage() {
               ))}
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <button
-                onClick={() => setMostrarFiltros((m) => !m)}
-                style={{ ...ghostButton, display: "flex", alignItems: "center", gap: 8 }}
-              >
-                <SlidersHorizontal size={16} />
-                Filtros
-              </button>
-              <div style={isMobile ? mobileSearchBox : searchBox}>
-                <Search size={16} color="#94A3B8" />
-                <input
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  placeholder="Buscar eventos..."
-                  style={searchInput}
-                />
-              </div>
-
-            </div>
+            <button
+              type="button"
+              onClick={abrirNovoEvento}
+              style={{ ...primaryButton, justifyContent: "center" }}
+            >
+              <Plus size={17} />
+              Novo Evento
+            </button>
           </div>
-
-          {mostrarFiltros && (
-            <div style={filtrosBar}>
-              <span style={{ color: "#94A3B8", fontSize: 13, fontWeight: 700 }}>Status:</span>
-              {["todos", ...EVENT_STAGE_ORDER].map((s) => {
-                const ativo = filtroStatus === s
-                const cfg = s === "todos" ? null : getStageConfig(s)
-                return (
-                  <button
-                    key={s}
-                    onClick={() => setFiltroStatus(s)}
-                    style={{
-                      ...chipButton,
-                      ...(ativo
-                        ? { background: cfg?.color || "#8B35FF", color: cfg?.text || "#fff", border: "1px solid transparent" }
-                        : {}),
-                    }}
-                  >
-                    {s === "todos" ? "Todos" : cfg?.label}
-                  </button>
-                )
-              })}
-            </div>
-          )}
 
           {/* ===== MÉTRICAS ===== */}
           <div style={isMobile ? mobileMetricsGrid : metricsGrid}>
@@ -1185,18 +1036,28 @@ export default function AgendaPage() {
                 </div>
               </div>
 
-              {/* Novo evento */}
-              <div style={panelCard}>
-                <button onClick={() => setFormAberto((f) => !f)} style={novoEventoHeader}>
-                  <div style={isMobile ? mobileHeaderActions : { display: "flex", alignItems: "center", gap: 10 }}>
-                    <Plus size={18} color="#00AAFF" />
-                    <h2 style={panelTitle}>{editandoId ? "Editar Evento" : "Novo Evento"}</h2>
-                  </div>
-                  {formAberto ? <ChevronUp size={18} color="#94A3B8" /> : <ChevronDown size={18} color="#94A3B8" />}
-                </button>
+              {/* Cadastro de evento em modal */}
+              {formModalAberto && (
+                <div style={modalOverlay} onClick={fecharModalEvento}>
+                  <div
+                    className="giba-agenda-modal-card"
+                    style={isMobile ? mobileModalCard : modalFormCard}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div style={modalFormHeader}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <Plus size={19} color="#00AAFF" />
+                        <div>
+                          <h2 style={panelTitle}>{editandoId ? "Editar Evento" : "Novo Evento"}</h2>
+                          <p style={panelSub}>Preencha as informações do compromisso.</p>
+                        </div>
+                      </div>
+                      <button type="button" onClick={fecharModalEvento} style={miniIconBtn} aria-label="Fechar">
+                        <X size={18} />
+                      </button>
+                    </div>
 
-                {formAberto && (
-                  <form onSubmit={salvarEvento} style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
+                    <form onSubmit={salvarEvento} style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 18 }}>
                     <Campo label="Cliente">
                       <SearchSelect
                         value={clientName}
@@ -1308,18 +1169,17 @@ export default function AgendaPage() {
                     </Campo>
 
                     <div style={isMobile ? mobileFormActions : { display: "flex", gap: 10 }}>
-                      {editandoId && (
-                        <button type="button" onClick={limparFormulario} style={{ ...ghostButton, flex: 1, justifyContent: "center" }}>
-                          Cancelar
-                        </button>
-                      )}
+                      <button type="button" onClick={fecharModalEvento} style={{ ...ghostButton, flex: 1, justifyContent: "center" }}>
+                        Cancelar
+                      </button>
                       <button type="submit" style={{ ...primaryButton, flex: 1, justifyContent: "center" }}>
                         {editandoId ? "Salvar alterações" : "Continuar cadastro"}
                       </button>
                     </div>
-                  </form>
-                )}
-              </div>
+                    </form>
+                  </div>
+                </div>
+              )}
 
               {/* Dica GIBA */}
               <div style={dicaCard}>
@@ -1516,63 +1376,29 @@ export default function AgendaPage() {
             }
           `}</style>
 
-          {whatsappEvento && (
-            <div style={modalOverlay} onClick={fecharModalWhatsapp}>
-              <div style={isMobile ? mobileWhatsappModalCard : whatsappModalCard} onClick={(e) => e.stopPropagation()}>
-                <div style={whatsappModalHeader}>
-                  <div>
-                    <p style={whatsappEyebrow}>CONFIRMAÇÃO VIA WHATSAPP</p>
-                    <h2 style={whatsappTitle}>Enviar mensagem ao contratante</h2>
-                    <p style={whatsappSubtitle}>Revise a mensagem antes de abrir o WhatsApp.</p>
-                  </div>
+          <WhatsAppMessageModal
+            open={Boolean(whatsappEvento)}
+            onOpenChange={(open) => !open && fecharModalWhatsapp()}
+            contextType="evento"
+            messageType="confirmacao_evento"
+            recipient={whatsappEvento ? {
+              id: buscarClienteDoEvento(whatsappEvento)?.id,
+              name: whatsappEvento.client_name,
+              phone: buscarClienteDoEvento(whatsappEvento)?.celular || buscarClienteDoEvento(whatsappEvento)?.telefone || "",
+            } : undefined}
+            event={whatsappEvento ? {
+              id: whatsappEvento.id,
+              name: whatsappEvento.title || whatsappEvento.event_type,
+              date: whatsappEvento.event_date,
+              time: whatsappEvento.event_time,
+              format: whatsappEvento.show_format || whatsappEvento.event_type,
+              location: whatsappEvento.location,
+              fee: whatsappEvento.fee,
+              paymentType: whatsappEvento.payment_format,
+              status: whatsappEvento.status,
+            } : undefined}
+          />
 
-                  <button onClick={fecharModalWhatsapp} style={miniIconBtn} aria-label="Fechar">
-                    <X size={18} />
-                  </button>
-                </div>
-
-                {whatsappAviso && <div style={whatsappWarningBox}>{whatsappAviso}</div>}
-
-                <Campo label="WhatsApp do contratante">
-                  <input
-                    value={whatsappTelefone}
-                    onChange={(e) => setWhatsappTelefone(e.target.value)}
-                    placeholder="Ex: 31999999999"
-                    inputMode="numeric"
-                    style={inputStyle}
-                  />
-                </Campo>
-
-                <Campo label="Mensagem">
-                  <textarea
-                    value={whatsappMensagem}
-                    onChange={(e) => setWhatsappMensagem(e.target.value)}
-                    rows={10}
-                    style={whatsappTextarea}
-                  />
-                </Campo>
-
-                <div style={whatsappHelpBox}>
-                  Para salvar um modelo reutilizável, você pode usar variáveis:
-                  <br />
-                  <strong>{"{cliente}"}</strong>, <strong>{"{data}"}</strong>, <strong>{"{horario}"}</strong>, <strong>{"{formato}"}</strong>, <strong>{"{local}"}</strong>, <strong>{"{cache}"}</strong>, <strong>{"{pagamento}"}</strong>.
-                </div>
-
-                <div style={isMobile ? mobileWhatsappActionsGrid : whatsappActionsGrid}>
-                  <button type="button" onClick={salvarModeloWhatsapp} style={ghostButton}>
-                    Salvar modelo
-                  </button>
-                  <button type="button" onClick={fecharModalWhatsapp} style={ghostButton}>
-                    Cancelar
-                  </button>
-                  <button type="button" onClick={confirmarEnvioWhatsapp} style={{ ...primaryButton, justifyContent: "center" }}>
-                    <MessageCircle size={16} />
-                    Enviar WhatsApp
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </AppLayout>
       </PlanProtectedRoute>
     </ProtectedRoute>
@@ -1830,34 +1656,6 @@ const headerIconBox: React.CSSProperties = {
 const pageTitle: React.CSSProperties = { margin: 0, fontSize: 28, fontWeight: 900, letterSpacing: -0.5 }
 const pageSubtitle: React.CSSProperties = { margin: "4px 0 0", color: "#94A3B8", fontSize: 14 }
 
-const iconButton: React.CSSProperties = {
-  width: 42,
-  height: 42,
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.05)",
-  color: "#CBD5E1",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  cursor: "pointer",
-}
-const notifBadge: React.CSSProperties = {
-  position: "absolute",
-  top: -4,
-  right: -4,
-  minWidth: 18,
-  height: 18,
-  padding: "0 5px",
-  borderRadius: 9,
-  background: "#EF4444",
-  color: "#fff",
-  fontSize: 10,
-  fontWeight: 900,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-}
 const datePill: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -1945,25 +1743,6 @@ const viewToggleActive: React.CSSProperties = {
   color: "#fff",
   boxShadow: "0 8px 20px rgba(139,53,255,0.30)",
 }
-const searchBox: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  padding: "0 14px",
-  height: 42,
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.05)",
-  minWidth: 230,
-}
-const searchInput: React.CSSProperties = {
-  border: "none",
-  background: "transparent",
-  outline: "none",
-  color: "#fff",
-  fontSize: 13,
-  width: "100%",
-}
 const primaryButton: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -1998,28 +1777,6 @@ const locationButton: React.CSSProperties = {
   color: "#7DD3FC",
   border: "1px solid rgba(0,170,255,0.35)",
   background: "rgba(0,170,255,0.10)",
-}
-
-const filtrosBar: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
-  padding: "12px 14px",
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.04)",
-  marginBottom: 18,
-}
-const chipButton: React.CSSProperties = {
-  padding: "6px 14px",
-  borderRadius: 999,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(255,255,255,0.04)",
-  color: "#CBD5E1",
-  fontSize: 12,
-  fontWeight: 700,
-  cursor: "pointer",
 }
 
 const metricsGrid: React.CSSProperties = {
@@ -2302,16 +2059,6 @@ const avatarCircle: React.CSSProperties = {
   justifyContent: "center",
 }
 
-const novoEventoHeader: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  width: "100%",
-  border: "none",
-  background: "transparent",
-  cursor: "pointer",
-  padding: 0,
-}
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "11px 13px",
@@ -2468,6 +2215,18 @@ const modalCard: React.CSSProperties = {
   background: "linear-gradient(145deg, #0B0F1C, #0A1426)",
   boxShadow: "0 40px 90px rgba(0,0,0,0.55)",
   color: "#fff",
+}
+const modalFormCard: React.CSSProperties = {
+  ...modalCard,
+  maxWidth: 760,
+}
+const modalFormHeader: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 16,
+  paddingBottom: 16,
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
 }
 const notasBox: React.CSSProperties = {
   padding: 14,
@@ -2684,89 +2443,6 @@ const acaoWhatsappButton: React.CSSProperties = {
   color: "#86EFAC",
 }
 
-const whatsappModalCard: React.CSSProperties = {
-  width: "100%",
-  maxWidth: 620,
-  maxHeight: "90vh",
-  overflowY: "auto",
-  padding: 24,
-  borderRadius: 24,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "linear-gradient(145deg, #0B0F1C, #0A1426)",
-  boxShadow: "0 40px 90px rgba(0,0,0,0.55)",
-  color: "#fff",
-}
-
-const whatsappModalHeader: React.CSSProperties = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: 16,
-  marginBottom: 18,
-}
-
-const whatsappEyebrow: React.CSSProperties = {
-  margin: "0 0 6px",
-  color: "#38BDF8",
-  fontSize: 11,
-  fontWeight: 900,
-  letterSpacing: 0.8,
-}
-
-const whatsappTitle: React.CSSProperties = {
-  margin: 0,
-  color: "#FFFFFF",
-  fontSize: 22,
-  fontWeight: 900,
-}
-
-const whatsappSubtitle: React.CSSProperties = {
-  margin: "6px 0 0",
-  color: "#94A3B8",
-  fontSize: 13,
-  lineHeight: 1.5,
-}
-
-const whatsappWarningBox: React.CSSProperties = {
-  padding: "12px 14px",
-  borderRadius: 14,
-  border: "1px solid rgba(245,158,11,0.28)",
-  background: "rgba(245,158,11,0.10)",
-  color: "#FCD34D",
-  fontSize: 13,
-  fontWeight: 700,
-  lineHeight: 1.45,
-  marginBottom: 14,
-}
-
-const whatsappTextarea: React.CSSProperties = {
-  ...inputStyle,
-  minHeight: 230,
-  resize: "vertical",
-  lineHeight: 1.5,
-  fontFamily: "inherit",
-}
-
-const whatsappHelpBox: React.CSSProperties = {
-  marginTop: 12,
-  padding: 12,
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.08)",
-  background: "rgba(255,255,255,0.035)",
-  color: "#94A3B8",
-  fontSize: 12,
-  lineHeight: 1.6,
-}
-
-const whatsappActionsGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr 1.2fr",
-  gap: 10,
-  marginTop: 18,
-}
-
-
-
 /* ===================== MOBILE / TABLET GIBA ===================== */
 
 const mobileHeaderRow: React.CSSProperties = {
@@ -2788,13 +2464,6 @@ const mobileToolbarRow: React.CSSProperties = {
   flexDirection: "column",
   alignItems: "stretch",
   gap: 12,
-}
-
-const mobileSearchBox: React.CSSProperties = {
-  ...searchBox,
-  width: "100%",
-  minWidth: 0,
-  boxSizing: "border-box",
 }
 
 const mobileMetricsGrid: React.CSSProperties = {
@@ -2882,21 +2551,6 @@ const mobileModalInfoGrid: React.CSSProperties = {
 }
 
 const mobileModalActionsGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: 10,
-  marginTop: 18,
-}
-
-const mobileWhatsappModalCard: React.CSSProperties = {
-  ...whatsappModalCard,
-  maxWidth: "100%",
-  maxHeight: "86vh",
-  padding: 18,
-  borderRadius: 20,
-}
-
-const mobileWhatsappActionsGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr",
   gap: 10,

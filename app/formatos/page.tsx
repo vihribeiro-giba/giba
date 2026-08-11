@@ -5,6 +5,7 @@ import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import { useEffect, useRef, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
+import { getAccountAuthUser } from "../../lib/access-session";
 import {
   ClipboardList,
   FileText,
@@ -50,7 +51,7 @@ export default function FormatosPage() {
   }
 
   async function obterUsuarioLogado() {
-    const { data, error } = await supabase.auth.getUser();
+    const { data, error } = await getAccountAuthUser();
 
     if (error || !data.user) {
       alert("Usuário não autenticado.");
@@ -197,7 +198,7 @@ export default function FormatosPage() {
   }, []);
 
   return (
-    <ProtectedRoute adminOnly>
+    <ProtectedRoute modulo="formatos">
       <PlanProtectedRoute modulo="formatos">
         <AppLayout>
           <div className="formatos-page">
@@ -205,7 +206,7 @@ export default function FormatosPage() {
             <header className="page-header">
               <div className="header-left">
                 <div className="header-icon" aria-hidden="true">
-                  <Mic2 size={26} />
+                  <Mic2 size={24} />
                 </div>
                 <div>
                   <h1>Formatos de Show</h1>
@@ -445,9 +446,9 @@ export default function FormatosPage() {
             .header-icon {
               display: grid;
               place-items: center;
-              width: 62px;
-              height: 62px;
-              border-radius: 20px;
+              width: 48px;
+              height: 48px;
+              border-radius: 16px;
               color: #ffffff;
               background: linear-gradient(135deg, #8b35ff, #00aaff);
               box-shadow: 0 18px 38px rgba(139, 53, 255, 0.35);
@@ -456,7 +457,7 @@ export default function FormatosPage() {
 
             .page-header h1 {
               color: #ffffff;
-              font-size: 32px;
+              font-size: 28px;
               line-height: 1.1;
               font-weight: 900;
               letter-spacing: -0.5px;
@@ -871,7 +872,7 @@ export default function FormatosPage() {
               }
 
               .page-header h1 {
-                font-size: 30px;
+                font-size: 28px;
               }
 
               .panel {

@@ -33,6 +33,7 @@ import type {
 } from "../../components/relatorios/types";
 import { getEventStatus } from "../../lib/eventStatus";
 import { supabase } from "../../lib/supabase";
+import { getAccountAuthUser } from "../../lib/access-session";
 
 const filtrosPadrao: FiltrosRelatorioState = {
   periodo: "30dias",
@@ -59,7 +60,7 @@ export default function RelatoriosPage() {
   }, []);
 
   async function obterUsuarioLogado() {
-    const { data, error } = await supabase.auth.getUser();
+    const { data, error } = await getAccountAuthUser();
 
     if (error || !data.user) {
       alert("Usuário não autenticado.");
@@ -297,18 +298,18 @@ export default function RelatoriosPage() {
   }
 
   return (
-    <ProtectedRoute adminOnly>
+    <ProtectedRoute modulo="relatorios">
       <PlanProtectedRoute modulo="relatorios">
         <AppLayout>
           <div className="min-h-screen text-white">
             <header className="mb-7 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex items-center gap-5">
-                <div className="grid h-20 w-20 shrink-0 place-items-center rounded-[24px] bg-gradient-to-br from-violet-600 to-sky-500 shadow-[0_20px_45px_rgba(59,130,246,0.22)]">
-                  <BarChart3 size={36} />
+              <div className="flex items-center gap-4">
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-sky-500 shadow-[0_14px_30px_rgba(139,53,255,0.30)]">
+                  <BarChart3 size={24} />
                 </div>
                 <div>
-                  <h1 className="text-3xl font-black tracking-[-0.02em] text-white md:text-4xl">Relatórios</h1>
-                  <p className="mt-2 max-w-3xl text-base leading-7 text-slate-300 md:text-lg">
+                  <h1 className="text-[28px] font-black tracking-[-0.5px] text-white">Relatórios</h1>
+                  <p className="mt-1 max-w-3xl text-sm text-slate-400">
                     Acompanhe indicadores financeiros, eventos, clientes e desempenho da sua carreira.
                   </p>
                 </div>

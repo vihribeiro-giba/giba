@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import AppLayout from "../../../components/AppLayout";
+import GibaSelect from "../../../components/GibaSelect";
 import ProtectedRoute from "../../../components/ProtectedRoute";
 import { supabase } from "../../../lib/supabase";
+import { getAccountAuthUser } from "../../../lib/access-session";
 
 type Municipio = {
   id: string;
@@ -109,7 +111,7 @@ export default function CrmDetalhesPage() {
   }, [municipioId]);
 
   async function obterUsuarioLogado() {
-    const { data, error } = await supabase.auth.getUser();
+    const { data, error } = await getAccountAuthUser();
 
     if (error || !data.user) {
       window.location.href = "/login";
@@ -343,7 +345,7 @@ export default function CrmDetalhesPage() {
   }
 
   return (
-    <ProtectedRoute adminOnly>
+    <ProtectedRoute modulo="crm">
       <AppLayout>
         <div style={{ color: "#fff" }}>
           <div style={headerStyle}>
@@ -385,18 +387,13 @@ export default function CrmDetalhesPage() {
                 <div style={cardStyle}>
                   <p style={cardLabelStyle}>Status</p>
 
-                  <select
+                  <GibaSelect
                     value={oportunidade?.status || "novo_lead"}
-                    onChange={(e) => alterarStatus(e.target.value)}
-                    style={inputStyle}
+                    onChange={(value) => alterarStatus(value)}
+                    options={STATUS_OPTIONS}
+                    triggerStyle={inputStyle}
                     disabled={!oportunidade?.id}
-                  >
-                    {STATUS_OPTIONS.map((status) => (
-                      <option key={status.value} value={status.value}>
-                        {status.label}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
 
                 <div style={cardStyle}>
@@ -444,17 +441,12 @@ export default function CrmDetalhesPage() {
 
                   <form onSubmit={salvarInteracao}>
                     <label style={labelStyle}>Tipo</label>
-                    <select
+                    <GibaSelect
                       value={tipoInteracao}
-                      onChange={(e) => setTipoInteracao(e.target.value)}
-                      style={inputStyle}
-                    >
-                      {TIPOS_INTERACAO.map((tipo) => (
-                        <option key={tipo} value={tipo}>
-                          {tipo}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setTipoInteracao}
+                      options={TIPOS_INTERACAO.map((tipo) => ({ value: tipo, label: tipo }))}
+                      triggerStyle={inputStyle}
+                    />
 
                     <label style={{ ...labelStyle, marginTop: "14px" }}>
                       Descrição

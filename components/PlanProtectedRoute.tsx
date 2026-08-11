@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { getAccessModule, isAccessModuleKey } from "../lib/access-modules";
+import { resolveAccessContext } from "../lib/access-session";
 
 type PlanProtectedRouteProps = {
   children: React.ReactNode;
@@ -43,19 +45,35 @@ export default function PlanProtectedRoute({
     setCarregando(true);
     setMensagem("");
 
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !authData.user) {
+    const context = await resolveAccessContext();
+    if (!context) {
       window.location.href = "/login";
       return;
     }
-
-    const user = authData.user;
+    const accessKey = isAccessModuleKey(modulo) ? modulo : modulo === "calculadora-show" ? "calculadora_show" : modulo === "contratos-modelo" ? "contratos" : null;
+    if (context.actor === "collaborator") {
+      if (!accessKey || !context.allowedModules.includes(accessKey)) {
+        setMensagem("Você não possui permissão para acessar este módulo.");
+        setLiberado(false);
+        setCarregando(false);
+        return;
+      }
+      const { data: hasAccess, error } = await supabase.rpc("giba_has_module_access", { required_module: accessKey });
+      if (error || !hasAccess) {
+        setMensagem(error ? "Não foi possível validar o plano da conta." : "Este módulo não está disponível no plano atual.");
+        setLiberado(false);
+        setCarregando(false);
+        return;
+      }
+      setLiberado(true);
+      setCarregando(false);
+      return;
+    }
 
     const { data: assinatura, error: erroAssinatura } = await supabase
       .from("subscriptions")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", context.accountUserId)
       .eq("status", "ativo")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -107,7 +125,7 @@ export default function PlanProtectedRoute({
       .from("plan_features")
       .select("*")
       .eq("plano", plano)
-      .eq("modulo", modulo)
+      .eq("modulo", accessKey ? getAccessModule(accessKey)?.planFeature || modulo : modulo)
       .eq("ativo", true)
       .maybeSingle();
 

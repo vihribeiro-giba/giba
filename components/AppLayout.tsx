@@ -4,6 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
+import NotificationBell from "./notificacoes/NotificationBell";
+import { ACCESS_MODULES, type AccessModuleKey } from "../lib/access-modules";
+import { clearCollaboratorSession, resolveAccessContext, type CollaboratorAccessSession } from "../lib/access-session";
 
 import {
   LayoutDashboard,
@@ -20,7 +23,9 @@ import {
   Menu,
   X,
   FileText,
+  FilePenLine,
   Building2,
+  KeyRound,
 } from "lucide-react";
 
 type AssinaturaResumo = {
@@ -42,6 +47,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [isMobile, setIsMobile] = useState(false);
   const [assinatura, setAssinatura] = useState<AssinaturaResumo | null>(null);
   const [empresa, setEmpresa] = useState<EmpresaResumo | null>(null);
+  const [collaborator, setCollaborator] = useState<CollaboratorAccessSession | null>(null);
+  const [visibleModules, setVisibleModules] = useState<AccessModuleKey[]>([]);
 
   useEffect(() => {
     const verificarTela = () => {
@@ -62,14 +69,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function carregarAssinaturaResumo() {
-    const { data: authData } = await supabase.auth.getUser();
-
-    if (!authData.user) return;
+    const context = await resolveAccessContext();
+    if (!context) return;
+    if (context.actor === "collaborator") {
+      setCollaborator(context.collaborator);
+      const checks = await Promise.all(context.allowedModules.map(async (key) => {
+        const { data } = await supabase.rpc("giba_has_module_access", { required_module: key });
+        return data ? key : null;
+      }));
+      setVisibleModules(checks.filter(Boolean) as AccessModuleKey[]);
+      return;
+    }
+    setVisibleModules(["assinatura"]);
 
     const { data, error } = await supabase
       .from("subscriptions")
       .select("plano,status,data_fim")
-      .eq("user_id", authData.user.id)
+      .eq("user_id", context.accountUserId)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -81,18 +97,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
     if (data) {
       setAssinatura(data as AssinaturaResumo);
+      const plan = String(data.plano || "teste");
+      if (plan === "owner") {
+        setVisibleModules(ACCESS_MODULES.filter((item) => item.key !== "agenda_colaborador").map((item) => item.key));
+      } else {
+        const { data: features } = await supabase.from("plan_features").select("modulo").eq("plano", plan).eq("ativo", true);
+        const enabled = new Set((features || []).map((item) => String(item.modulo)));
+        setVisibleModules(ACCESS_MODULES.filter((item) => item.key !== "agenda_colaborador" && (!item.planFeature || enabled.has(item.planFeature))).map((item) => item.key));
+      }
     }
   }
 
   async function carregarEmpresaResumo() {
-    const { data: authData } = await supabase.auth.getUser();
-
-    if (!authData.user) return;
+    const context = await resolveAccessContext();
+    if (!context || context.actor === "collaborator") return;
 
     const { data, error } = await supabase
       .from("company_settings")
       .select("nome_artistico,razao_social,responsavel")
-      .eq("user_id", authData.user.id)
+      .eq("user_id", context.accountUserId)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -109,6 +132,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   function nomeUsuarioSidebar() {
     return (
+      collaborator?.nome?.trim() ||
       empresa?.nome_artistico?.trim() ||
       empresa?.razao_social?.trim() ||
       empresa?.responsavel?.trim() ||
@@ -122,6 +146,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   function nomePlano(plano?: string) {
+    if (collaborator) return collaborator.funcao || "Colaborador";
     if (!plano) return "Sem plano";
 
     if (plano === "teste") return "Teste";
@@ -133,23 +158,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return plano;
   }
 
-  const menu = useMemo(
-    () => [
-      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { label: "Agenda", href: "/agenda", icon: CalendarDays },
-      { label: "Clientes", href: "/clientes", icon: Users },
-      { label: "Calculadora", href: "/calculadora-show", icon: Calculator },
-      { label: "Financeiro", href: "/financeiro", icon: DollarSign },
-      { label: "Relatórios", href: "/relatorios", icon: BarChart3 },
-      { label: "CRM", href: "/crm", icon: Building2 },
-      { label: "Formatos", href: "/formatos", icon: Music },
-      { label: "Colaboradores", href: "/colaboradores", icon: UserCog },
-      { label: "Contratos", href: "/contratos", icon: FileText },
-      { label: "Configurações", href: "/configuracoes", icon: Settings },
-      { label: "Assinatura", href: "/assinatura", icon: CreditCard },
-    ],
-    []
-  );
+  const menu = useMemo(() => {
+    const icons: Record<AccessModuleKey, typeof LayoutDashboard> = {
+      dashboard: LayoutDashboard,
+      agenda: CalendarDays,
+      agenda_colaborador: CalendarDays,
+      clientes: Users,
+      crm: Building2,
+      propostas: FilePenLine,
+      contratos: FileText,
+      formatos: Music,
+      calculadora_show: Calculator,
+      financeiro: DollarSign,
+      relatorios: BarChart3,
+      colaboradores: UserCog,
+      configuracoes: Settings,
+      assinatura: CreditCard,
+    };
+    return ACCESS_MODULES
+      .filter((item) => visibleModules.includes(item.key))
+      .map((item) => ({ label: item.label, href: item.href, icon: icons[item.key] }));
+  }, [visibleModules]);
 
   return (
     <div style={appShellStyle}>
@@ -240,10 +269,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
 
               <p style={renewTextStyle}>
-                Vencimento: {formatarData(assinatura?.data_fim)}
+                {collaborator ? "Acesso definido pelo titular" : `Vencimento: ${formatarData(assinatura?.data_fim)}`}
               </p>
 
-              <Link href="/login" style={logoutButtonStyle}>
+              {collaborator && (
+                <Link href="/alterar-senha" style={passwordButtonStyle}>
+                  <KeyRound size={15} />
+                  Alterar senha
+                </Link>
+              )}
+
+              <Link href="/login" onClick={() => { clearCollaboratorSession(); void supabase.auth.signOut(); }} style={logoutButtonStyle}>
                 <LogOut size={16} />
                 Sair do sistema
               </Link>
@@ -252,11 +288,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
+      <div style={notificationDockStyle}>
+        <NotificationBell />
+      </div>
+
       <main
         style={{
           ...mainStyle,
           marginLeft: isMobile ? "0" : "280px",
-          padding: isMobile ? "88px 16px 24px" : "30px",
+          padding: isMobile ? "88px 16px 24px" : "30px 88px 30px 30px",
           overflowX: "hidden",
           maxWidth: isMobile ? "100vw" : "none",
         }}
@@ -267,6 +307,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+const appBackground =
+  "radial-gradient(circle at 15% 0%, rgba(139,53,255,0.18), transparent 32%), radial-gradient(circle at 85% 10%, rgba(0,170,255,0.14), transparent 34%), linear-gradient(135deg, #050510, #070B16 45%, #00172F)";
+
 const appShellStyle: React.CSSProperties = {
   minHeight: "100vh",
   display: "flex",
@@ -276,8 +319,7 @@ const appShellStyle: React.CSSProperties = {
   overflow: "hidden",
   width: "100%",
   maxWidth: "100vw",
-  background:
-    "radial-gradient(circle at 15% 0%, rgba(139,53,255,0.18), transparent 32%), radial-gradient(circle at 85% 10%, rgba(0,170,255,0.14), transparent 34%), linear-gradient(135deg, #050510, #070B16 45%, #00172F)",
+  background: appBackground,
 };
 
 const mobileMenuButtonStyle: React.CSSProperties = {
@@ -513,4 +555,29 @@ const mainStyle: React.CSSProperties = {
   overflowX: "hidden",
   width: "100%",
   boxSizing: "border-box",
+  background: appBackground,
+  backgroundAttachment: "local",
+};
+
+const passwordButtonStyle: React.CSSProperties = {
+  minHeight: 38,
+  marginTop: 10,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+  borderRadius: 12,
+  border: "1px solid rgba(56,189,248,0.22)",
+  background: "rgba(56,189,248,0.09)",
+  color: "#BAE6FD",
+  fontSize: 13,
+  fontWeight: 800,
+  textDecoration: "none",
+};
+
+const notificationDockStyle: React.CSSProperties = {
+  position: "fixed",
+  top: "calc(18px + env(safe-area-inset-top, 0px))",
+  right: "max(16px, env(safe-area-inset-right, 0px))",
+  zIndex: 920,
 };

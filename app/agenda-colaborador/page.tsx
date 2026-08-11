@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AppLayout from "../../components/AppLayout";
+import ProtectedRoute from "../../components/ProtectedRoute";
 import { supabase } from "../../lib/supabase";
 import { getEventStatus } from "../../lib/eventStatus";
 import {
@@ -552,6 +553,7 @@ export default function AgendaColaboradorPage() {
      RENDER
      ============================================================ */
   return (
+    <ProtectedRoute modulo="agenda_colaborador">
     <AppLayout>
       <style>{`
         .agc-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
@@ -891,6 +893,7 @@ export default function AgendaColaboradorPage() {
         </div>
       )}
     </AppLayout>
+    </ProtectedRoute>
   );
 }
 
