@@ -14,7 +14,6 @@ import {
   ArrowUpRight,
   Wallet,
   DollarSign,
-  User,
   ChevronDown,
   TrendingUp,
   Search,
@@ -73,6 +72,7 @@ type DespesaRecorrente = {
   payment_method: string | null
   periodicity: string
   is_paid: boolean
+  last_paid_at?: string | null
 }
 
 type Recebimento = {
@@ -244,6 +244,7 @@ export default function FinanceiroPage() {
   const [recebimentos, setRecebimentos] = useState<Recebimento[]>([])
   const [carregando, setCarregando] = useState(true)
   const [salvando, setSalvando] = useState(false)
+  const [recorrenteAtualizandoId, setRecorrenteAtualizandoId] = useState<string | null>(null)
   const [movimentacaoSelecionada, setMovimentacaoSelecionada] = useState<Movimentacao | null>(null)
 
   const [mes, setMes] = useState(hoje.getMonth())
@@ -252,6 +253,7 @@ export default function FinanceiroPage() {
 
   // Formulário de nova movimentação
   const [tipo, setTipo] = useState<"Entrada" | "Saída" | "Recorrente">("Entrada")
+  const [modalMovimentacaoAberto, setModalMovimentacaoAberto] = useState(false)
   const [categoria, setCategoria] = useState("Cachê")
   const [eventoId, setEventoId] = useState("")
   const [colaboradorId, setColaboradorId] = useState("")
@@ -488,6 +490,37 @@ export default function FinanceiroPage() {
 
   /* ------------------------------- Ações --------------------------------- */
 
+  function limparFormularioMovimentacao(tipoSelecionado: "Entrada" | "Saída" | "Recorrente") {
+    setTipo(tipoSelecionado)
+    setCategoria(
+      tipoSelecionado === "Entrada"
+        ? CATEGORIAS_ENTRADA[0]
+        : tipoSelecionado === "Saída"
+          ? CATEGORIAS_SAIDA[0]
+          : CATEGORIAS_RECORRENTES[0],
+    )
+    setEventoId("")
+    setColaboradorId("")
+    setDescricao("")
+    setClienteNome("")
+    setValor("")
+    setFormaPagamento("PIX")
+    setDataPagamento(new Date().toISOString().slice(0, 10))
+    setNotas("")
+    setDiaVencimento(String(new Date().getDate()))
+    setPeriodicidade("Mensal")
+  }
+
+  function abrirModalMovimentacao(tipoSelecionado: "Entrada" | "Saída" | "Recorrente") {
+    limparFormularioMovimentacao(tipoSelecionado)
+    setModalMovimentacaoAberto(true)
+  }
+
+  function fecharModalMovimentacao() {
+    if (salvando) return
+    setModalMovimentacaoAberto(false)
+  }
+
   async function salvarMovimentacao() {
     const valorNum = parseValorBR(valor)
 
@@ -540,6 +573,7 @@ export default function FinanceiroPage() {
       setEventoId("")
       setColaboradorId("")
       await carregarDados()
+      setModalMovimentacaoAberto(false)
       setSalvando(false)
       return
     }
@@ -580,6 +614,7 @@ export default function FinanceiroPage() {
     setEventoId("")
     setColaboradorId("")
     await carregarDados()
+    setModalMovimentacaoAberto(false)
     setSalvando(false)
   }
 
@@ -595,14 +630,73 @@ export default function FinanceiroPage() {
   }
 
   async function alternarPagamentoRecorrente(item: DespesaRecorrente) {
-    const novo = !item.is_paid
-    setRecorrentes((prev) =>
-      prev.map((r) => (r.id === item.id ? { ...r, is_paid: novo } : r)),
-    )
-    await supabase
-      .from("recurring_expenses")
-      .update({ is_paid: novo, last_paid_at: novo ? new Date().toISOString().slice(0, 10) : null })
-      .eq("id", item.id)
+    if (recorrenteAtualizandoId) return
+
+    const novoStatus = !item.is_paid
+    const hojePagamento = new Date().toISOString().slice(0, 10)
+    const referenciaAtual = hojePagamento.slice(0, 7)
+    setRecorrenteAtualizandoId(item.id)
+
+    try {
+      const user = await obterUsuario()
+      if (!user) throw new Error("Você precisa estar logado para atualizar a despesa.")
+
+      if (!novoStatus) {
+        const { error } = await supabase
+          .from("recurring_expenses")
+          .update({ is_paid: false })
+          .eq("id", item.id)
+          .eq("user_id", user.id)
+
+        if (error) throw error
+        setRecorrentes((prev) => prev.map((recorrente) => recorrente.id === item.id ? { ...recorrente, is_paid: false } : recorrente))
+        return
+      }
+
+      const jaLancadaNesteMes = item.last_paid_at?.slice(0, 7) === referenciaAtual
+      let movimentacaoCriadaId: string | null = null
+
+      if (!jaLancadaNesteMes) {
+        const { data, error } = await supabase
+          .from("finance")
+          .insert({
+            user_id: user.id,
+            type: "Saída",
+            amount: Number(item.amount || 0),
+            description: item.name,
+            category: item.category || "Outros",
+            payment_method: item.payment_method || null,
+            event_id: null,
+            client_name: null,
+            status: "Pago",
+            payment_date: hojePagamento,
+            notes: "Gerada automaticamente a partir de uma despesa recorrente.",
+          })
+          .select("id")
+          .single()
+
+        if (error || !data) throw error || new Error("Não foi possível criar a movimentação.")
+        movimentacaoCriadaId = data.id
+      }
+
+      const { error: erroRecorrente } = await supabase
+        .from("recurring_expenses")
+        .update({ is_paid: true, last_paid_at: hojePagamento })
+        .eq("id", item.id)
+        .eq("user_id", user.id)
+
+      if (erroRecorrente) {
+        if (movimentacaoCriadaId) await supabase.from("finance").delete().eq("id", movimentacaoCriadaId).eq("user_id", user.id)
+        throw erroRecorrente
+      }
+
+      await carregarDados()
+    } catch (error) {
+      console.error("Erro ao atualizar despesa recorrente:", error)
+      alert(error instanceof Error ? error.message : "Não foi possível atualizar a despesa recorrente.")
+    } finally {
+      setRecorrenteAtualizandoId(null)
+    }
   }
 
   async function excluirDespesaRecorrente(id: string) {
@@ -744,10 +838,25 @@ export default function FinanceiroPage() {
               </div>
             </section>
 
-            {/* Movimentações + Nova movimentação */}
-            <section style={isMobile ? mobileOneColStyle : twoColStyle}>
-              {/* Lista de movimentações */}
-              <div style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), ...(isMobile ? mobileMovimentacoesCardStyle : movimentacoesCardStyle), minWidth: 0 }}>
+            {/* Ações de movimentação */}
+            <section style={isMobile ? mobileMovementActionsStyle : movementActionsStyle}>
+              <button type="button" onClick={() => abrirModalMovimentacao("Entrada")} style={{ ...movementActionButtonStyle, ...movementIncomeButtonStyle }}>
+                <span style={{ ...movementActionIconStyle, background: "rgba(55,232,132,0.14)", color: "#37E884" }}><ArrowDownLeft size={21} /></span>
+                <span style={movementActionTextStyle}><strong style={movementActionTitleStyle}>Entrada</strong><small style={movementActionSubtitleStyle}>Registrar um recebimento</small></span>
+              </button>
+              <button type="button" onClick={() => abrirModalMovimentacao("Saída")} style={{ ...movementActionButtonStyle, ...movementExpenseButtonStyle }}>
+                <span style={{ ...movementActionIconStyle, background: "rgba(255,91,138,0.14)", color: "#FF5B8A" }}><ArrowUpRight size={21} /></span>
+                <span style={movementActionTextStyle}><strong style={movementActionTitleStyle}>Despesa</strong><small style={movementActionSubtitleStyle}>Adicionar um novo custo</small></span>
+              </button>
+              <button type="button" onClick={() => abrirModalMovimentacao("Recorrente")} style={{ ...movementActionButtonStyle, ...movementRecurringButtonStyle }}>
+                <span style={{ ...movementActionIconStyle, background: "rgba(245,158,11,0.14)", color: "#F59E0B" }}><RefreshCcw size={20} /></span>
+                <span style={movementActionTextStyle}><strong style={movementActionTitleStyle}>Recorrente</strong><small style={movementActionSubtitleStyle}>Criar uma despesa periódica</small></span>
+              </button>
+            </section>
+
+            {/* Lista de movimentações */}
+            <section style={movimentacoesSectionStyle}>
+              <div style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), ...(isMobile ? mobileMovimentacoesCardStyle : movimentacoesCardStyle), width: "100%", minWidth: 0 }}>
                 <div style={cardHeaderStyle}>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <h2 style={cardTitleStyle}>Movimentações</h2>
@@ -904,199 +1013,6 @@ export default function FinanceiroPage() {
                   )}
                 </div>
               </div>
-
-              {/* Nova movimentação */}
-              <div style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), ...(isMobile ? mobileNovaMovimentacaoCardStyle : novaMovimentacaoCardStyle), minWidth: 0 }}>
-                <div style={cardHeaderStyle}>
-                  <h2 style={cardTitleStyle}>Nova Movimentação</h2>
-                  <div style={toggleStyle}>
-                    <button
-                      onClick={() => {
-                        setTipo("Entrada")
-                        setCategoria(CATEGORIAS_ENTRADA[0])
-                      }}
-                      style={{
-                        ...toggleBtnStyle,
-                        ...(tipo === "Entrada" ? toggleActiveEntradaStyle : {}),
-                      }}
-                    >
-                      Entrada
-                    </button>
-                    <button
-                      onClick={() => {
-                        setTipo("Saída")
-                        setCategoria(CATEGORIAS_SAIDA[0])
-                      }}
-                      style={{
-                        ...toggleBtnStyle,
-                        ...(tipo === "Saída" ? toggleActiveSaidaStyle : {}),
-                      }}
-                    >
-                      Saída
-                    </button>
-                    <button
-                      onClick={() => {
-                        setTipo("Recorrente")
-                        setCategoria(CATEGORIAS_RECORRENTES[0])
-                      }}
-                      style={{
-                        ...toggleBtnStyle,
-                        ...(tipo === "Recorrente" ? toggleActiveRecorrenteStyle : {}),
-                      }}
-                    >
-                      Recorrente
-                    </button>
-                  </div>
-                </div>
-
-                <div style={isMobile ? mobileFormGridStyle : formGridStyle}>
-                  <Campo rotulo="Categoria">
-                    <DropdownSearch
-                      value={categoria}
-                      placeholder="Selecione a categoria"
-                      options={categoriasAtuais.map((c) => ({ value: c, label: c }))}
-                      onChange={setCategoria}
-                    />
-                  </Campo>
-
-                  {tipo !== "Recorrente" && (
-                    <Campo rotulo="Evento">
-                      <DropdownSearch
-                        value={eventoId}
-                        placeholder="Busque por data, evento ou cliente"
-                        options={eventos.map((ev) => ({ value: ev.id, label: labelEvento(ev) }))}
-                        initialScrollValue={eventoMaisProximoId(eventos)}
-                        onChange={(id) => {
-                          setEventoId(id)
-                          const ev = eventos.find((x) => x.id === id)
-
-                          if (tipo === "Entrada" && ev?.client_name) {
-                            setClienteNome(ev.client_name)
-                          }
-
-                          if (tipo === "Entrada" && ev?.fee) {
-                            setValor(String(ev.fee))
-                          }
-
-                          if (ev?.title) {
-                            setDescricao(
-                              tipo === "Entrada"
-                                ? `Pagamento referente ao evento: ${primeirosNomes(ev.client_name)} - ${formatarData(ev.event_date)}`
-                                : `Despesa referente ao evento: ${primeirosNomes(ev.client_name)} - ${formatarData(ev.event_date)}`,
-                            )
-                          }
-                        }}
-                      />
-                    </Campo>
-                  )}
-
-                  {tipo === "Saída" && (
-                    <Campo rotulo="Colaborador">
-                      <DropdownSearch
-                        value={colaboradorId}
-                        placeholder="Busque ou selecione o colaborador"
-                        options={colaboradores.map((c) => ({
-                          value: c.id,
-                          label: `${nomeColaborador(c)}${funcaoColaborador(c) ? ` — ${funcaoColaborador(c)}` : ""}`,
-                        }))}
-                        onChange={(id) => {
-                          setColaboradorId(id)
-                          const colaborador = colaboradores.find((c) => c.id === id)
-                          if (colaborador) setClienteNome(nomeColaborador(colaborador))
-                        }}
-                      />
-                    </Campo>
-                  )}
-
-                  <Campo rotulo={tipo === "Recorrente" ? "Nome da despesa" : "Descrição"}>
-                    <input
-                      value={descricao}
-                      onChange={(e) => setDescricao(e.target.value)}
-                      placeholder={tipo === "Recorrente" ? "Ex.: INSS, contador, internet" : "Ex.: Pagamento do show"}
-                      style={inputStyle}
-                    />
-                  </Campo>
-
-                  {tipo !== "Recorrente" && (
-                    <Campo rotulo={tipo === "Saída" ? "Colaborador / Favorecido" : "Cliente"}>
-                      <input
-                        value={clienteNome}
-                        onChange={(e) => setClienteNome(e.target.value)}
-                        placeholder={tipo === "Saída" ? "Nome do favorecido" : "Nome do cliente"}
-                        style={inputStyle}
-                      />
-                    </Campo>
-                  )}
-
-                  <Campo rotulo="Valor (R$)">
-                    <input
-                      value={valor}
-                      onChange={(e) => setValor(e.target.value)}
-                      placeholder="0,00"
-                      inputMode="decimal"
-                      style={inputStyle}
-                    />
-                  </Campo>
-
-                  <Campo rotulo="Forma de Pagamento">
-                    <DropdownSearch
-                      value={formaPagamento}
-                      placeholder="Forma de pagamento"
-                      options={FORMAS_PAGAMENTO.map((f) => ({ value: f, label: f }))}
-                      onChange={setFormaPagamento}
-                    />
-                  </Campo>
-
-                  {tipo === "Recorrente" ? (
-                    <>
-                      <Campo rotulo="Dia do vencimento">
-                        <input
-                          type="number"
-                          min="1"
-                          max="31"
-                          value={diaVencimento}
-                          onChange={(e) => setDiaVencimento(e.target.value)}
-                          style={inputStyle}
-                        />
-                      </Campo>
-                      <Campo rotulo="Periodicidade">
-                        <DropdownSearch
-                          value={periodicidade}
-                          placeholder="Periodicidade"
-                          options={PERIODICIDADES.map((p) => ({ value: p, label: p }))}
-                          onChange={setPeriodicidade}
-                        />
-                      </Campo>
-                    </>
-                  ) : (
-                    <Campo rotulo="Data do Pagamento">
-                      <input
-                        type="date"
-                        value={dataPagamento}
-                        onChange={(e) => setDataPagamento(e.target.value)}
-                        style={inputStyle}
-                      />
-                    </Campo>
-                  )}
-
-                  <Campo rotulo="Notas (opcional)">
-                    <input
-                      value={notas}
-                      onChange={(e) => setNotas(e.target.value)}
-                      placeholder="Observações adicionais..."
-                      style={inputStyle}
-                    />
-                  </Campo>
-                </div>
-                <button
-                  onClick={salvarMovimentacao}
-                  disabled={salvando}
-                  style={{ ...saveBtnStyle, opacity: salvando ? 0.7 : 1 }}
-                >
-                  <Save size={17} />
-                  {salvando ? "Salvando..." : tipo === "Recorrente" ? "Salvar Despesa Recorrente" : "Salvar Movimentação"}
-                </button>
-              </div>
             </section>
 
             {/* Gráficos */}
@@ -1198,8 +1114,11 @@ export default function FinanceiroPage() {
                       <div style={isMobile ? mobileRecActionsStyle : recActionsStyle}>
                         <button
                           onClick={() => alternarPagamentoRecorrente(r)}
+                          disabled={recorrenteAtualizandoId === r.id}
                           style={{
                             ...recStatusBtnStyle,
+                            opacity: recorrenteAtualizandoId === r.id ? 0.65 : 1,
+                            cursor: recorrenteAtualizandoId === r.id ? "wait" : "pointer",
                             color: r.is_paid ? "#37E884" : "#FFB454",
                             background: r.is_paid
                               ? "rgba(55,232,132,0.12)"
@@ -1208,7 +1127,7 @@ export default function FinanceiroPage() {
                           }}
                         >
                           <CheckCircle2 size={14} />
-                          {r.is_paid ? "Pago" : "Em aberto"}
+                          {recorrenteAtualizandoId === r.id ? "Atualizando..." : r.is_paid ? "Pago" : "Em aberto"}
                         </button>
 
                         <button
@@ -1225,6 +1144,170 @@ export default function FinanceiroPage() {
               )}
             </section>
           </div>
+
+          {modalMovimentacaoAberto && (
+            <div style={{ ...modalOverlayStyle, zIndex: 90 }} onClick={fecharModalMovimentacao}>
+              <div style={isMobile ? mobileMovementModalCardStyle : movementModalCardStyle} onClick={(e) => e.stopPropagation()}>
+                <div style={modalHeaderStyle}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+                    <span
+                      style={{
+                        ...movementModalIconStyle,
+                        color: tipo === "Entrada" ? "#37E884" : tipo === "Saída" ? "#FF5B8A" : "#F59E0B",
+                        background: tipo === "Entrada" ? "rgba(55,232,132,0.12)" : tipo === "Saída" ? "rgba(255,91,138,0.12)" : "rgba(245,158,11,0.12)",
+                      }}
+                    >
+                      {tipo === "Entrada" ? <ArrowDownLeft size={21} /> : tipo === "Saída" ? <ArrowUpRight size={21} /> : <RefreshCcw size={20} />}
+                    </span>
+                    <div>
+                      <span style={movementModalEyebrowStyle}>NOVA MOVIMENTAÇÃO</span>
+                      <h2 style={{ ...modalTitleStyle, marginTop: "5px" }}>
+                        {tipo === "Entrada" ? "Adicionar entrada" : tipo === "Saída" ? "Adicionar despesa" : "Adicionar despesa recorrente"}
+                      </h2>
+                      <p style={modalSubtitleStyle}>
+                        {tipo === "Entrada"
+                          ? "Registre um valor recebido e vincule-o a um evento."
+                          : tipo === "Saída"
+                            ? "Registre um custo, favorecido ou pagamento de colaborador."
+                            : "Cadastre uma despesa que se repete periodicamente."}
+                      </p>
+                    </div>
+                  </div>
+                  <button type="button" style={modalCloseButtonStyle} onClick={fecharModalMovimentacao} aria-label="Fechar">
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    void salvarMovimentacao()
+                  }}
+                >
+                  <div style={isMobile ? mobileFormGridStyle : movementModalFormGridStyle}>
+                    <Campo rotulo="Categoria">
+                      <DropdownSearch
+                        value={categoria}
+                        placeholder="Selecione a categoria"
+                        options={categoriasAtuais.map((c) => ({ value: c, label: c }))}
+                        onChange={setCategoria}
+                      />
+                    </Campo>
+
+                    {tipo !== "Recorrente" && (
+                      <Campo rotulo="Evento">
+                        <DropdownSearch
+                          value={eventoId}
+                          placeholder="Busque por data, evento ou cliente"
+                          options={eventos.map((ev) => ({ value: ev.id, label: labelEvento(ev) }))}
+                          initialScrollValue={eventoMaisProximoId(eventos)}
+                          onChange={(id) => {
+                            setEventoId(id)
+                            const ev = eventos.find((item) => item.id === id)
+                            if (tipo === "Entrada" && ev?.client_name) setClienteNome(ev.client_name)
+                            if (tipo === "Entrada" && ev?.fee) setValor(String(ev.fee))
+                            if (ev?.title) {
+                              setDescricao(
+                                tipo === "Entrada"
+                                  ? `Pagamento referente ao evento: ${primeirosNomes(ev.client_name)} - ${formatarData(ev.event_date)}`
+                                  : `Despesa referente ao evento: ${primeirosNomes(ev.client_name)} - ${formatarData(ev.event_date)}`,
+                              )
+                            }
+                          }}
+                        />
+                      </Campo>
+                    )}
+
+                    {tipo === "Saída" && (
+                      <Campo rotulo="Colaborador">
+                        <DropdownSearch
+                          value={colaboradorId}
+                          placeholder="Busque ou selecione o colaborador"
+                          options={colaboradores.map((colaborador) => ({
+                            value: colaborador.id,
+                            label: `${nomeColaborador(colaborador)}${funcaoColaborador(colaborador) ? ` — ${funcaoColaborador(colaborador)}` : ""}`,
+                          }))}
+                          onChange={(id) => {
+                            setColaboradorId(id)
+                            const colaborador = colaboradores.find((item) => item.id === id)
+                            if (colaborador) setClienteNome(nomeColaborador(colaborador))
+                          }}
+                        />
+                      </Campo>
+                    )}
+
+                    <Campo rotulo={tipo === "Recorrente" ? "Nome da despesa" : "Descrição"}>
+                      <input
+                        value={descricao}
+                        onChange={(e) => setDescricao(e.target.value)}
+                        placeholder={tipo === "Recorrente" ? "Ex.: INSS, contador, internet" : tipo === "Entrada" ? "Ex.: Pagamento do show" : "Ex.: Pagamento de transporte"}
+                        style={inputStyle}
+                        required
+                      />
+                    </Campo>
+
+                    {tipo !== "Recorrente" && (
+                      <Campo rotulo={tipo === "Saída" ? "Colaborador / Favorecido" : "Cliente"}>
+                        <input
+                          value={clienteNome}
+                          onChange={(e) => setClienteNome(e.target.value)}
+                          placeholder={tipo === "Saída" ? "Nome do favorecido" : "Nome do cliente"}
+                          style={inputStyle}
+                        />
+                      </Campo>
+                    )}
+
+                    <Campo rotulo="Valor (R$)">
+                      <input value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" inputMode="decimal" style={inputStyle} required />
+                    </Campo>
+
+                    <Campo rotulo="Forma de pagamento">
+                      <DropdownSearch
+                        value={formaPagamento}
+                        placeholder="Forma de pagamento"
+                        options={FORMAS_PAGAMENTO.map((forma) => ({ value: forma, label: forma }))}
+                        onChange={setFormaPagamento}
+                      />
+                    </Campo>
+
+                    {tipo === "Recorrente" ? (
+                      <>
+                        <Campo rotulo="Dia do vencimento">
+                          <input type="number" min="1" max="31" value={diaVencimento} onChange={(e) => setDiaVencimento(e.target.value)} style={inputStyle} />
+                        </Campo>
+                        <Campo rotulo="Periodicidade">
+                          <DropdownSearch
+                            value={periodicidade}
+                            placeholder="Periodicidade"
+                            options={PERIODICIDADES.map((item) => ({ value: item, label: item }))}
+                            onChange={setPeriodicidade}
+                          />
+                        </Campo>
+                      </>
+                    ) : (
+                      <Campo rotulo="Data do pagamento">
+                        <input type="date" value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} style={inputStyle} />
+                      </Campo>
+                    )}
+
+                    {tipo !== "Recorrente" && (
+                      <Campo rotulo="Notas (opcional)">
+                        <input value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Observações adicionais..." style={inputStyle} />
+                      </Campo>
+                    )}
+                  </div>
+
+                  <div style={isMobile ? mobileMovementModalActionsStyle : movementModalActionsStyle}>
+                    <button type="button" onClick={fecharModalMovimentacao} disabled={salvando} style={movementModalCancelButtonStyle}>Cancelar</button>
+                    <button type="submit" disabled={salvando} style={{ ...saveBtnStyle, marginTop: 0, opacity: salvando ? 0.7 : 1 }}>
+                      <Save size={17} />
+                      {salvando ? "Salvando..." : tipo === "Entrada" ? "Salvar entrada" : tipo === "Saída" ? "Salvar despesa" : "Salvar recorrente"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
 
           {movimentacaoSelecionada && (
             <div style={modalOverlayStyle} onClick={() => setMovimentacaoSelecionada(null)}>
@@ -1650,23 +1733,79 @@ const insightTextStyle: React.CSSProperties = {
   lineHeight: 1.5,
 }
 
-const twoColStyle: React.CSSProperties = {
+const movementActionsStyle: React.CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "minmax(0, 1.5fr) minmax(0, 1fr)",
-  gap: "22px",
-  alignItems: "stretch",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: "14px",
+  marginTop: "22px",
+}
+
+const movementActionButtonStyle: React.CSSProperties = {
+  minHeight: "78px",
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  padding: "13px 16px",
+  borderRadius: "18px",
+  background: "rgba(255,255,255,0.035)",
+  color: "#fff",
+  textAlign: "left",
+  cursor: "pointer",
+  transition: "transform .18s ease, border-color .18s ease, background .18s ease",
+}
+
+const movementIncomeButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(55,232,132,0.24)",
+}
+
+const movementExpenseButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,91,138,0.24)",
+}
+
+const movementRecurringButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(245,158,11,0.24)",
+}
+
+const movementActionIconStyle: React.CSSProperties = {
+  width: "44px",
+  height: "44px",
+  flex: "0 0 44px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: "14px",
+}
+
+const movementActionTextStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "3px",
+  minWidth: 0,
+}
+
+const movementActionTitleStyle: React.CSSProperties = {
+  color: "#FFFFFF",
+  fontSize: "14px",
+  fontWeight: 850,
+}
+
+const movementActionSubtitleStyle: React.CSSProperties = {
+  color: "#94A3B8",
+  fontSize: "11px",
+  lineHeight: 1.35,
+}
+
+const movimentacoesSectionStyle: React.CSSProperties = {
+  width: "100%",
+  marginTop: "18px",
 }
 
 const movimentacoesCardStyle: React.CSSProperties = {
-  height: "640px",
+  width: "100%",
+  height: "clamp(430px, 60vh, 680px)",
   display: "flex",
   flexDirection: "column",
-}
-
-const novaMovimentacaoCardStyle: React.CSSProperties = {
-  height: "640px",
-  display: "flex",
-  flexDirection: "column",
+  boxSizing: "border-box",
 }
 
 const threeColStyle: React.CSSProperties = {
@@ -1818,41 +1957,6 @@ const vazioStyle: React.CSSProperties = {
   color: "#64748B",
   textAlign: "center",
   lineHeight: 1.5,
-}
-
-const toggleStyle: React.CSSProperties = {
-  display: "flex",
-  gap: "4px",
-  padding: "4px",
-  borderRadius: "13px",
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.10)",
-}
-
-const toggleBtnStyle: React.CSSProperties = {
-  padding: "7px 16px",
-  borderRadius: "10px",
-  border: "none",
-  background: "transparent",
-  color: "#94A3B8",
-  fontSize: "13px",
-  fontWeight: 700,
-  cursor: "pointer",
-}
-
-const toggleActiveEntradaStyle: React.CSSProperties = {
-  background: "#18B866",
-  color: "#fff",
-}
-
-const toggleActiveSaidaStyle: React.CSSProperties = {
-  background: "#FF5B8A",
-  color: "#fff",
-}
-
-const toggleActiveRecorrenteStyle: React.CSSProperties = {
-  background: "#F59E0B",
-  color: "#fff",
 }
 
 const formGridStyle: React.CSSProperties = {
@@ -2174,6 +2278,54 @@ const modalCardStyle: React.CSSProperties = {
   color: "#fff",
 }
 
+const movementModalCardStyle: React.CSSProperties = {
+  ...modalCardStyle,
+  width: "min(760px, 100%)",
+  maxHeight: "92vh",
+  overflowY: "auto",
+  scrollbarWidth: "none",
+}
+
+const movementModalIconStyle: React.CSSProperties = {
+  width: "44px",
+  height: "44px",
+  flex: "0 0 44px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: "14px",
+}
+
+const movementModalEyebrowStyle: React.CSSProperties = {
+  color: "#94A3B8",
+  fontSize: "10px",
+  fontWeight: 850,
+  letterSpacing: "1.2px",
+}
+
+const movementModalFormGridStyle: React.CSSProperties = {
+  ...formGridStyle,
+  marginTop: "4px",
+}
+
+const movementModalActionsStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(130px, .7fr) minmax(200px, 1.3fr)",
+  gap: "10px",
+  marginTop: "20px",
+}
+
+const movementModalCancelButtonStyle: React.CSSProperties = {
+  minHeight: "50px",
+  borderRadius: "15px",
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(255,255,255,0.05)",
+  color: "#E2E8F0",
+  fontSize: "14px",
+  fontWeight: 800,
+  cursor: "pointer",
+}
+
 const modalHeaderStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "flex-start",
@@ -2316,6 +2468,12 @@ const mobileOneColStyle: React.CSSProperties = {
   minWidth: 0,
 }
 
+const mobileMovementActionsStyle: React.CSSProperties = {
+  ...movementActionsStyle,
+  gridTemplateColumns: "1fr",
+  gap: "10px",
+}
+
 const mobileCardStyle: React.CSSProperties = {
   padding: "18px",
   borderRadius: "22px",
@@ -2336,12 +2494,6 @@ const mobileSearchWrapStyle: React.CSSProperties = {
 const mobileMovimentacoesCardStyle: React.CSSProperties = {
   height: "auto",
   maxHeight: "none",
-  display: "flex",
-  flexDirection: "column",
-}
-
-const mobileNovaMovimentacaoCardStyle: React.CSSProperties = {
-  height: "auto",
   display: "flex",
   flexDirection: "column",
 }
@@ -2456,6 +2608,19 @@ const mobileModalCardStyle: React.CSSProperties = {
   overflowY: "auto",
   padding: "18px",
   borderRadius: "22px",
+}
+
+const mobileMovementModalCardStyle: React.CSSProperties = {
+  ...movementModalCardStyle,
+  width: "100%",
+  maxHeight: "90vh",
+  padding: "18px",
+  borderRadius: "22px",
+}
+
+const mobileMovementModalActionsStyle: React.CSSProperties = {
+  ...movementModalActionsStyle,
+  gridTemplateColumns: "1fr",
 }
 
 const mobileModalInfoGridStyle: React.CSSProperties = {

@@ -161,12 +161,14 @@ export default function LoginPage() {
 
     if (!error) {
       const userEmail = data.user?.email;
-
-      const { data: colaborador } = await supabase
-        .from("collaborators")
-        .select("*")
-        .or(`auth_user_id.eq.${data.user?.id},email.eq.${userEmail}`)
-        .maybeSingle();
+      const isCollaboratorAccess = data.user?.user_metadata?.giba_role === "collaborator";
+      const { data: colaborador } = isCollaboratorAccess
+        ? await supabase
+          .from("collaborators")
+          .select("*")
+          .or(`auth_user_id.eq.${data.user?.id},email.eq.${userEmail}`)
+          .maybeSingle()
+        : { data: null };
 
       if (colaborador) {
         if (colaborador.status !== "Ativo") {

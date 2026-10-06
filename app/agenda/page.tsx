@@ -31,12 +31,14 @@ import {
   Lightbulb,
   ArrowRight,
   MessageCircle,
+  ClipboardCheck,
 } from "lucide-react"
 
 type Cliente = { id: string; nome: string; celular?: string | null; telefone?: string | null }
 type Colaborador = { id: string; nome: string; funcao: string; status: string }
 type FormatoShow = { id: string; nome: string }
 type EventCollaborator = { event_id: string; collaborator_id: string }
+type ProductionLink = { id: string; event_id: string; status: string }
 type ReceitaEvento = {
   id: string
   event_id: string | null
@@ -66,7 +68,20 @@ type Evento = {
   notes: string
 }
 
-type Vista = "mes" | "semana" | "lista"
+type TipoMovimentacaoEvento = "Entrada" | "Saída"
+
+const categoriasReceita = ["Cachê", "Sinal", "Pagamento Integral", "Outros"]
+const categoriasDespesa = [
+  "Combustível",
+  "Colaboradores",
+  "Hospedagem",
+  "Transporte",
+  "Equipamento",
+  "Alimentação",
+  "Impostos",
+  "Outros",
+]
+const formasPagamento = ["PIX", "Cartão de Crédito", "Cartão de Débito", "Dinheiro", "Transferência", "Boleto"]
 
 const meses = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -176,6 +191,17 @@ function formatarMoeda(valor: number) {
   return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 
+function parseValorBR(valor: string) {
+  const limpo = valor.trim()
+
+  if (!limpo) return 0
+  if (limpo.includes(",") && limpo.includes(".")) {
+    return Number(limpo.replace(/\./g, "").replace(",", "."))
+  }
+  if (limpo.includes(",")) return Number(limpo.replace(",", "."))
+  return Number(limpo)
+}
+
 function iniciais(nome: string) {
   const partes = nome.trim().split(" ").filter(Boolean)
   if (partes.length === 0) return "?"
@@ -215,6 +241,7 @@ export default function AgendaPage() {
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
   const [formatos, setFormatos] = useState<FormatoShow[]>([])
   const [eventCollaborators, setEventCollaborators] = useState<EventCollaborator[]>([])
+  const [productionLinks, setProductionLinks] = useState<ProductionLink[]>([])
   const [colaboradoresSelecionados, setColaboradoresSelecionados] = useState<string[]>([])
 
   const [eventos, setEventos] = useState<Evento[]>([])
@@ -225,7 +252,6 @@ export default function AgendaPage() {
   const [mesAtual, setMesAtual] = useState(hoje.getMonth())
   const [anoAtual, setAnoAtual] = useState(hoje.getFullYear())
   const [diaSelecionado, setDiaSelecionado] = useState(hojeStr)
-  const [vista, setVista] = useState<Vista>("mes")
   const [formModalAberto, setFormModalAberto] = useState(false)
 
   // Campos do formulário
@@ -243,6 +269,18 @@ export default function AgendaPage() {
   const [numeroEndereco, setNumeroEndereco] = useState("")
   const [cepLoading, setCepLoading] = useState(false)
   const [whatsappEvento, setWhatsappEvento] = useState<Evento | null>(null)
+  const [eventoMovimentacao, setEventoMovimentacao] = useState<Evento | null>(null)
+  const [tipoMovimentacao, setTipoMovimentacao] = useState<TipoMovimentacaoEvento>("Entrada")
+  const [categoriaMovimentacao, setCategoriaMovimentacao] = useState("Cachê")
+  const [descricaoMovimentacao, setDescricaoMovimentacao] = useState("")
+  const [colaboradorMovimentacaoId, setColaboradorMovimentacaoId] = useState("")
+  const [favorecidoMovimentacao, setFavorecidoMovimentacao] = useState("")
+  const [valorMovimentacao, setValorMovimentacao] = useState("")
+  const [formaPagamentoMovimentacao, setFormaPagamentoMovimentacao] = useState("PIX")
+  const [dataMovimentacao, setDataMovimentacao] = useState(hojeStr)
+  const [notasMovimentacao, setNotasMovimentacao] = useState("")
+  const [salvandoMovimentacao, setSalvandoMovimentacao] = useState(false)
+  const [erroMovimentacao, setErroMovimentacao] = useState("")
 
   const diasCalendario = useMemo(() => {
     const primeiroDia = new Date(anoAtual, mesAtual, 1).getDay()
@@ -260,6 +298,7 @@ export default function AgendaPage() {
     carregarEventos()
     carregarVinculos()
     carregarReceitasEventos()
+    carregarProducoesVinculadas()
   }, [])
 
   // Se o dia selecionado não tiver eventos, foca automaticamente no próximo
@@ -348,6 +387,21 @@ export default function AgendaPage() {
       .from("event_collaborators").select("event_id, collaborator_id").in("event_id", eventIds)
     if (error) return setEventCollaborators([])
     setEventCollaborators(data || [])
+  }
+
+  async function carregarProducoesVinculadas() {
+    const user = await obterUsuarioLogado()
+    if (!user) return setProductionLinks([])
+    const { data, error } = await supabase
+      .from("productions")
+      .select("id,event_id,status")
+      .eq("user_id", user.id)
+      .not("event_id", "is", null)
+    if (error) {
+      console.info("Produções vinculadas ainda não estão disponíveis para esta conta.")
+      return setProductionLinks([])
+    }
+    setProductionLinks((data || []) as ProductionLink[])
   }
 
   async function carregarReceitasEventos() {
@@ -548,6 +602,10 @@ export default function AgendaPage() {
     window.location.href = `/contratos?eventId=${evento.id}`
   }
 
+  function producaoDoEvento(eventId: string) {
+    return productionLinks.find((item) => item.event_id === eventId)
+  }
+
   async function atualizarStatusEvento(evento: Evento, novoStatus: "pendente" | "proximo" | "realizado") {
     const user = await obterUsuarioLogado()
     if (!user) return
@@ -568,9 +626,108 @@ export default function AgendaPage() {
     await carregarEventos()
   }
 
-  async function lancarReceita(evento: Evento) {
-    await atualizarStatusEvento(evento, "proximo")
-    window.location.href = `/financeiro?eventId=${evento.id}`
+  function descricaoPadraoMovimentacao(evento: Evento, tipo: TipoMovimentacaoEvento) {
+    const data = new Date(`${evento.event_date}T00:00:00`).toLocaleDateString("pt-BR")
+    const prefixo = tipo === "Entrada" ? "Receita" : "Despesa"
+    return `${prefixo} referente ao evento: ${evento.client_name} - ${data}`
+  }
+
+  function abrirMovimentacao(evento: Evento) {
+    setEventoMovimentacao(evento)
+    setTipoMovimentacao("Entrada")
+    setCategoriaMovimentacao("Cachê")
+    setDescricaoMovimentacao(descricaoPadraoMovimentacao(evento, "Entrada"))
+    setColaboradorMovimentacaoId("")
+    setFavorecidoMovimentacao(evento.client_name)
+    setValorMovimentacao(evento.fee ? String(evento.fee) : "")
+    setFormaPagamentoMovimentacao("PIX")
+    setDataMovimentacao(hojeStr)
+    setNotasMovimentacao("")
+    setErroMovimentacao("")
+  }
+
+  function alterarTipoMovimentacao(tipo: TipoMovimentacaoEvento) {
+    if (!eventoMovimentacao) return
+
+    setTipoMovimentacao(tipo)
+    setCategoriaMovimentacao(tipo === "Entrada" ? "Cachê" : "Combustível")
+    setDescricaoMovimentacao(descricaoPadraoMovimentacao(eventoMovimentacao, tipo))
+    setColaboradorMovimentacaoId("")
+    setFavorecidoMovimentacao(tipo === "Entrada" ? eventoMovimentacao.client_name : "")
+    setValorMovimentacao(tipo === "Entrada" && eventoMovimentacao.fee ? String(eventoMovimentacao.fee) : "")
+    setErroMovimentacao("")
+  }
+
+  function fecharMovimentacao() {
+    if (salvandoMovimentacao) return
+    setEventoMovimentacao(null)
+    setErroMovimentacao("")
+  }
+
+  async function salvarMovimentacaoEvento(e: React.FormEvent) {
+    e.preventDefault()
+    if (!eventoMovimentacao) return
+
+    const valor = parseValorBR(valorMovimentacao)
+    if (!descricaoMovimentacao.trim() || !Number.isFinite(valor) || valor <= 0) {
+      setErroMovimentacao("Informe uma descrição e um valor válido.")
+      return
+    }
+
+    setSalvandoMovimentacao(true)
+    setErroMovimentacao("")
+
+    const user = await obterUsuarioLogado()
+    if (!user) {
+      setErroMovimentacao("Usuário não encontrado. Faça login novamente.")
+      setSalvandoMovimentacao(false)
+      return
+    }
+
+    const colaboradorSelecionado = colaboradores.find((colaborador) => colaborador.id === colaboradorMovimentacaoId)
+    const nomeFavorecido = tipoMovimentacao === "Saída" && colaboradorSelecionado
+      ? colaboradorSelecionado.nome
+      : favorecidoMovimentacao.trim()
+    const descricaoFinal = tipoMovimentacao === "Saída" && colaboradorSelecionado && categoriaMovimentacao === "Colaboradores"
+      ? `${descricaoMovimentacao.trim()} - ${colaboradorSelecionado.nome}`
+      : descricaoMovimentacao.trim()
+
+    const payload = {
+      user_id: user.id,
+      event_id: eventoMovimentacao.id,
+      type: tipoMovimentacao,
+      amount: valor,
+      description: descricaoFinal,
+      category: categoriaMovimentacao,
+      payment_method: formaPagamentoMovimentacao,
+      client_name: nomeFavorecido || null,
+      status: tipoMovimentacao === "Entrada" ? "Recebido" : "Pago",
+      payment_date: dataMovimentacao || null,
+      notes: notasMovimentacao.trim() || null,
+    }
+
+    const { error } = await supabase.from("finance").insert(payload)
+
+    if (error) {
+      console.group("Erro ao lançar movimentação pela Agenda")
+      console.error("Mensagem:", error.message)
+      console.error("Detalhes:", error.details)
+      console.error("Hint:", error.hint)
+      console.error("Código:", error.code)
+      console.error("Objeto enviado:", payload)
+      console.groupEnd()
+      setErroMovimentacao(error.message || "Não foi possível salvar a movimentação.")
+      setSalvandoMovimentacao(false)
+      return
+    }
+
+    if (tipoMovimentacao === "Entrada") {
+      await atualizarStatusEvento(eventoMovimentacao, "proximo")
+    }
+
+    await carregarReceitasEventos()
+    setEventoMovimentacao(null)
+    setSalvandoMovimentacao(false)
   }
 
   async function buscarCep() {
@@ -611,22 +768,36 @@ export default function AgendaPage() {
   }
 
   // ---- Navegação ----
+  function selecionarMes(mes: number, ano: number) {
+    setMesAtual(mes)
+    setAnoAtual(ano)
+
+    const ehMesAtual = mes === hoje.getMonth() && ano === hoje.getFullYear()
+    const primeiroEvento = eventos
+      .filter((evento) => {
+        const data = new Date(`${evento.event_date}T00:00:00`)
+        return data.getMonth() === mes && data.getFullYear() === ano
+      })
+      .sort((a, b) => (a.event_date + a.event_time).localeCompare(b.event_date + b.event_time))[0]
+
+    setDiaSelecionado(ehMesAtual ? hojeStr : primeiroEvento?.event_date || ymd(new Date(ano, mes, 1)))
+  }
+
+  function navegarMes(deslocamento: number) {
+    const destino = new Date(anoAtual, mesAtual + deslocamento, 1)
+    selecionarMes(destino.getMonth(), destino.getFullYear())
+  }
+
   function mesAnterior() {
-    if (mesAtual === 0) {
-      setMesAtual(11)
-      setAnoAtual((a) => a - 1)
-    } else setMesAtual((m) => m - 1)
+    navegarMes(-1)
   }
+
   function mesProximo() {
-    if (mesAtual === 11) {
-      setMesAtual(0)
-      setAnoAtual((a) => a + 1)
-    } else setMesAtual((m) => m + 1)
+    navegarMes(1)
   }
+
   function irParaHoje() {
-    setMesAtual(hoje.getMonth())
-    setAnoAtual(hoje.getFullYear())
-    setDiaSelecionado(hojeStr)
+    selecionarMes(hoje.getMonth(), hoje.getFullYear())
   }
 
   // ---- Métricas ----
@@ -653,7 +824,7 @@ export default function AgendaPage() {
     const escalados = new Set(
       eventosDoMes.flatMap((e) => colaboradoresDoEvento(e.id).map((c) => c.id)),
     ).size
-    const faturamento = eventosFuturos.reduce((s, e) => s + (e.fee || 0), 0)
+    const faturamento = eventosDoMes.reduce((total, evento) => total + Number(evento.fee || 0), 0)
 
     return {
       totalMes: eventosDoMes.length,
@@ -663,28 +834,9 @@ export default function AgendaPage() {
       faturamento,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventosDoMes, eventosFuturos, eventCollaborators, colaboradores, eventos])
+  }, [eventosDoMes, eventCollaborators, colaboradores, eventos])
 
   const eventosDoDiaSelecionado = eventosDoDia(diaSelecionado)
-
-  // ---- semana da data selecionada ----
-  const diasDaSemana = useMemo(() => {
-    const base = new Date(diaSelecionado + "T00:00:00")
-    const inicio = new Date(base)
-    inicio.setDate(base.getDate() - base.getDay())
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(inicio)
-      d.setDate(inicio.getDate() + i)
-      return d
-    })
-  }, [diaSelecionado])
-
-  const eventosFiltradosLista = useMemo(
-    () =>
-      eventosDoMes
-        .sort((a, b) => (a.event_date + a.event_time).localeCompare(b.event_date + b.event_time)),
-    [eventosDoMes],
-  )
 
   return (
     <ProtectedRoute modulo="agenda">
@@ -712,34 +864,22 @@ export default function AgendaPage() {
 
           {/* ===== TOOLBAR ===== */}
           <div style={isMobile ? mobileToolbarRow : toolbarRow}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <div style={navGroup}>
+            <div style={monthToolbarGroup}>
+              <div style={monthNavigator}>
                 <button onClick={mesAnterior} style={navArrow} aria-label="Mês anterior">
                   <ChevronLeft size={18} />
                 </button>
+                <div style={monthCurrentLabel} aria-live="polite">
+                  <CalendarDays size={16} color="#A78BFA" />
+                  <span>{meses[mesAtual]} de {anoAtual}</span>
+                </div>
                 <button onClick={mesProximo} style={navArrow} aria-label="Próximo mês">
                   <ChevronRight size={18} />
                 </button>
               </div>
-              <button onClick={irParaHoje} style={ghostButton}>
+              <button onClick={irParaHoje} style={todayButton}>
                 Hoje
               </button>
-              <div style={monthPill}>
-                {meses[mesAtual]}, {anoAtual}
-                <ChevronDown size={16} />
-              </div>
-            </div>
-
-            <div style={viewToggle}>
-              {(["mes", "semana", "lista"] as Vista[]).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setVista(v)}
-                  style={{ ...viewToggleBtn, ...(vista === v ? viewToggleActive : {}) }}
-                >
-                  {v === "mes" ? "Mês" : v === "semana" ? "Semana" : "Lista"}
-                </button>
-              ))}
             </div>
 
             <button
@@ -790,7 +930,7 @@ export default function AgendaPage() {
               tint="#22C55E"
               value={formatarMoeda(metricas.faturamento)}
               label="Faturamento previsto"
-              trend="Eventos futuros"
+              trend="Valor bruto do mês"
               trendPlain
             />
           </div>
@@ -800,119 +940,59 @@ export default function AgendaPage() {
             {/* Coluna esquerda */}
             <div style={{ display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
               <div style={isMobile ? mobileCalendarCard : calendarCard}>
-                {vista === "mes" && (
-                  <>
-                    <div style={isMobile ? mobileWeekHeader : weekHeader}>
-                      {diasSemana.map((d) => (
-                        <div key={d} style={weekHeaderCell}>
-                          {d}
-                        </div>
-                      ))}
+                <div style={isMobile ? mobileWeekHeader : weekHeader}>
+                  {diasSemana.map((d) => (
+                    <div key={d} style={weekHeaderCell}>
+                      {d}
                     </div>
-                    <div style={isMobile ? mobileMonthGrid : monthGrid}>
-                      {diasCalendario.map((dia, idx) => {
-                        if (dia === null) return <div key={`v-${idx}`} style={emptyCell} />
-                        const dataStr = formatarData(dia)
-                        const doDia = eventosDoDia(dataStr)
-                        const ehHoje = dataStr === hojeStr
-                        const selecionado = dataStr === diaSelecionado
-                        const primeiro = doDia[0]
-                        return (
-                          <button
-                            key={dataStr}
-                            onClick={() => setDiaSelecionado(dataStr)}
-                            style={{
-                              ...(isMobile ? mobileDayCell : dayCell),
-                              ...(selecionado ? dayCellSelected : {}),
+                  ))}
+                </div>
+                <div style={isMobile ? mobileMonthGrid : monthGrid}>
+                  {diasCalendario.map((dia, idx) => {
+                    if (dia === null) return <div key={`v-${idx}`} style={emptyCell} />
+                    const dataStr = formatarData(dia)
+                    const doDia = eventosDoDia(dataStr)
+                    const ehHoje = dataStr === hojeStr
+                    const selecionado = dataStr === diaSelecionado
+                    const primeiro = doDia[0]
+                    return (
+                      <button
+                        key={dataStr}
+                        onClick={() => setDiaSelecionado(dataStr)}
+                        style={{
+                          ...(isMobile ? mobileDayCell : dayCell),
+                          ...(selecionado ? dayCellSelected : {}),
+                        }}
+                      >
+                        <span style={{ ...dayNumber, ...(ehHoje ? dayNumberToday : {}) }}>{dia}</span>
+                        {primeiro && (
+                          <div
+                            onClick={(ev) => {
+                              ev.stopPropagation()
+                              abrirDetalhes(primeiro)
                             }}
+                            style={{ ...eventChip, borderLeft: `3px solid ${getStageConfig(statusParaExibicaoEvento(primeiro)).color}` }}
                           >
-                            <span style={{ ...dayNumber, ...(ehHoje ? dayNumberToday : {}) }}>{dia}</span>
-                            {primeiro && (
-                              <div
-                                onClick={(ev) => {
-                                  ev.stopPropagation()
-                                  abrirDetalhes(primeiro)
-                                }}
-                                style={{ ...eventChip, borderLeft: `3px solid ${getStageConfig(statusParaExibicaoEvento(primeiro)).color}` }}
-                              >
-                                <div style={chipTime}>{primeiro.event_time}</div>
-                                <div style={chipTitle}>{primeiro.show_format || primeiro.event_type || primeiro.title.replace(/^Show - /, "")}</div>
-                                <span
-                                  style={{
-                                    ...statusBadge,
-                                    background: getStageConfig(statusParaExibicaoEvento(primeiro)).soft,
-                                    color: getStageConfig(statusParaExibicaoEvento(primeiro)).color,
-                                  }}
-                                >
-                                  {getStageConfig(statusParaExibicaoEvento(primeiro)).label}
-                                </span>
-                              </div>
-                            )}
-                            {doDia.length > 1 && (
-                              <span style={maisEventos}>+{doDia.length - 1} evento{doDia.length - 1 > 1 ? "s" : ""}</span>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </>
-                )}
-
-                {vista === "semana" && (
-                  <div style={isMobile ? mobileWeekGrid : monthGrid}>
-                    {diasDaSemana.map((d) => {
-                      const dataStr = ymd(d)
-                      const doDia = eventosDoDia(dataStr)
-                      const selecionado = dataStr === diaSelecionado
-                      const ehHoje = dataStr === hojeStr
-                      return (
-                        <button
-                          key={dataStr}
-                          onClick={() => setDiaSelecionado(dataStr)}
-                          style={{ ...(isMobile ? mobileDayCell : dayCell), minHeight: isMobile ? 150 : 220, ...(selecionado ? dayCellSelected : {}) }}
-                        >
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, marginBottom: 8 }}>
-                            <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 700 }}>{diasSemana[d.getDay()]}</span>
-                            <span style={{ ...dayNumber, ...(ehHoje ? dayNumberToday : {}) }}>{d.getDate()}</span>
+                            <div style={chipTime}>{primeiro.event_time}</div>
+                            <div style={chipTitle}>{primeiro.show_format || primeiro.event_type || primeiro.title.replace(/^Show - /, "")}</div>
+                            <span
+                              style={{
+                                ...statusBadge,
+                                background: getStageConfig(statusParaExibicaoEvento(primeiro)).soft,
+                                color: getStageConfig(statusParaExibicaoEvento(primeiro)).color,
+                              }}
+                            >
+                              {getStageConfig(statusParaExibicaoEvento(primeiro)).label}
+                            </span>
                           </div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
-                            {doDia.map((ev) => (
-                              <div
-                                key={ev.id}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  abrirDetalhes(ev)
-                                }}
-                                style={{ ...eventChip, borderLeft: `3px solid ${getStageConfig(statusParaExibicaoEvento(ev)).color}` }}
-                              >
-                                <div style={chipTime}>{ev.event_time}</div>
-                                <div style={chipTitle}>{ev.show_format || ev.event_type || ev.title.replace(/^Show - /, "")}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {vista === "lista" && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {eventosFiltradosLista.length === 0 && (
-                      <p style={{ color: "#94A3B8", textAlign: "center", padding: 28 }}>
-                        Nenhum evento encontrado neste mês.
-                      </p>
-                    )}
-                    {eventosFiltradosLista.map((ev) => (
-                      <EventoLinha
-                        key={ev.id}
-                        evento={ev}
-                        colaboradores={colaboradoresDoEvento(ev.id)}
-                        onDetalhes={() => abrirDetalhes(ev)}
-                      />
-                    ))}
-                  </div>
-                )}
+                        )}
+                        {doDia.length > 1 && (
+                          <span style={maisEventos}>+{doDia.length - 1} evento{doDia.length - 1 > 1 ? "s" : ""}</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
 
                 {/* Legenda */}
                 <div style={legendaRow}>
@@ -994,6 +1074,11 @@ export default function AgendaPage() {
                               </p>
                               <p style={eventoDoDiaCliente}>{ev.client_name}</p>
                               <p style={eventoDoDiaLocal}>{ev.location}</p>
+                              {producaoDoEvento(ev.id) && (
+                                <span style={productionLinkedBadge}>
+                                  <ClipboardCheck size={12} /> Produção vinculada
+                                </span>
+                              )}
                             </div>
                           </div>
 
@@ -1019,7 +1104,7 @@ export default function AgendaPage() {
                             <FileText size={14} /> Contrato
                           </button>
 
-                          <button style={acaoButton} onClick={() => lancarReceita(ev)}>
+                          <button style={acaoButton} onClick={() => abrirMovimentacao(ev)}>
                             <Wallet size={14} /> Receita
                           </button>
 
@@ -1340,10 +1425,15 @@ export default function AgendaPage() {
                 )}
 
                 <div style={isMobile ? mobileModalActionsGrid : { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 18 }}>
+                  {producaoDoEvento(eventoSelecionado.id) && (
+                    <button onClick={() => { window.location.href = `/producao/${producaoDoEvento(eventoSelecionado.id)?.id}` }} style={{ ...primaryButton, justifyContent: "center" }}>
+                      <ClipboardCheck size={16} /> Abrir produção
+                    </button>
+                  )}
                   <button onClick={() => gerarContrato(eventoSelecionado)} style={{ ...primaryButton, justifyContent: "center" }}>
                     <FileText size={16} /> Gerar contrato
                   </button>
-                  <button onClick={() => lancarReceita(eventoSelecionado)} style={{ ...ghostButton, justifyContent: "center", display: "flex", alignItems: "center", gap: 8 }}>
+                  <button onClick={() => abrirMovimentacao(eventoSelecionado)} style={{ ...ghostButton, justifyContent: "center", display: "flex", alignItems: "center", gap: 8 }}>
                     <Wallet size={16} /> Lançar receita
                   </button>
                   <button onClick={() => enviarWhatsAppConfirmacao(eventoSelecionado)} style={{ ...ghostButton, justifyContent: "center", display: "flex", alignItems: "center", gap: 8 }}>
@@ -1359,6 +1449,162 @@ export default function AgendaPage() {
                     <MapPin size={16} /> Localização
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ===== MODAL MOVIMENTAÇÃO FINANCEIRA ===== */}
+          {eventoMovimentacao && (
+            <div style={financeModalOverlay} onClick={fecharMovimentacao}>
+              <div
+                className="giba-agenda-modal-card"
+                style={isMobile ? mobileFinanceModalCard : financeModalCard}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={modalFormHeader}>
+                  <div>
+                    <p style={financeModalEyebrow}>FINANCEIRO DO EVENTO</p>
+                    <h2 style={financeModalTitle}>Adicionar Receita ou Despesa</h2>
+                    <p style={financeModalSubtitle}>
+                      {eventoMovimentacao.client_name} · {new Date(`${eventoMovimentacao.event_date}T00:00:00`).toLocaleDateString("pt-BR")}
+                    </p>
+                  </div>
+                  <button type="button" onClick={fecharMovimentacao} style={miniIconBtn} aria-label="Fechar">
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <form onSubmit={salvarMovimentacaoEvento}>
+                  <div style={financeTypeToggle}>
+                    <button
+                      type="button"
+                      onClick={() => alterarTipoMovimentacao("Entrada")}
+                      style={{
+                        ...financeTypeButton,
+                        ...(tipoMovimentacao === "Entrada" ? financeTypeButtonIncome : {}),
+                      }}
+                    >
+                      <DollarSign size={17} /> Receita
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => alterarTipoMovimentacao("Saída")}
+                      style={{
+                        ...financeTypeButton,
+                        ...(tipoMovimentacao === "Saída" ? financeTypeButtonExpense : {}),
+                      }}
+                    >
+                      <Wallet size={17} /> Despesa
+                    </button>
+                  </div>
+
+                  <div style={isMobile ? mobileFinanceFormGrid : financeFormGrid}>
+                    <Campo label="Categoria">
+                      <DropdownSelect
+                        value={categoriaMovimentacao}
+                        options={(tipoMovimentacao === "Entrada" ? categoriasReceita : categoriasDespesa).map((categoria) => ({
+                          value: categoria,
+                          label: categoria,
+                        }))}
+                        onChange={setCategoriaMovimentacao}
+                      />
+                    </Campo>
+
+                    <Campo label="Valor (R$)">
+                      <input
+                        value={valorMovimentacao}
+                        onChange={(e) => setValorMovimentacao(e.target.value)}
+                        placeholder="0,00"
+                        inputMode="decimal"
+                        style={inputStyle}
+                      />
+                    </Campo>
+
+                    {tipoMovimentacao === "Saída" && (
+                      <div style={financeWideField}>
+                        <Campo label="Colaborador">
+                          <SearchSelect
+                            value={colaboradorMovimentacaoId}
+                            placeholder="Busque ou selecione o colaborador"
+                            options={colaboradores.map((colaborador) => ({
+                              value: colaborador.id,
+                              label: `${colaborador.nome}${colaborador.funcao ? ` — ${colaborador.funcao}` : ""}`,
+                            }))}
+                            onChange={(id) => {
+                              setColaboradorMovimentacaoId(id)
+                              const colaborador = colaboradores.find((item) => item.id === id)
+                              if (colaborador) setFavorecidoMovimentacao(colaborador.nome)
+                            }}
+                          />
+                        </Campo>
+                      </div>
+                    )}
+
+                    <div style={financeWideField}>
+                      <Campo label="Descrição">
+                        <input
+                          value={descricaoMovimentacao}
+                          onChange={(e) => setDescricaoMovimentacao(e.target.value)}
+                          placeholder={tipoMovimentacao === "Entrada" ? "Descrição da receita" : "Descrição da despesa"}
+                          style={inputStyle}
+                        />
+                      </Campo>
+                    </div>
+
+                    <Campo label={tipoMovimentacao === "Entrada" ? "Cliente" : "Favorecido"}>
+                      <input
+                        value={favorecidoMovimentacao}
+                        onChange={(e) => setFavorecidoMovimentacao(e.target.value)}
+                        placeholder={tipoMovimentacao === "Entrada" ? "Nome do cliente" : "Nome do favorecido"}
+                        style={inputStyle}
+                      />
+                    </Campo>
+
+                    <Campo label="Forma de pagamento">
+                      <DropdownSelect
+                        value={formaPagamentoMovimentacao}
+                        options={formasPagamento.map((forma) => ({ value: forma, label: forma }))}
+                        onChange={setFormaPagamentoMovimentacao}
+                      />
+                    </Campo>
+
+                    <Campo label="Data do pagamento">
+                      <input
+                        type="date"
+                        value={dataMovimentacao}
+                        onChange={(e) => setDataMovimentacao(e.target.value)}
+                        style={inputStyle}
+                      />
+                    </Campo>
+
+                    <div style={financeWideField}>
+                      <Campo label="Notas (opcional)">
+                        <textarea
+                          value={notasMovimentacao}
+                          onChange={(e) => setNotasMovimentacao(e.target.value)}
+                          placeholder="Observações adicionais..."
+                          rows={3}
+                          style={{ ...inputStyle, resize: "vertical" }}
+                        />
+                      </Campo>
+                    </div>
+                  </div>
+
+                  {erroMovimentacao && <p style={financeErrorMessage}>{erroMovimentacao}</p>}
+
+                  <div style={isMobile ? mobileFormActions : financeModalActions}>
+                    <button type="button" onClick={fecharMovimentacao} disabled={salvandoMovimentacao} style={{ ...ghostButton, flex: 1, justifyContent: "center" }}>
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={salvandoMovimentacao}
+                      style={{ ...primaryButton, flex: 1, justifyContent: "center", opacity: salvandoMovimentacao ? 0.65 : 1 }}
+                    >
+                      {salvandoMovimentacao ? "Salvando..." : tipoMovimentacao === "Entrada" ? "Salvar receita" : "Salvar despesa"}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}
@@ -1677,25 +1923,46 @@ const toolbarRow: React.CSSProperties = {
   flexWrap: "wrap",
   marginBottom: 18,
 }
-const navGroup: React.CSSProperties = {
+const monthToolbarGroup: React.CSSProperties = {
   display: "flex",
-  gap: 4,
+  alignItems: "center",
+  gap: 10,
+  flexWrap: "wrap",
+}
+const monthNavigator: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "42px minmax(170px, auto) 42px",
+  alignItems: "center",
   padding: 4,
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.04)",
+  borderRadius: 15,
+  border: "1px solid rgba(139,92,246,0.25)",
+  background: "linear-gradient(135deg, rgba(139,53,255,0.10), rgba(255,255,255,0.035))",
+  boxShadow: "0 10px 28px rgba(2,6,23,0.20)",
 }
 const navArrow: React.CSSProperties = {
-  width: 34,
-  height: 34,
+  width: 42,
+  height: 40,
   borderRadius: 10,
   border: "none",
-  background: "transparent",
-  color: "#CBD5E1",
+  background: "rgba(255,255,255,0.045)",
+  color: "#E2E8F0",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   cursor: "pointer",
+}
+const monthCurrentLabel: React.CSSProperties = {
+  minHeight: 40,
+  padding: "0 14px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 9,
+  color: "#FFFFFF",
+  fontSize: 14,
+  fontWeight: 900,
+  textTransform: "capitalize",
+  whiteSpace: "nowrap",
 }
 const ghostButton: React.CSSProperties = {
   padding: "10px 16px",
@@ -1707,41 +1974,13 @@ const ghostButton: React.CSSProperties = {
   fontWeight: 700,
   cursor: "pointer",
 }
-const monthPill: React.CSSProperties = {
+const todayButton: React.CSSProperties = {
+  ...ghostButton,
   display: "flex",
   alignItems: "center",
-  gap: 8,
-  padding: "10px 16px",
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.05)",
-  color: "#fff",
-  fontSize: 14,
-  fontWeight: 800,
-  cursor: "pointer",
-}
-const viewToggle: React.CSSProperties = {
-  display: "flex",
-  gap: 4,
-  padding: 4,
-  borderRadius: 14,
-  border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.04)",
-}
-const viewToggleBtn: React.CSSProperties = {
-  padding: "8px 18px",
-  borderRadius: 10,
-  border: "none",
-  background: "transparent",
-  color: "#94A3B8",
-  fontSize: 13,
-  fontWeight: 800,
-  cursor: "pointer",
-}
-const viewToggleActive: React.CSSProperties = {
-  background: "linear-gradient(90deg, #8B35FF, #00AAFF)",
-  color: "#fff",
-  boxShadow: "0 8px 20px rgba(139,53,255,0.30)",
+  justifyContent: "center",
+  minHeight: 48,
+  paddingInline: 18,
 }
 const primaryButton: React.CSSProperties = {
   display: "flex",
@@ -2228,6 +2467,103 @@ const modalFormHeader: React.CSSProperties = {
   paddingBottom: 16,
   borderBottom: "1px solid rgba(255,255,255,0.08)",
 }
+
+const financeModalOverlay: React.CSSProperties = {
+  ...modalOverlay,
+  zIndex: 2100,
+}
+
+const financeModalCard: React.CSSProperties = {
+  ...modalCard,
+  maxWidth: 680,
+  padding: 26,
+}
+
+const financeModalEyebrow: React.CSSProperties = {
+  margin: "0 0 7px",
+  color: "#22D3EE",
+  fontSize: 11,
+  fontWeight: 900,
+  letterSpacing: 1.5,
+}
+
+const financeModalTitle: React.CSSProperties = {
+  margin: 0,
+  color: "#FFFFFF",
+  fontSize: 22,
+  fontWeight: 900,
+}
+
+const financeModalSubtitle: React.CSSProperties = {
+  margin: "7px 0 0",
+  color: "#94A3B8",
+  fontSize: 13,
+}
+
+const financeTypeToggle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 8,
+  margin: "20px 0",
+  padding: 5,
+  borderRadius: 15,
+  border: "1px solid rgba(255,255,255,0.09)",
+  background: "rgba(255,255,255,0.035)",
+}
+
+const financeTypeButton: React.CSSProperties = {
+  minHeight: 42,
+  borderRadius: 11,
+  border: "1px solid transparent",
+  background: "transparent",
+  color: "#94A3B8",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+  fontSize: 13,
+  fontWeight: 900,
+  cursor: "pointer",
+}
+
+const financeTypeButtonIncome: React.CSSProperties = {
+  border: "1px solid rgba(55,232,132,0.45)",
+  background: "rgba(55,232,132,0.12)",
+  color: "#37E884",
+}
+
+const financeTypeButtonExpense: React.CSSProperties = {
+  border: "1px solid rgba(255,91,138,0.45)",
+  background: "rgba(255,91,138,0.12)",
+  color: "#FF7AA0",
+}
+
+const financeFormGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 14,
+}
+
+const financeWideField: React.CSSProperties = {
+  gridColumn: "1 / -1",
+}
+
+const financeErrorMessage: React.CSSProperties = {
+  margin: "14px 0 0",
+  padding: "11px 13px",
+  borderRadius: 12,
+  border: "1px solid rgba(255,91,138,0.32)",
+  background: "rgba(255,91,138,0.09)",
+  color: "#FDA4AF",
+  fontSize: 12,
+  fontWeight: 700,
+}
+
+const financeModalActions: React.CSSProperties = {
+  display: "flex",
+  gap: 10,
+  marginTop: 20,
+}
 const notasBox: React.CSSProperties = {
   padding: 14,
   borderRadius: 14,
@@ -2498,13 +2834,6 @@ const mobileMonthGrid: React.CSSProperties = {
   minWidth: 620,
 }
 
-const mobileWeekGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(7, minmax(86px, 1fr))",
-  gap: 8,
-  minWidth: 620,
-}
-
 const mobileDayCell: React.CSSProperties = {
   ...dayCell,
   minHeight: 92,
@@ -2543,6 +2872,20 @@ const mobileModalCard: React.CSSProperties = {
   borderRadius: 20,
 }
 
+const mobileFinanceModalCard: React.CSSProperties = {
+  ...financeModalCard,
+  maxWidth: "100%",
+  maxHeight: "90vh",
+  padding: 18,
+  borderRadius: 20,
+}
+
+const mobileFinanceFormGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr",
+  gap: 12,
+}
+
 const mobileModalInfoGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr",
@@ -2555,4 +2898,18 @@ const mobileModalActionsGrid: React.CSSProperties = {
   gridTemplateColumns: "1fr",
   gap: 10,
   marginTop: 18,
+}
+
+const productionLinkedBadge: React.CSSProperties = {
+  marginTop: 8,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  padding: "4px 8px",
+  borderRadius: 999,
+  border: "1px solid rgba(34,211,238,.24)",
+  background: "rgba(34,211,238,.09)",
+  color: "#A5F3FC",
+  fontSize: 10,
+  fontWeight: 800,
 }

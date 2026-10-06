@@ -70,6 +70,7 @@ export function clearCollaboratorSession() {
 }
 
 async function loadCollaboratorByAuthUser(user: User) {
+  if (user.user_metadata?.giba_role !== "collaborator") return null;
   const email = String(user.email || "").toLowerCase();
   const filters = [`auth_user_id.eq.${user.id}`];
   if (email) filters.push(`email.eq.${email}`);

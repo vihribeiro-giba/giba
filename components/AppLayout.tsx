@@ -26,6 +26,7 @@ import {
   FilePenLine,
   Building2,
   KeyRound,
+  ClipboardCheck,
 } from "lucide-react";
 
 type AssinaturaResumo = {
@@ -163,6 +164,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       dashboard: LayoutDashboard,
       agenda: CalendarDays,
       agenda_colaborador: CalendarDays,
+      producao: ClipboardCheck,
       clientes: Users,
       crm: Building2,
       propostas: FilePenLine,

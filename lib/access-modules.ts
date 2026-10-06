@@ -2,6 +2,7 @@ export const ACCESS_MODULE_KEYS = [
   "dashboard",
   "agenda",
   "agenda_colaborador",
+  "producao",
   "clientes",
   "crm",
   "propostas",
@@ -40,6 +41,7 @@ export const ACCESS_MODULES: AccessModuleDefinition[] = [
   { key: "dashboard", label: "Dashboard", description: "Visão geral da operação.", href: "/dashboard", group: "operacao", planFeature: "dashboard" },
   { key: "agenda", label: "Agenda", description: "Agenda completa e gestão dos eventos.", href: "/agenda", group: "operacao", planFeature: "agenda" },
   { key: "agenda_colaborador", label: "Agenda do Colaborador", description: "Escalas e eventos atribuídos ao colaborador.", href: "/agenda-colaborador", group: "operacao", planFeature: "agenda" },
+  { key: "producao", label: "Produção", description: "Equipe, tarefas e operação dos eventos.", href: "/producao", group: "operacao", planFeature: "producao" },
   { key: "clientes", label: "Clientes", description: "Cadastro e relacionamento com clientes.", href: "/clientes", group: "operacao", planFeature: "clientes" },
   { key: "crm", label: "CRM", description: "Prefeituras e oportunidades comerciais.", href: "/crm", group: "comercial", planFeature: "crm" },
   { key: "propostas", label: "Propostas", description: "Modelos e propostas comerciais.", href: "/propostas", group: "comercial", planFeature: "propostas" },
@@ -55,7 +57,7 @@ export const ACCESS_MODULES: AccessModuleDefinition[] = [
 
 export const ACCESS_PROFILES: Array<{ key: AccessProfileKey; label: string; modules: AccessModuleKey[] }> = [
   { key: "musico_tecnico", label: "Músico ou técnico", modules: ["agenda_colaborador"] },
-  { key: "producao", label: "Produção", modules: ["dashboard", "clientes", "agenda", "agenda_colaborador", "contratos"] },
+  { key: "producao", label: "Produção", modules: ["dashboard", "clientes", "agenda", "agenda_colaborador", "producao", "contratos"] },
   { key: "vendas", label: "Venda de shows", modules: ["dashboard", "clientes", "crm", "propostas", "contratos", "formatos", "calculadora_show"] },
   { key: "financeiro", label: "Financeiro", modules: ["dashboard", "financeiro", "relatorios"] },
   { key: "administrador", label: "Administrador", modules: ACCESS_MODULES.filter((item) => !item.ownerOnly).map((item) => item.key) },
