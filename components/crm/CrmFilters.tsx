@@ -45,9 +45,9 @@ export default function CrmFilters({
   }
 
   return (
-    <div className="rounded-[24px] border border-white/10 bg-slate-950/30 p-3 backdrop-blur-xl sm:p-4">
+    <div className="rounded-[18px] border border-white/[0.08] bg-slate-950/20 p-3">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-        <label className="flex min-h-12 min-w-0 flex-[0.8] items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.055] px-4 transition focus-within:border-cyan-400/40 focus-within:bg-cyan-400/[0.06]">
+        <label className="flex min-h-11 min-w-0 flex-[0.8] items-center gap-3 rounded-[13px] border border-white/[0.09] bg-white/[0.035] px-4 transition focus-within:border-cyan-400/35">
           <Search size={18} className="shrink-0 text-slate-400" />
           <input
             value={search}
@@ -77,7 +77,7 @@ export default function CrmFilters({
           compact
         />
 
-        <div className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 xl:justify-center">
+        <div className="flex min-h-11 items-center justify-between gap-3 rounded-[13px] border border-white/[0.08] bg-white/[0.025] px-4 xl:justify-center">
           <span className="whitespace-nowrap text-xs font-bold text-slate-400">
             {resultCount} {resultCount === 1 ? "resultado" : "resultados"}
           </span>
@@ -117,7 +117,7 @@ function FilterSelect({
       leadingIcon={icon}
       searchable={options.length > 8}
       className={compact ? "sm:min-w-[155px]" : "sm:min-w-[205px]"}
-      triggerClassName="min-h-12 rounded-2xl bg-white/[0.055]"
+      triggerClassName="min-h-11 rounded-[13px] bg-white/[0.035]"
     />
   );
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Eye, EyeOff, Lock, Mail, User } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { createFreeTrialPeriod, FREE_TRIAL_DAYS } from "../../lib/trial";
 
 function obterRedirectUrl(path: string) {
   if (typeof window === "undefined") {
@@ -49,9 +50,7 @@ export default function CadastroPage() {
       return false;
     }
 
-    const dataInicioTrial = new Date();
-    const dataFimTrial = new Date();
-    dataFimTrial.setDate(dataFimTrial.getDate() + 7);
+    const { start: dataInicioTrial, end: dataFimTrial } = createFreeTrialPeriod();
 
     const { error: erroAssinatura } = await supabase.from("subscriptions").insert({
       user_id: userId,
@@ -59,7 +58,7 @@ export default function CadastroPage() {
       status: "ativo",
       data_inicio: dataInicioTrial.toISOString(),
       data_fim: dataFimTrial.toISOString(),
-      trial_dias: 7,
+      trial_dias: FREE_TRIAL_DAYS,
       trial_finalizado: false,
       mercadopago_subscription_id: null,
     });
@@ -221,7 +220,7 @@ export default function CadastroPage() {
           <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-300">
             {aguardandoConfirmacao
               ? "Enviamos um link de confirmação para o seu e-mail. Acesse sua caixa de entrada para ativar sua conta."
-              : "Comece a organizar sua carreira artística com mais profissionalismo."}
+              : `Crie sua conta e aproveite ${FREE_TRIAL_DAYS} dias grátis para organizar sua carreira artística.`}
           </p>
         </div>
 

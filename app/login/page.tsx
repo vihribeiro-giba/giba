@@ -6,6 +6,7 @@ import { ArrowLeft, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import { supabase } from "../../lib/supabase";
 import { clearCollaboratorSession, collaboratorHome, storeCollaboratorSession } from "../../lib/access-session";
+import { createFreeTrialPeriod, FREE_TRIAL_DAYS } from "../../lib/trial";
 
 type ModoAuth = "login" | "recuperar";
 
@@ -83,9 +84,7 @@ async function garantirContaInicial(user: SupabaseUser) {
   }
 
   if (!assinaturaExistente) {
-    const dataInicioTrial = new Date();
-    const dataFimTrial = new Date();
-    dataFimTrial.setDate(dataFimTrial.getDate() + 7);
+    const { start: dataInicioTrial, end: dataFimTrial } = createFreeTrialPeriod();
 
     const { error: erroAssinatura } = await supabase.from("subscriptions").insert({
       user_id: user.id,
@@ -93,7 +92,7 @@ async function garantirContaInicial(user: SupabaseUser) {
       status: "ativo",
       data_inicio: dataInicioTrial.toISOString(),
       data_fim: dataFimTrial.toISOString(),
-      trial_dias: 7,
+      trial_dias: FREE_TRIAL_DAYS,
       trial_finalizado: false,
       mercadopago_subscription_id: null,
     });

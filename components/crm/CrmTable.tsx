@@ -37,7 +37,7 @@ const statusLabels: Record<string, string> = {
 export default function CrmTable({ rows, loading, onOpen }: CrmTableProps) {
   if (loading) {
     return (
-      <div className="grid min-h-56 place-items-center rounded-[24px] border border-white/10 bg-slate-950/25">
+      <div className="grid min-h-56 place-items-center rounded-[18px] border border-white/[0.08] bg-slate-950/20">
         <div className="flex items-center gap-3 text-sm font-bold text-slate-400">
           <span className="h-5 w-5 animate-spin rounded-full border-2 border-cyan-300/20 border-t-cyan-300" />
           Carregando CRM...
@@ -48,7 +48,7 @@ export default function CrmTable({ rows, loading, onOpen }: CrmTableProps) {
 
   if (!rows.length) {
     return (
-      <div className="grid min-h-64 place-items-center rounded-[24px] border border-dashed border-white/10 bg-slate-950/25 px-5 text-center">
+      <div className="grid min-h-64 place-items-center rounded-[18px] border border-dashed border-white/10 bg-slate-950/20 px-5 text-center">
         <div>
           <span className="mx-auto grid h-16 w-16 place-items-center rounded-[22px] border border-violet-400/20 bg-violet-500/15 text-violet-200">
             <Landmark size={29} />
@@ -62,8 +62,8 @@ export default function CrmTable({ rows, loading, onOpen }: CrmTableProps) {
 
   return (
     <>
-      <div className="hidden overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/25 xl:block">
-        <div className="grid grid-cols-[1.25fr_.9fr_.9fr_1fr_1fr_.85fr_.85fr_48px] items-center gap-2 border-b border-white/10 bg-white/[0.055] px-4 py-3 text-center text-[10px] font-black uppercase tracking-[0.11em] text-slate-400">
+      <div className="hidden overflow-hidden rounded-[18px] border border-white/[0.08] bg-slate-950/20 xl:block">
+        <div className="grid grid-cols-[1.25fr_.9fr_.9fr_1fr_1fr_.85fr_.85fr_48px] items-center gap-2 border-b border-white/[0.08] bg-white/[0.035] px-4 py-3 text-center text-[10px] font-black uppercase tracking-[0.11em] text-slate-500">
           <span>Prefeitura</span>
           <span>Status</span>
           <span>Modelo</span>
@@ -115,7 +115,7 @@ export default function CrmTable({ rows, loading, onOpen }: CrmTableProps) {
               key={row.oportunidade.id}
               type="button"
               onClick={() => onOpen(row.oportunidade.id)}
-              className={`group relative overflow-hidden rounded-[24px] border p-4 text-left shadow-[0_18px_45px_rgba(0,0,0,0.2)] backdrop-blur-xl transition hover:-translate-y-0.5 ${
+              className={`group relative overflow-hidden rounded-[18px] border p-4 text-left transition hover:border-white/15 ${
                 followUp.tone === "overdue"
                   ? "border-rose-400/20 bg-rose-500/[0.07]"
                   : followUp.tone === "today"

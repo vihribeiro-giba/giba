@@ -9,6 +9,7 @@ import {
   Globe,
 } from "lucide-react"
 import Image from "next/image"
+import { FREE_TRIAL_DAYS } from "@/lib/trial"
 
 export function Hero() {
   const whatsapp =
@@ -61,7 +62,7 @@ export function Hero() {
                   size="lg"
                   className="h-11 bg-gradient-to-r from-violet-600 to-violet-500 px-6 text-sm text-white shadow-lg shadow-violet-500/30 hover:from-violet-700 hover:to-violet-600 hover:shadow-violet-500/50 sm:h-12 sm:px-8 sm:text-base"
                 >
-                  Teste Grátis
+                  Teste grátis por {FREE_TRIAL_DAYS} dias
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </a>

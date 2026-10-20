@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { getAccessModule, isAccessModuleKey } from "../lib/access-modules";
 import { resolveAccessContext } from "../lib/access-session";
+import { FREE_TRIAL_DAYS } from "../lib/trial";
 
 type PlanProtectedRouteProps = {
   children: React.ReactNode;
@@ -110,7 +111,7 @@ export default function PlanProtectedRoute({
 
       if (dataFim < agora) {
         if (plano === "teste") {
-          setMensagem("Seu período de teste gratuito expirou. Escolha um plano para continuar usando o GIBA.");
+          setMensagem(`Seu período de teste gratuito de ${FREE_TRIAL_DAYS} dias expirou. Escolha um plano para continuar usando o GIBA.`);
         } else {
           setMensagem("Sua assinatura expirou. Regularize seu plano para continuar.");
         }

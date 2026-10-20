@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase";
 import NotificationBell from "./notificacoes/NotificationBell";
 import { ACCESS_MODULES, type AccessModuleKey } from "../lib/access-modules";
 import { clearCollaboratorSession, resolveAccessContext, type CollaboratorAccessSession } from "../lib/access-session";
+import { FREE_TRIAL_DAYS } from "../lib/trial";
 
 import {
   LayoutDashboard,
@@ -150,7 +151,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (collaborator) return collaborator.funcao || "Colaborador";
     if (!plano) return "Sem plano";
 
-    if (plano === "teste") return "Teste";
+    if (plano === "teste") return `Teste grátis (${FREE_TRIAL_DAYS} dias)`;
     if (plano === "essencial") return "Essencial";
     if (plano === "profissional") return "Profissional";
     if (plano === "expertise") return "Expertise";

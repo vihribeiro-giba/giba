@@ -15,6 +15,7 @@ import AppLayout from "../../components/AppLayout";
 import ProtectedRoute from "../../components/ProtectedRoute";
 import WhatsAppMessageModal from "../../components/whatsapp/WhatsAppMessageModal";
 import { supabase } from "../../lib/supabase";
+import { FREE_TRIAL_DAYS } from "../../lib/trial";
 
 type Assinatura = {
   id: string;
@@ -156,7 +157,7 @@ export default function AssinaturaPage() {
 
   function nomePlano(plano?: string) {
     if (!plano) return "Sem plano";
-    if (plano === "teste") return "Teste gratis";
+    if (plano === "teste") return `Teste grátis (${FREE_TRIAL_DAYS} dias)`;
     if (plano === "essencial") return "Essencial";
     if (plano === "profissional") return "Profissional";
     if (plano === "expertise") return "Expertise";
@@ -505,7 +506,7 @@ export default function AssinaturaPage() {
                   Pagamento seguro pelo Mercado Pago
                 </h2>
                 <p className="mt-2 max-w-4xl text-sm leading-7 text-slate-300">
-                  O GIBA salva o plano como pendente, redireciona para o checkout e so atualiza o acesso quando o webhook confirmar a aprovacao. Assim, o teste gratis ou plano atual nao e removido antes da confirmacao.
+                  O GIBA salva o plano como pendente, redireciona para o checkout e só atualiza o acesso quando o webhook confirmar a aprovação. Assim, o teste grátis de {FREE_TRIAL_DAYS} dias ou o plano atual não é removido antes da confirmação.
                 </p>
               </div>
             </div>
@@ -540,7 +541,7 @@ function StatusItem({ label, value }: { label: string; value: string }) {
 function obterStatusInfo(status?: string, plano?: string) {
   if (plano === "teste") {
     return {
-      label: "Teste gratis",
+      label: `Teste grátis - ${FREE_TRIAL_DAYS} dias`,
       classe: "border-sky-400/25 bg-sky-500/10 text-sky-200",
     };
   }

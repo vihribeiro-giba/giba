@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { supabase } from "../../lib/supabase"
 import { getAccountAuthUser } from "../../lib/access-session"
+import { FREE_TRIAL_DAYS } from "../../lib/trial"
 import type {
   GibaNotification,
   GibaNotificationStatus,
@@ -619,7 +620,7 @@ function buildSubscriptionNotifications(subscriptions: Row[]): GibaNotification[
     notifications.push({
       id: `subscription-trial-${subscription.id}-${dateKey(endDate!)}`,
       module: "assinatura",
-      title: "Período de teste perto do fim",
+      title: `Teste grátis de ${FREE_TRIAL_DAYS} dias perto do fim`,
       description: days === 0 ? "Seu teste termina hoje." : `Seu teste termina em ${days} dia(s).`,
       date: dateKey(endDate!),
       priority: days <= 2 ? "media" : "baixa",

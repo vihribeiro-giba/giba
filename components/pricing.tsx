@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { Check } from "lucide-react"
+import { FREE_TRIAL_DAYS } from "@/lib/trial"
 
 const whatsapp =
   "https://wa.me/5531993575969?text=Olá!%20Quero%20assinar%20a%20Plataforma%20GIBA."
@@ -75,7 +76,7 @@ export function Pricing() {
             </span>
           </h2>
           <p className="mt-3 text-sm text-muted-foreground sm:mt-4 sm:text-base">
-            Comece grátis por 7 dias. Cancele quando quiser.
+            Comece grátis por {FREE_TRIAL_DAYS} dias. Cancele quando quiser.
           </p>
         </div>
 

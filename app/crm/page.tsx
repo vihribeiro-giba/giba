@@ -1053,13 +1053,13 @@ export default function CrmPage() {
             </section>
           )}
 
-          <section className="mt-5 rounded-[30px] border border-white/10 bg-white/[0.045] p-3 shadow-[0_24px_70px_rgba(0,0,0,0.24)] backdrop-blur-2xl sm:mt-6 sm:p-5">
+          <section className="mt-5 rounded-[22px] border border-white/[0.085] bg-white/[0.025] p-3 sm:p-5">
             <div className="mb-4 flex flex-col gap-2 px-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-300">Carteira comercial</span>
-                <h2 className="mt-1 text-2xl font-black tracking-[-0.025em] text-white">Prefeituras e oportunidades</h2>
+                <h2 className="text-xl font-black tracking-[-0.02em] text-white">Prefeituras e oportunidades</h2>
+                <p className="mt-1 text-sm text-slate-500">Carteira comercial e próximos contatos.</p>
               </div>
-              <p className="max-w-xl text-sm leading-6 text-slate-400 sm:text-right">
+              <p className="max-w-xl text-xs leading-5 text-slate-500 sm:text-right">
                 Follow-ups mais urgentes aparecem primeiro. Abra um registro para acessar o dossiê completo.
               </p>
             </div>
@@ -2153,15 +2153,15 @@ function calcularPrioridadeEvento(dataEvento: string) {
 }
 
 const pageStyle: React.CSSProperties = {
-  maxWidth: 1480,
+  maxWidth: 1380,
   margin: "0 auto",
   color: "#fff",
 };
 
 const botaoPrincipal: React.CSSProperties = {
-  minHeight: 52,
-  padding: "0 20px",
-  borderRadius: 16,
+  minHeight: 46,
+  padding: "0 18px",
+  borderRadius: 13,
   border: "none",
   background: "linear-gradient(90deg,#8B35FF,#00AAFF)",
   color: "#fff",
@@ -2193,13 +2193,11 @@ const botaoPerigo: React.CSSProperties = {
 };
 
 const cardStyle: React.CSSProperties = {
-  background:
-    "linear-gradient(135deg,rgba(255,255,255,0.065),rgba(0,170,255,0.08))",
-  border: "1px solid rgba(255,255,255,0.11)",
-  borderRadius: 24,
-  padding: 26,
+  background: "rgba(255,255,255,0.03)",
+  border: "1px solid rgba(255,255,255,0.085)",
+  borderRadius: 20,
+  padding: 22,
   marginBottom: 24,
-  boxShadow: "0 18px 50px rgba(0,0,0,0.18)",
 };
 
 const sectionHeaderStyle: React.CSSProperties = {
@@ -2244,9 +2242,9 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   minHeight: 50,
   padding: "0 14px",
-  borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(5,10,24,0.66)",
+  borderRadius: 13,
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(2,6,23,0.48)",
   color: "#fff",
   outline: "none",
   boxSizing: "border-box",
@@ -2287,7 +2285,7 @@ const modalOverlayStyle: React.CSSProperties = {
   inset: 0,
   zIndex: 9999,
   background: "rgba(2,6,18,0.76)",
-  backdropFilter: "blur(12px)",
+  backdropFilter: "blur(8px)",
   display: "grid",
   placeItems: "center",
   padding: 8,
@@ -2297,10 +2295,10 @@ const modalCardStyle: React.CSSProperties = {
   width: "min(1080px, calc(100vw - 16px))",
   maxHeight: "calc(100dvh - 16px)",
   overflowY: "auto",
-  borderRadius: 28,
-  border: "1px solid rgba(255,255,255,0.14)",
-  background: "linear-gradient(135deg,#101224,#08263A)",
-  boxShadow: "0 28px 90px rgba(0,0,0,0.48)",
+  borderRadius: 22,
+  border: "1px solid rgba(255,255,255,0.11)",
+  background: "#0b1425",
+  boxShadow: "0 28px 80px rgba(0,0,0,0.44)",
   padding: "clamp(16px, 3vw, 26px)",
 };
 
@@ -2313,9 +2311,9 @@ const modalHeaderStyle: React.CSSProperties = {
 };
 
 const modalIconStyle: React.CSSProperties = {
-  width: 54,
-  height: 54,
-  borderRadius: 18,
+  width: 46,
+  height: 46,
+  borderRadius: 14,
   display: "grid",
   placeItems: "center",
   background: "linear-gradient(135deg,#8B35FF,#00AAFF)",

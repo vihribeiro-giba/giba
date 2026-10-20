@@ -20,19 +20,15 @@ type SummaryItem = {
 const toneClasses = {
   violet: {
     icon: "border-violet-400/20 bg-violet-500/15 text-violet-200",
-    glow: "bg-violet-500/20",
   },
   cyan: {
     icon: "border-cyan-400/20 bg-cyan-400/15 text-cyan-200",
-    glow: "bg-cyan-400/20",
   },
   amber: {
     icon: "border-amber-400/20 bg-amber-400/15 text-amber-200",
-    glow: "bg-amber-400/20",
   },
   rose: {
     icon: "border-rose-400/20 bg-rose-500/15 text-rose-200",
-    glow: "bg-rose-500/20",
   },
 };
 
@@ -75,7 +71,7 @@ export default function CrmSummaryCards({
   ];
 
   return (
-    <section className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:items-stretch lg:mt-6">
+    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {items.map((item) => {
         const Icon = item.icon;
         const tone = toneClasses[item.tone];
@@ -83,21 +79,20 @@ export default function CrmSummaryCards({
         return (
           <article
             key={item.label}
-            className="group relative min-h-[172px] overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.05] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.2)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-white/15 sm:h-full sm:p-6"
+            className="min-h-[134px] rounded-[20px] border border-white/[0.085] bg-white/[0.03] p-5 transition hover:border-white/15 hover:bg-white/[0.045]"
           >
-            <div className={`pointer-events-none absolute -right-10 -top-12 h-28 w-28 rounded-full blur-3xl ${tone.glow}`} />
-            <div className="relative flex h-full items-start justify-between gap-4">
+            <div className="flex h-full items-start justify-between gap-4">
               <div className="flex h-full min-w-0 flex-col">
-                <p className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-400">
+                <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">
                   {item.label}
                 </p>
-                <strong className="mt-4 block text-4xl font-black leading-none tracking-[-0.04em] text-white">
+                <strong className="mt-3 block text-3xl font-black leading-none tracking-[-0.04em] text-white">
                   {item.value}
                 </strong>
-                <p className="mt-auto pt-3 text-sm font-semibold text-slate-400">{item.hint}</p>
+                <p className="mt-auto pt-3 text-xs font-semibold leading-5 text-slate-500">{item.hint}</p>
               </div>
-              <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl border ${tone.icon}`}>
-                <Icon size={21} />
+              <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-[13px] border ${tone.icon}`}>
+                <Icon size={18} />
               </span>
             </div>
           </article>
