@@ -1,4 +1,4 @@
-import { CalendarDays, Trash2 } from "lucide-react";
+import { CalendarDays, Pencil, Trash2 } from "lucide-react";
 
 export type CrmEventItem = {
   id: string;
@@ -11,6 +11,7 @@ export type CrmEventItem = {
 
 type CrmEventTableProps = {
   events: CrmEventItem[];
+  onEdit: (event: CrmEventItem) => void;
   onDelete: (event: CrmEventItem) => void;
   formatDate: (value?: string | null) => string;
   normalizeModel: (value?: string | null) => string;
@@ -21,6 +22,7 @@ type CrmEventTableProps = {
 
 export default function CrmEventTable({
   events,
+  onEdit,
   onDelete,
   formatDate,
   normalizeModel,
@@ -41,7 +43,7 @@ export default function CrmEventTable({
 
   return (
     <div className="overflow-hidden rounded-[22px] border border-white/10 bg-slate-950/25">
-      <div className="hidden grid-cols-[1.2fr_.7fr_.9fr_1fr_.8fr_48px] items-center gap-2 border-b border-white/10 bg-white/[0.05] px-4 py-3 text-center text-[10px] font-black uppercase tracking-[0.1em] text-slate-500 lg:grid">
+      <div className="hidden grid-cols-[1.2fr_.7fr_.9fr_1fr_.8fr_92px] items-center gap-2 border-b border-white/10 bg-white/[0.05] px-4 py-3 text-center text-[10px] font-black uppercase tracking-[0.1em] text-slate-500 lg:grid">
         <span>Evento</span><span>Data</span><span>Modelo</span><span>Melhor contato</span><span>Prioridade</span><span />
       </div>
       <div className="divide-y divide-white/[0.07]">
@@ -50,20 +52,30 @@ export default function CrmEventTable({
             calculateContactDate(event.data_evento || "", getReminderMonths(event.observacoes)),
           );
           return (
-            <div key={event.id} className="grid gap-3 p-4 lg:grid-cols-[1.2fr_.7fr_.9fr_1fr_.8fr_48px] lg:items-center lg:gap-2 lg:text-center">
+            <div key={event.id} className="grid gap-3 p-4 lg:grid-cols-[1.2fr_.7fr_.9fr_1fr_.8fr_92px] lg:items-center lg:gap-2 lg:text-center">
               <strong className="text-sm font-black text-white">{event.nome_evento}</strong>
               <EventDetail label="Data" value={formatDate(event.data_evento)} />
               <EventDetail label="Modelo" value={normalizeModel(event.modelo_contratacao)} />
               <EventDetail label="Melhor contato" value={bestContact} accent />
               <span className="flex lg:justify-center"><PriorityBadge value={event.prioridade || "Sem prioridade"} /></span>
-              <button
-                type="button"
-                onClick={() => onDelete(event)}
-                className="grid h-10 w-10 place-items-center rounded-xl border border-rose-400/20 bg-rose-500/10 text-rose-200 transition hover:bg-rose-500/20"
-                aria-label={`Excluir evento ${event.nome_evento}`}
-              >
-                <Trash2 size={16} />
-              </button>
+              <span className="flex gap-2 lg:justify-center">
+                <button
+                  type="button"
+                  onClick={() => onEdit(event)}
+                  className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300 transition hover:border-sky-400/30 hover:bg-sky-500/10 hover:text-sky-200"
+                  aria-label={`Editar evento ${event.nome_evento}`}
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(event)}
+                  className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-400 transition hover:border-rose-400/30 hover:bg-rose-500/10 hover:text-rose-200"
+                  aria-label={`Excluir evento ${event.nome_evento}`}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </span>
             </div>
           );
         })}

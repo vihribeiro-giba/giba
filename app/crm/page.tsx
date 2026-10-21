@@ -1139,6 +1139,7 @@ function CrmModal({
   const [abaAtiva, setAbaAtiva] = useState<CrmModalTab>("dados");
   const [salvandoEvento, setSalvandoEvento] = useState(false);
   const [eventosModal, setEventosModal] = useState(eventos);
+  const [eventoEditandoId, setEventoEditandoId] = useState<string | null>(null);
   const [interacoesModal, setInteracoesModal] = useState(interacoes);
   const [novaObservacao, setNovaObservacao] = useState("");
   const [salvandoObservacao, setSalvandoObservacao] = useState(false);
@@ -1188,28 +1189,56 @@ function CrmModal({
     setNovoEvento((atual) => ({ ...atual, [campo]: valor }));
   }
 
+  function limparEventoMapeado() {
+    setEventoEditandoId(null);
+    setNovoEvento({
+      nome: "",
+      data: "",
+      modelo: "Credenciamento",
+      mesesAntes: "3",
+      observacoes: "",
+    });
+  }
+
+  function editarEventoMapeado(evento: EventoMunicipal) {
+    setEventoEditandoId(evento.id);
+    setNovoEvento({
+      nome: evento.nome_evento || "",
+      data: evento.data_evento
+        ? formatarDataEventoCurta(evento.data_evento)
+        : "",
+      modelo: normalizarModeloEvento(evento.modelo_contratacao),
+      mesesAntes: String(obterMesesAntesEvento(evento.observacoes)),
+      observacoes: evento.observacoes || "",
+    });
+  }
+
   async function cadastrarEventoMapeado(event: React.FormEvent) {
     event.preventDefault();
     if (!municipio?.id) return;
 
-      if (!novoEvento.nome.trim()) {
-        alert("Informe o nome do evento.");
-        return;
-      }
+    if (!novoEvento.nome.trim()) {
+      alert("Informe o nome do evento.");
+      return;
+    }
+
+    const dataEventoBanco = normalizarDataEventoParaBanco(novoEvento.data);
+
+    if (!dataEventoBanco) {
+      alert("Informe uma data válida para o evento no formato dd/mm.");
+      return;
+    }
 
     try {
       setSalvandoEvento(true);
 
-      const dataEventoBanco = normalizarDataEventoParaBanco(novoEvento.data);
       const proximoContato = calcularDataContatoEvento(
-        novoEvento.data,
+        dataEventoBanco,
         Number(novoEvento.mesesAntes || 0),
       );
-      const prioridadeAutomatica = calcularPrioridadeEvento(novoEvento.data);
+      const prioridadeAutomatica = calcularPrioridadeEvento(dataEventoBanco);
 
-      const { data: eventoCriado, error: eventoError } = await supabase
-        .from("municipio_eventos")
-        .insert({
+      const dadosEvento = {
           user_id: oportunidade.user_id,
           municipio_id: municipio.id,
           nome_evento: novoEvento.nome.trim(),
@@ -1217,7 +1246,19 @@ function CrmModal({
           modelo_contratacao: novoEvento.modelo || null,
           prioridade: prioridadeAutomatica,
           observacoes: criarObservacaoEvento(novoEvento.mesesAntes),
-        })
+          updated_at: new Date().toISOString(),
+        };
+
+      const gravacaoEvento = eventoEditandoId
+        ? supabase
+          .from("municipio_eventos")
+          .update(dadosEvento)
+          .eq("id", eventoEditandoId)
+        : supabase
+          .from("municipio_eventos")
+          .insert(dadosEvento);
+
+      const { data: eventoSalvo, error: eventoError } = await gravacaoEvento
         .select("*")
         .single();
 
@@ -1244,14 +1285,19 @@ function CrmModal({
         }
       }
 
-      setEventosModal((atual) => [...atual, eventoCriado as EventoMunicipal]);
-      setNovoEvento({
-        nome: "",
-        data: "",
-        modelo: "Credenciamento",
-        mesesAntes: "3",
-        observacoes: "",
-      });
+      setEventosModal((atual) => eventoEditandoId
+        ? atual.map((item) => item.id === eventoEditandoId ? eventoSalvo as EventoMunicipal : item)
+        : [...atual, eventoSalvo as EventoMunicipal]);
+      if (eventoSalvo.id === eventoPrincipal?.id) {
+        setEdit((atual) => ({
+          ...atual,
+          nome_evento: eventoSalvo.nome_evento || "",
+          data_evento: eventoSalvo.data_evento || "",
+          prioridade: eventoSalvo.prioridade || "",
+          observacoes_evento: eventoSalvo.observacoes || "",
+        }));
+      }
+      limparEventoMapeado();
       await onSaved();
     } finally {
       setSalvandoEvento(false);
@@ -1277,6 +1323,7 @@ function CrmModal({
     }
 
     setEventosModal((atual) => atual.filter((item) => item.id !== evento.id));
+    if (eventoEditandoId === evento.id) limparEventoMapeado();
     await onSaved();
   }
 
@@ -1393,35 +1440,13 @@ function CrmModal({
         const { error: eventoError } = await supabase
           .from("municipio_eventos")
           .update({
-            nome_evento: edit.nome_evento.trim() || "Evento municipal",
-            data_evento: edit.data_evento || null,
-            modelo_contratacao: edit.modelo_contratacao,
             prioridade: edit.prioridade.trim() || null,
-            observacoes: edit.observacoes_evento.trim() || null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", eventoPrincipal.id);
 
         if (eventoError) {
           console.error("Erro ao atualizar evento municipal:", eventoError);
-          alert("Erro ao salvar evento municipal.");
-          return;
-        }
-      } else if (edit.nome_evento.trim() || edit.prioridade.trim()) {
-        const { error: eventoError } = await supabase
-          .from("municipio_eventos")
-          .insert({
-            user_id: oportunidade.user_id,
-            municipio_id: municipio.id,
-            nome_evento: edit.nome_evento.trim() || "Evento municipal",
-            data_evento: edit.data_evento || null,
-            modelo_contratacao: edit.modelo_contratacao,
-            prioridade: edit.prioridade.trim() || null,
-            observacoes: edit.observacoes_evento.trim() || null,
-          });
-
-        if (eventoError) {
-          console.error("Erro ao criar evento municipal:", eventoError);
           alert("Erro ao salvar evento municipal.");
           return;
         }
@@ -1621,6 +1646,7 @@ function CrmModal({
                   }
                   style={inputStyle}
                   placeholder="Ex.: Aniversário da Cidade"
+                  required
                 />
               </Campo>
               <Campo label="Data do Evento">
@@ -1633,9 +1659,10 @@ function CrmModal({
                     )
                   }
                   style={inputStyle}
-                  inputMode="numeric"
+                  inputMode="text"
                   maxLength={5}
                   placeholder="dd/mm"
+                  required
                 />
               </Campo>
               <Campo label="Modelo">
@@ -1679,23 +1706,43 @@ function CrmModal({
                     </small>
                   </div>
                 </div>
-                <button
-                  className="md:col-span-2 xl:col-span-1"
-                  type="submit"
-                  disabled={salvandoEvento}
-                  style={{
-                    ...eventSubmitButtonStyle,
-                    opacity: salvandoEvento ? 0.7 : 1,
-                  }}
+                <div
+                  className={`grid grid-cols-1 gap-2 md:col-span-2 xl:col-span-1 ${
+                    eventoEditandoId ? "md:grid-cols-2" : ""
+                  }`}
                 >
-                  <Plus size={17} />
-                  {salvandoEvento ? "Salvando..." : "Adicionar evento"}
-                </button>
+                  <button
+                    type="submit"
+                    disabled={salvandoEvento}
+                    style={{
+                      ...eventSubmitButtonStyle,
+                      opacity: salvandoEvento ? 0.7 : 1,
+                    }}
+                  >
+                    <Check size={16} />
+                    {salvandoEvento
+                      ? "Salvando..."
+                      : eventoEditandoId
+                        ? "Salvar"
+                        : "Adicionar"}
+                  </button>
+                  {eventoEditandoId && (
+                    <button
+                      type="button"
+                      onClick={limparEventoMapeado}
+                      disabled={salvandoEvento}
+                      style={eventCancelButtonStyle}
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </div>
               </div>
             </form>
 
             <CrmEventTable
               events={eventosModal}
+              onEdit={(evento) => editarEventoMapeado(evento as EventoMunicipal)}
               onDelete={(evento) => excluirEventoMapeado(evento as EventoMunicipal)}
               formatDate={formatarDataEventoCurta}
               normalizeModel={normalizarModeloEvento}
@@ -1808,7 +1855,7 @@ function CrmModal({
             className="w-full sm:w-auto"
           >
             <Check size={17} />
-            {salvandoAlteracoes ? "Salvando..." : "Salvar alterações"}
+            {salvandoAlteracoes ? "Salvando..." : "Salvar"}
           </button>
           <button
             type="button"
@@ -1817,7 +1864,7 @@ function CrmModal({
             className="w-full sm:w-auto"
           >
             <Trash2 size={17} />
-            Excluir oportunidade
+            Excluir
           </button>
         </div>
         <WhatsAppMessageModal
@@ -2001,46 +2048,71 @@ function formatarTelefoneDigitado(valor: string) {
 }
 
 function formatarDiaMesDigitado(valor: string) {
-  const digitos = valor.replace(/\D/g, "").slice(0, 4);
+  const texto = valor.replace(/[^\d/]/g, "").slice(0, 5);
+
+  if (texto.includes("/")) {
+    const partes = texto.split("/");
+    const dia = (partes[0] || "").slice(0, 2);
+    const mes = (partes[1] || "").slice(0, 2);
+    return `${dia}/${mes}`;
+  }
+
+  const digitos = texto.replace(/\D/g, "").slice(0, 4);
 
   if (digitos.length <= 2) return digitos;
   return `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
 }
 
 function normalizarDataEventoParaBanco(valor: string) {
-  if (!valor) return null;
+  const valorTratado = valor.trim();
+  if (!valorTratado) return null;
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor;
+  const isoMatch = valorTratado.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    return obterProximaDataAnual(Number(isoMatch[2]), Number(isoMatch[3]));
+  }
 
-  const match = valor.match(/^(\d{2})\/(\d{2})$/);
+  const match = valorTratado.match(/^(\d{1,2})\/(\d{1,2})$/);
   if (!match) return null;
 
   const dia = Number(match[1]);
   const mes = Number(match[2]);
 
-  if (dia < 1 || dia > 31 || mes < 1 || mes > 12) return null;
+  return obterProximaDataAnual(mes, dia);
+}
 
+function obterProximaDataAnual(mes: number, dia: number) {
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
 
-  const anoAtual = hoje.getFullYear();
-  let data = new Date(anoAtual, mes - 1, dia);
+  let ano = hoje.getFullYear();
+  let dataNormalizada = montarDataEventoValida(ano, mes, dia);
+  if (!dataNormalizada) return null;
 
+  const data = new Date(`${dataNormalizada}T00:00:00`);
+  if (data < hoje) {
+    ano += 1;
+    dataNormalizada = montarDataEventoValida(ano, mes, dia);
+  }
+
+  return dataNormalizada;
+}
+
+function montarDataEventoValida(ano: number, mes: number, dia: number) {
+  if (ano < 1900 || dia < 1 || dia > 31 || mes < 1 || mes > 12) return null;
+
+  const data = new Date(ano, mes - 1, dia);
   if (
-    data.getDate() !== dia ||
+    data.getFullYear() !== ano ||
     data.getMonth() !== mes - 1 ||
+    data.getDate() !== dia ||
     Number.isNaN(data.getTime())
   ) {
     return null;
   }
 
-  if (data < hoje) {
-    data = new Date(anoAtual + 1, mes - 1, dia);
-  }
-
-  const ano = data.getFullYear();
-  const mesTexto = String(data.getMonth() + 1).padStart(2, "0");
-  const diaTexto = String(data.getDate()).padStart(2, "0");
+  const mesTexto = String(mes).padStart(2, "0");
+  const diaTexto = String(dia).padStart(2, "0");
 
   return `${ano}-${mesTexto}-${diaTexto}`;
 }
@@ -2366,11 +2438,21 @@ const eventFormStyle: React.CSSProperties = {
 };
 
 const eventSubmitButtonStyle: React.CSSProperties = {
-  ...botaoSecundario,
+  ...botaoPrincipal,
   width: "100%",
   minHeight: 50,
   alignSelf: "end",
   justifyContent: "center",
+  textAlign: "center",
+  lineHeight: 1.1,
+  whiteSpace: "nowrap",
+};
+
+const eventCancelButtonStyle: React.CSSProperties = {
+  ...botaoNeutro,
+  width: "100%",
+  minHeight: 50,
+  padding: "0 14px",
 };
 
 const calculatedMonthBoxStyle: React.CSSProperties = {
