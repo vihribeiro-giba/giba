@@ -101,6 +101,7 @@ export default function DashboardPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [financeiro, setFinanceiro] = useState<Financeiro[]>([]);
   const [nomeUsuario, setNomeUsuario] = useState("Usuário GIBA");
+  const [valoresVisiveis, setValoresVisiveis] = useState(true);
 
   async function obterUsuarioLogado() {
     const { data, error } = await getAccountAuthUser();
@@ -271,7 +272,10 @@ export default function DashboardPage() {
               </div>
             </header>
 
-            <QuickActions />
+            <QuickActions
+              valoresVisiveis={valoresVisiveis}
+              onAlternarValores={() => setValoresVisiveis((visiveis) => !visiveis)}
+            />
 
             <section style={metricsGridStyle}>
               <MetricCard
@@ -285,7 +289,7 @@ export default function DashboardPage() {
               <MetricCard
                 icon={<DollarSign size={24} />}
                 title="Receita Confirmada"
-                value={formatarMoeda(resumo.entradas)}
+                value={valoresVisiveis ? formatarMoeda(resumo.entradas) : "R$ ******"}
                 detail="Financeiro real"
                 color="#37E884"
               />
@@ -293,7 +297,7 @@ export default function DashboardPage() {
               <MetricCard
                 icon={<TrendingDown size={24} />}
                 title="Despesas"
-                value={formatarMoeda(resumo.saidas)}
+                value={valoresVisiveis ? formatarMoeda(resumo.saidas) : "R$ ******"}
                 detail="Saídas registradas"
                 color="#FF5B8A"
                 positive={false}
@@ -302,7 +306,7 @@ export default function DashboardPage() {
               <MetricCard
                 icon={<Trophy size={24} />}
                 title="Lucro Atual"
-                value={formatarMoeda(resumo.saldo)}
+                value={valoresVisiveis ? formatarMoeda(resumo.saldo) : "R$ ******"}
                 detail="Entradas - Saídas"
                 color={resumo.saldo >= 0 ? "#00AAFF" : "#FF5B8A"}
                 positive={resumo.saldo >= 0}
@@ -311,7 +315,10 @@ export default function DashboardPage() {
 
             <section style={mainGridStyle}>
               <UpcomingShows eventos={eventos} />
-              <RevenueChart financeiro={financeiro} />
+              <RevenueChart
+                financeiro={financeiro}
+                valoresVisiveis={valoresVisiveis}
+              />
             </section>
 
             <section style={bottomGridStyle}>
@@ -370,6 +377,7 @@ export default function DashboardPage() {
                 totalClientes={clientes.length}
                 totalEventos={eventos.length}
                 saldo={resumo.saldo}
+                valoresVisiveis={valoresVisiveis}
               />
             </section>
           </div>

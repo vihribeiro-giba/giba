@@ -1,11 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarPlus, UserPlus, Plus, FileText } from "lucide-react";
+import { CalendarPlus, Eye, EyeOff, UserPlus, Plus, FileText } from "lucide-react";
 
-export default function QuickActions() {
+type QuickActionsProps = {
+  valoresVisiveis: boolean;
+  onAlternarValores: () => void;
+};
+
+export default function QuickActions({
+  valoresVisiveis,
+  onAlternarValores,
+}: QuickActionsProps) {
+  const rotulo = valoresVisiveis ? "Ocultar valores" : "Mostrar valores";
+
   return (
     <div style={wrapperStyle}>
+      <button
+        type="button"
+        onClick={onAlternarValores}
+        style={visibilityButtonStyle}
+        aria-label={rotulo}
+        title={rotulo}
+        aria-pressed={!valoresVisiveis}
+      >
+        {valoresVisiveis ? <Eye size={19} /> : <EyeOff size={19} />}
+      </button>
+
       <Link href="/agenda" style={primaryButtonStyle}>
         <CalendarPlus size={18} />
         Novo Evento
@@ -70,4 +91,11 @@ const secondaryButtonStyle: React.CSSProperties = {
   ...baseButton,
   background: "rgba(255,255,255,0.055)",
   border: "1px solid rgba(255,255,255,0.10)",
+};
+
+const visibilityButtonStyle: React.CSSProperties = {
+  ...secondaryButtonStyle,
+  width: 44,
+  padding: 0,
+  cursor: "pointer",
 };

@@ -64,7 +64,7 @@ export default function ColaboradorForm(props: Props) {
 
   return (
     <div ref={props.formRef} className="rounded-[26px] border border-white/10 bg-white/[0.05] p-5 shadow-2xl sm:p-6">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 pr-12">
         <h2 className="text-xl font-black text-white">{props.editandoId ? "Editar colaborador" : "Cadastrar colaborador"}</h2>
         {props.editandoId && <span className="rounded-full bg-sky-400/15 px-3 py-1 text-xs font-bold text-sky-300">Editando</span>}
       </div>

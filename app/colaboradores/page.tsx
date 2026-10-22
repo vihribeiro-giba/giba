@@ -5,7 +5,7 @@ import PlanProtectedRoute from "../../components/PlanProtectedRoute";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
-import { Users, UserCheck, UserX, KeyRound, Plus } from "lucide-react";
+import { Users, UserCheck, UserX, KeyRound, Plus, X } from "lucide-react";
 
 import type { Colaborador, FiltroStatus, PixTipo } from "../../components/colaboradores/types";
 import {
@@ -31,7 +31,7 @@ import {
 export default function ColaboradoresPage() {
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
   const [editandoId, setEditandoId] = useState<string | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
+  const [modalAberto, setModalAberto] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [whatsappColaborador, setWhatsappColaborador] = useState<Colaborador | null>(null);
@@ -65,14 +65,6 @@ export default function ColaboradoresPage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
-
-  /* ---------- responsividade (mesmo padrão dos módulos) ---------- */
-  useEffect(() => {
-    const verificarTela = () => setIsMobile(window.innerWidth <= 1100);
-    verificarTela();
-    window.addEventListener("resize", verificarTela);
-    return () => window.removeEventListener("resize", verificarTela);
-  }, []);
 
   /* ---------- autenticação / carregamento (mantido) ---------- */
   async function obterUsuarioLogado() {
@@ -140,6 +132,25 @@ export default function ColaboradoresPage() {
   useEffect(() => {
     carregarColaboradores();
   }, []);
+
+  useEffect(() => {
+    if (!modalAberto) return;
+
+    const overflowAnterior = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const fecharComEsc = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !salvando && !enviandoFoto) {
+        limparFormulario();
+      }
+    };
+
+    window.addEventListener("keydown", fecharComEsc);
+    return () => {
+      document.body.style.overflow = overflowAnterior;
+      window.removeEventListener("keydown", fecharComEsc);
+    };
+  }, [modalAberto, salvando, enviandoFoto]);
 
   /* ---------- salvar (mantém CRUD + novos campos) ---------- */
   async function salvarColaborador(e: React.FormEvent) {
@@ -221,10 +232,7 @@ export default function ColaboradoresPage() {
     setPixChave(colaborador.pix_key || "");
     setPixFavorecido(colaborador.pix_favorecido || "");
     setObservacoes(colaborador.observacoes || "");
-
-    if (isMobile && formRef.current) {
-      formRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    setModalAberto(true);
   }
 
   async function excluirColaborador(id: string) {
@@ -253,6 +261,7 @@ export default function ColaboradoresPage() {
   }
 
   function limparFormulario() {
+    setModalAberto(false);
     setEditandoId(null);
     setNome("");
     setFuncao("");
@@ -446,9 +455,7 @@ Use a senha inicial definida pelo titular. Depois de entrar, você poderá alter
                 type="button"
                 onClick={() => {
                   limparFormulario();
-                  if (isMobile && formRef.current) {
-                    formRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }
+                  setModalAberto(true);
                 }}
                 style={novoBotaoStyle}
               >
@@ -489,55 +496,8 @@ Use a senha inicial definida pelo titular. Depois de entrar, você poderá alter
               />
             </section>
 
-            {/* ---------- GRID PRINCIPAL ---------- */}
-            <section
-              style={{
-                display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "minmax(520px, 0.9fr) minmax(0, 1.1fr)",
-                gap: 22,
-                alignItems: "start",
-              }}
-            >
-              {/* ===== FORMULÁRIO ===== */}
-              <ColaboradorForm
-                editandoId={editandoId}
-                salvando={salvando}
-                enviandoFoto={enviandoFoto}
-                nome={nome}
-                setNome={setNome}
-                funcao={funcao}
-                setFuncao={setFuncao}
-                celular={celular}
-                setCelular={setCelular}
-                accessIdentifier={accessIdentifier}
-                setAccessIdentifier={(value) => setAccessIdentifier(normalizeEmailIdentifier(value))}
-                password={password}
-                setPassword={setPassword}
-                professionalDomain={professionalDomain}
-                domainError={domainError}
-                instagram={instagram}
-                setInstagram={setInstagram}
-                status={status}
-                setStatus={setStatus}
-                pixTipo={pixTipo}
-                setPixTipo={setPixTipo}
-                pixChave={pixChave}
-                setPixChave={setPixChave}
-                observacoes={observacoes}
-                setObservacoes={setObservacoes}
-                allowedModules={allowedModules}
-                setAllowedModules={setAllowedModules}
-                availableModules={availableModules}
-                photoUrl={photoUrl}
-                fileInputRef={fileInputRef}
-                onSelecionarFoto={aoSelecionarFoto}
-                onRemoverFoto={removerFoto}
-                formRef={formRef}
-                onSubmit={salvarColaborador}
-                onCancelar={limparFormulario}
-              />
-
-              {/* ===== LISTA ===== */}
+            {/* ---------- LISTA PRINCIPAL ---------- */}
+            <section>
               <div style={panelStyle}>
                 <div style={panelHeaderStyle}>
                   <h2 style={panelTitleStyle}>Colaboradores cadastrados</h2>
@@ -582,7 +542,7 @@ Use a senha inicial definida pelo titular. Depois de entrar, você poderá alter
                       }
                       texto={
                         colaboradores.length === 0
-                          ? "Cadastre seu primeiro colaborador no formulário ao lado."
+                          ? "Use o botão Novo Colaborador para cadastrar o primeiro profissional."
                           : "Ajuste a busca ou os filtros para ver mais resultados."
                       }
                     />
@@ -593,6 +553,72 @@ Use a senha inicial definida pelo titular. Depois de entrar, você poderá alter
               </div>
             </section>
           </div>
+
+          {modalAberto && (
+            <div
+              className="fixed inset-0 z-[1000] overflow-y-auto bg-black/75 p-4 backdrop-blur-sm sm:p-8"
+              onMouseDown={() => {
+                if (!salvando && !enviandoFoto) limparFormulario();
+              }}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label={editandoId ? "Editar colaborador" : "Cadastrar colaborador"}
+                className="relative mx-auto w-full max-w-3xl"
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={limparFormulario}
+                  disabled={salvando || enviandoFoto}
+                  className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-xl border border-white/10 bg-slate-900/90 text-slate-300 transition hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Fechar formulário de colaborador"
+                >
+                  <X size={18} />
+                </button>
+
+                <ColaboradorForm
+                  editandoId={editandoId}
+                  salvando={salvando}
+                  enviandoFoto={enviandoFoto}
+                  nome={nome}
+                  setNome={setNome}
+                  funcao={funcao}
+                  setFuncao={setFuncao}
+                  celular={celular}
+                  setCelular={setCelular}
+                  accessIdentifier={accessIdentifier}
+                  setAccessIdentifier={(value) => setAccessIdentifier(normalizeEmailIdentifier(value))}
+                  password={password}
+                  setPassword={setPassword}
+                  professionalDomain={professionalDomain}
+                  domainError={domainError}
+                  instagram={instagram}
+                  setInstagram={setInstagram}
+                  status={status}
+                  setStatus={setStatus}
+                  pixTipo={pixTipo}
+                  setPixTipo={setPixTipo}
+                  pixChave={pixChave}
+                  setPixChave={setPixChave}
+                  observacoes={observacoes}
+                  setObservacoes={setObservacoes}
+                  allowedModules={allowedModules}
+                  setAllowedModules={setAllowedModules}
+                  availableModules={availableModules}
+                  photoUrl={photoUrl}
+                  fileInputRef={fileInputRef}
+                  onSelecionarFoto={aoSelecionarFoto}
+                  onRemoverFoto={removerFoto}
+                  formRef={formRef}
+                  onSubmit={salvarColaborador}
+                  onCancelar={limparFormulario}
+                />
+              </div>
+            </div>
+          )}
+
           <WhatsAppMessageModal
             open={Boolean(whatsappColaborador)}
             onOpenChange={(open) => !open && setWhatsappColaborador(null)}

@@ -6,6 +6,7 @@ type GibaInsightsProps = {
   totalClientes: number;
   totalEventos: number;
   saldo: number;
+  valoresVisiveis: boolean;
 };
 
 function moeda(valor: number) {
@@ -21,7 +22,9 @@ export default function GibaInsights({
   totalClientes,
   totalEventos,
   saldo,
+  valoresVisiveis,
 }: GibaInsightsProps) {
+  const valorProtegido = "R$ ******";
   const insights = [
     {
       icon: <BarChart3 size={18} />,
@@ -36,15 +39,21 @@ export default function GibaInsights({
     {
       icon: <DollarSign size={18} />,
       color: "#37E884",
-      text: `Seu ticket médio estimado por evento é de ${moeda(ticketMedio)}.`,
+      text: `Seu ticket médio estimado por evento é de ${
+        valoresVisiveis ? moeda(ticketMedio) : valorProtegido
+      }.`,
     },
     {
       icon: <ShieldCheck size={18} />,
       color: saldo >= 0 ? "#38BDF8" : "#FF5B8A",
       text:
         saldo >= 0
-          ? `Sua operação está positiva com saldo atual de ${moeda(saldo)}. Continue assim!`
-          : `Atenção: seu saldo atual está negativo em ${moeda(Math.abs(saldo))}.`,
+          ? `Sua operação está positiva com saldo atual de ${
+              valoresVisiveis ? moeda(saldo) : valorProtegido
+            }. Continue assim!`
+          : `Atenção: seu saldo atual está negativo em ${
+              valoresVisiveis ? moeda(Math.abs(saldo)) : valorProtegido
+            }.`,
     },
   ];
 

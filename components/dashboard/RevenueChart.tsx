@@ -12,6 +12,7 @@ type Financeiro = {
 
 type RevenueChartProps = {
   financeiro: Financeiro[];
+  valoresVisiveis: boolean;
 };
 
 function formatCurrency(value: number) {
@@ -21,7 +22,10 @@ function formatCurrency(value: number) {
   });
 }
 
-export default function RevenueChart({ financeiro }: RevenueChartProps) {
+export default function RevenueChart({
+  financeiro,
+  valoresVisiveis,
+}: RevenueChartProps) {
   const [period, setPeriod] = useState<6 | 12>(12);
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -78,9 +82,9 @@ export default function RevenueChart({ financeiro }: RevenueChartProps) {
 
       <div style={chartAreaStyle}>
         <div style={axisStyle}>
-          <span>{formatCurrency(maxValue)}</span>
-          <span>{formatCurrency(maxValue / 2)}</span>
-          <span>R$ 0</span>
+          <span>{valoresVisiveis ? formatCurrency(maxValue) : "R$ ******"}</span>
+          <span>{valoresVisiveis ? formatCurrency(maxValue / 2) : "R$ ******"}</span>
+          <span>{valoresVisiveis ? "R$ 0" : "R$ ******"}</span>
         </div>
 
         <div style={barsWrapperStyle}>
@@ -98,7 +102,9 @@ export default function RevenueChart({ financeiro }: RevenueChartProps) {
                 {isActive && (
                   <div style={tooltipStyle}>
                     <small>{item.label}</small>
-                    <strong>{formatCurrency(item.value)}</strong>
+                    <strong>
+                      {valoresVisiveis ? formatCurrency(item.value) : "R$ ******"}
+                    </strong>
                   </div>
                 )}
 
