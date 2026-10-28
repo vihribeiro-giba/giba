@@ -2,7 +2,7 @@
 
 import ProtectedRoute from "../../components/ProtectedRoute";
 import PlanProtectedRoute from "../../components/PlanProtectedRoute";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import { supabase } from "../../lib/supabase";
 import { getAccountAuthUser } from "../../lib/access-session";
@@ -61,6 +61,8 @@ type EmpresaResumo = {
   responsavel?: string | null;
 };
 
+const DASHBOARD_VALUES_VISIBILITY_KEY = "giba:dashboard:valores-visiveis";
+
 function formatarMoeda(valor: number) {
   return valor.toLocaleString("pt-BR", {
     style: "currency",
@@ -101,7 +103,8 @@ export default function DashboardPage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [financeiro, setFinanceiro] = useState<Financeiro[]>([]);
   const [nomeUsuario, setNomeUsuario] = useState("Usuário GIBA");
-  const [valoresVisiveis, setValoresVisiveis] = useState(true);
+  const [valoresVisiveis, setValoresVisiveis] = useState(false);
+  const preferenciaValoresKeyRef = useRef(DASHBOARD_VALUES_VISIBILITY_KEY);
 
   async function obterUsuarioLogado() {
     const { data, error } = await getAccountAuthUser();
@@ -118,6 +121,15 @@ export default function DashboardPage() {
   async function carregarDados() {
     const user = await obterUsuarioLogado();
     if (!user) return;
+
+    const preferenciaKey = `${DASHBOARD_VALUES_VISIBILITY_KEY}:${user.id}`;
+    preferenciaValoresKeyRef.current = preferenciaKey;
+
+    try {
+      setValoresVisiveis(localStorage.getItem(preferenciaKey) === "true");
+    } catch {
+      setValoresVisiveis(false);
+    }
 
     const eventosRes = await supabase
       .from("events")
@@ -184,6 +196,20 @@ export default function DashboardPage() {
   useEffect(() => {
     carregarDados();
   }, []);
+
+  function alternarVisibilidadeValores() {
+    const proximoEstado = !valoresVisiveis;
+    setValoresVisiveis(proximoEstado);
+
+    try {
+      localStorage.setItem(
+        preferenciaValoresKeyRef.current,
+        String(proximoEstado),
+      );
+    } catch {
+      // Mantém o controle funcional mesmo quando o navegador bloqueia o storage.
+    }
+  }
 
   const resumo = useMemo(() => {
     let entradas = 0;
@@ -274,7 +300,7 @@ export default function DashboardPage() {
 
             <QuickActions
               valoresVisiveis={valoresVisiveis}
-              onAlternarValores={() => setValoresVisiveis((visiveis) => !visiveis)}
+              onAlternarValores={alternarVisibilidadeValores}
             />
 
             <section style={metricsGridStyle}>

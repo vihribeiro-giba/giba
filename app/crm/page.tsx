@@ -928,7 +928,7 @@ export default function CrmPage() {
                       placeholder="Aniversário, festa da cidade..."
                     />
                   </Campo>
-                  <Campo label="Data do evento">
+                  <Campo label="Data do Evento">
                     <input
                       value={form.data_evento}
                       onChange={(e) =>
@@ -1056,7 +1056,7 @@ export default function CrmPage() {
           <section className="mt-5 rounded-[22px] border border-white/[0.085] bg-white/[0.025] p-3 sm:p-5">
             <div className="mb-4 flex flex-col gap-2 px-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <h2 className="text-xl font-black tracking-[-0.02em] text-white">Prefeituras e oportunidades</h2>
+                <h2 className="text-xl font-black tracking-[-0.02em] text-white">Prefeituras e Oportunidades</h2>
                 <p className="mt-1 text-sm text-slate-500">Carteira comercial e próximos contatos.</p>
               </div>
               <p className="max-w-xl text-xs leading-5 text-slate-500 sm:text-right">
@@ -1533,7 +1533,7 @@ function CrmModal({
                   style={inputStyle}
                 />
               </Campo>
-              <Campo label="Distância da capital">
+              <Campo label="Distância da Capital">
                 <input
                   value={edit.distancia_bh}
                   onChange={(event) =>
@@ -1828,7 +1828,7 @@ function CrmModal({
 
         {abaAtiva === "historico" && <div style={modalGridStyle}>
           <section style={modalSectionStyle}>
-            <h3 style={modalSectionTitleStyle}>Histórico e observações</h3>
+            <h3 style={modalSectionTitleStyle}>Histórico e Observações</h3>
             <CrmHistory
               items={interacoesModal}
               note={novaObservacao}

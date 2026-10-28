@@ -15,10 +15,10 @@ export default function ColaboradoresCharts({
 }) {
   return (
     <div className="grid grid-cols-1 gap-[22px] xl:grid-cols-2">
-      <SectionCard title="Participações por colaborador">
+      <SectionCard title="Participações por Colaborador">
         <DataTable items={ranking} valueLabel="Shows" />
       </SectionCard>
-      <SectionCard title="Total recebido">
+      <SectionCard title="Total Recebido">
         <DataTable items={pagamentos} valueLabel="Recebido" formatValue={formatarMoeda} />
       </SectionCard>
     </div>

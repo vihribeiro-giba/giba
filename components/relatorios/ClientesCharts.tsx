@@ -19,7 +19,7 @@ export default function ClientesCharts({
 }) {
   return (
     <div className="grid grid-cols-1 gap-[22px] xl:grid-cols-3">
-      <SectionCard title="Resumo de clientes" subtitle="Base ativa e recorrência no período.">
+      <SectionCard title="Resumo de Clientes" subtitle="Base ativa e recorrência no período.">
         <DataTable
           items={[
             { label: "Clientes novos", valor: novos },
@@ -29,15 +29,15 @@ export default function ClientesCharts({
         />
       </SectionCard>
 
-      <SectionCard title="Origem dos clientes">
+      <SectionCard title="Origem dos Clientes">
         <DataTable items={origem} valueLabel="Clientes" />
       </SectionCard>
 
-      <SectionCard title="Top 10 clientes">
+      <SectionCard title="Top 10 Clientes">
         <DataTable items={topClientes} valueLabel="Eventos" />
       </SectionCard>
 
-      <SectionCard title="Clientes sem contratar há mais tempo">
+      <SectionCard title="Clientes sem Contratar Há Mais Tempo">
         <DataTable items={inativos} valueLabel="Dias" />
       </SectionCard>
     </div>

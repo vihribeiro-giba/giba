@@ -208,7 +208,7 @@ export default function ProposalForm({ proposalId }: { proposalId?: string }) {
 
       <section className="rounded-[26px] border border-white/10 bg-white/[.045] p-5 sm:p-7">
         <div>
-          <h2 className="text-xl font-black">Informações da proposta</h2>
+          <h2 className="text-xl font-black">Informações da Proposta</h2>
           <p className="mt-1 text-sm text-slate-400">Preencha os dados variáveis deste orçamento.</p>
         </div>
 
@@ -408,7 +408,7 @@ export default function ProposalForm({ proposalId }: { proposalId?: string }) {
         </div>
 
         <div className="mt-8 rounded-2xl border border-white/10 bg-[#071122]/75 p-5">
-          <h3 className="font-black">Resumo da proposta</h3>
+          <h3 className="font-black">Resumo da Proposta</h3>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {summary.map(([label, value]) => (
               <div key={label}>

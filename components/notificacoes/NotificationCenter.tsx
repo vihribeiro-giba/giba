@@ -188,7 +188,7 @@ export default function NotificationCenter({
             <div className="w-full rounded-2xl border border-white/[0.08] bg-slate-950/35 p-3">
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-xs font-black text-white">Tipos de notificação</h3>
+                  <h3 className="text-xs font-black text-white">Tipos de Notificação</h3>
                   <p className="mt-1 text-[11px] leading-4 text-slate-400">
                     Escolha quais categorias devem aparecer na Central e no contador do sino.
                   </p>
@@ -253,7 +253,7 @@ export default function NotificationCenter({
             <div className="grid min-h-64 place-items-center rounded-[24px] border border-dashed border-white/10 bg-white/[0.025] text-center">
               <div>
                 <CheckCheck size={28} className="mx-auto text-emerald-300" />
-                <h3 className="mt-3 text-base font-black text-white">Tudo em dia</h3>
+                <h3 className="mt-3 text-base font-black text-white">Tudo em Dia</h3>
                 <p className="mt-1 text-xs text-slate-500">Nenhum alerta corresponde aos filtros atuais.</p>
               </div>
             </div>

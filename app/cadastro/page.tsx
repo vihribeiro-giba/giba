@@ -248,7 +248,7 @@ export default function CadastroPage() {
           <form onSubmit={criarConta} className="grid gap-4">
             <AuthInput
               icon={<User size={18} />}
-              label="Nome artístico ou empresa"
+              label="Nome Artístico ou Empresa"
               type="text"
               placeholder="Ex: Banda GIBA, Vih Ribeiro..."
               value={nomeArtistico}
@@ -288,7 +288,7 @@ export default function CadastroPage() {
 
             <AuthInput
               icon={<Lock size={18} />}
-              label="Confirmar senha"
+              label="Confirmar Senha"
               type={mostrarConfirmacao ? "text" : "password"}
               placeholder="Digite a senha novamente"
               value={confirmarSenha}

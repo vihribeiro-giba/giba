@@ -15,7 +15,7 @@ export default function EventosCharts({
 }) {
   return (
     <div className="grid grid-cols-1 gap-[22px] xl:grid-cols-3">
-      <SectionCard title="Cidades mais visitadas">
+      <SectionCard title="Cidades Mais Visitadas">
         <DataTable items={cidades} valueLabel="Eventos" />
       </SectionCard>
 
@@ -23,7 +23,7 @@ export default function EventosCharts({
         <DataTable items={formatos} valueLabel="Eventos" />
       </SectionCard>
 
-      <SectionCard title="Eventos por mês">
+      <SectionCard title="Eventos por Mês">
         <DataTable items={eventosMes} valueLabel="Eventos" />
       </SectionCard>
     </div>

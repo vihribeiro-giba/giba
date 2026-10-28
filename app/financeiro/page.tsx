@@ -1162,7 +1162,7 @@ export default function FinanceiroPage() {
                     <div>
                       <span style={movementModalEyebrowStyle}>NOVA MOVIMENTAÇÃO</span>
                       <h2 style={{ ...modalTitleStyle, marginTop: "5px" }}>
-                        {tipo === "Entrada" ? "Adicionar entrada" : tipo === "Saída" ? "Adicionar despesa" : "Adicionar despesa recorrente"}
+                        {tipo === "Entrada" ? "Adicionar Entrada" : tipo === "Saída" ? "Adicionar Despesa" : "Adicionar Despesa Recorrente"}
                       </h2>
                       <p style={modalSubtitleStyle}>
                         {tipo === "Entrada"
@@ -1236,7 +1236,7 @@ export default function FinanceiroPage() {
                       </Campo>
                     )}
 
-                    <Campo rotulo={tipo === "Recorrente" ? "Nome da despesa" : "Descrição"}>
+                    <Campo rotulo={tipo === "Recorrente" ? "Nome da Despesa" : "Descrição"}>
                       <input
                         value={descricao}
                         onChange={(e) => setDescricao(e.target.value)}
@@ -1261,7 +1261,7 @@ export default function FinanceiroPage() {
                       <input value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" inputMode="decimal" style={inputStyle} required />
                     </Campo>
 
-                    <Campo rotulo="Forma de pagamento">
+                    <Campo rotulo="Forma de Pagamento">
                       <DropdownSearch
                         value={formaPagamento}
                         placeholder="Forma de pagamento"
@@ -1272,7 +1272,7 @@ export default function FinanceiroPage() {
 
                     {tipo === "Recorrente" ? (
                       <>
-                        <Campo rotulo="Dia do vencimento">
+                        <Campo rotulo="Dia do Vencimento">
                           <input type="number" min="1" max="31" value={diaVencimento} onChange={(e) => setDiaVencimento(e.target.value)} style={inputStyle} />
                         </Campo>
                         <Campo rotulo="Periodicidade">
@@ -1285,13 +1285,13 @@ export default function FinanceiroPage() {
                         </Campo>
                       </>
                     ) : (
-                      <Campo rotulo="Data do pagamento">
+                      <Campo rotulo="Data do Pagamento">
                         <input type="date" value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} style={inputStyle} />
                       </Campo>
                     )}
 
                     {tipo !== "Recorrente" && (
-                      <Campo rotulo="Notas (opcional)">
+                      <Campo rotulo="Notas (Opcional)">
                         <input value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Observações adicionais..." style={inputStyle} />
                       </Campo>
                     )}
@@ -1346,9 +1346,9 @@ export default function FinanceiroPage() {
                 <div style={isMobile ? mobileModalInfoGridStyle : modalInfoGridStyle}>
                   <InfoDetalhe label="Valor" value={formatarMoeda(Number(movimentacaoSelecionada.amount || 0))} highlight={movimentacaoSelecionada.type === "Entrada" ? "#37E884" : "#FF5B8A"} />
                   <InfoDetalhe label="Categoria" value={movimentacaoSelecionada.category || "—"} />
-                  <InfoDetalhe label="Forma de pagamento" value={movimentacaoSelecionada.payment_method || "—"} />
+                  <InfoDetalhe label="Forma de Pagamento" value={movimentacaoSelecionada.payment_method || "—"} />
                   <InfoDetalhe label={movimentacaoSelecionada.type === "Entrada" ? "Cliente" : "Favorecido / Colaborador"} value={movimentacaoSelecionada.client_name || "—"} />
-                  <InfoDetalhe label="Evento vinculado" value={tituloEventoPorId(eventos, movimentacaoSelecionada.event_id) || movimentacaoSelecionada.event_name || "—"} />
+                  <InfoDetalhe label="Evento Vinculado" value={tituloEventoPorId(eventos, movimentacaoSelecionada.event_id) || movimentacaoSelecionada.event_name || "—"} />
                   <InfoDetalhe label="Status" value={movimentacaoSelecionada.status || "—"} />
                 </div>
 

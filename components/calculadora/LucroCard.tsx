@@ -18,8 +18,8 @@ export default function LucroCard({
   return (
     <SectionShell title="Lucro" subtitle="Resultado líquido e margem da simulação." icon={<TrendingUp size={18} />}>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <TextInput label="Cachê do artista" value={cacheArtista} onChange={setCacheArtista} placeholder="Ex: 7000" />
-        <ValuePill label="Lucro líquido" value={lucroLiquido} />
+        <TextInput label="Cachê do Artista" value={cacheArtista} onChange={setCacheArtista} placeholder="Ex: 7000" />
+        <ValuePill label="Lucro Líquido" value={lucroLiquido} />
         <ValuePill label="Margem" value={margem} />
       </div>
     </SectionShell>

@@ -1173,7 +1173,7 @@ function ContratosContent() {
             <section className="panel contracts-panel">
               <div className="panel-header">
                 <div>
-                  <h2>Contratos pendentes e gerados</h2>
+                  <h2>Contratos Pendentes e Gerados</h2>
                   <p>Mais próximos primeiro. Busque por cliente, evento, cidade ou número.</p>
                 </div>
                 <span className="count-badge">{eventosFiltrados.length}</span>
@@ -1192,13 +1192,13 @@ function ContratosContent() {
               {carregando ? (
                 <div className="empty-state">
                   <div className="spinner" aria-hidden="true" />
-                  <h3>Carregando contratos</h3>
+                  <h3>Carregando Contratos</h3>
                   <p>Estamos preparando os dados da agenda, clientes e modelos.</p>
                 </div>
               ) : eventosFiltrados.length === 0 ? (
                 <div className="empty-state">
                   <FileCheck2 size={34} aria-hidden="true" />
-                  <h3>Nenhum contrato encontrado</h3>
+                  <h3>Nenhum Contrato Encontrado</h3>
                   <p>Contratos assinados saem desta lista. Ajuste a busca para ver outros pendentes.</p>
                 </div>
               ) : (
@@ -1270,7 +1270,7 @@ function ContratosContent() {
               <section className="panel quick-panel" id="contract-quick-actions">
                 <div className="panel-header compact">
                   <div>
-                    <h2>Ações rápidas</h2>
+                    <h2>Ações Rápidas</h2>
                     <p>Selecione um evento para gerar o contrato.</p>
                   </div>
                 </div>

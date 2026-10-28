@@ -55,8 +55,8 @@ export default function FiltrosRelatorio({ filtros, onChange, onApply, onClear }
 
       {filtros.periodo === "personalizado" && (
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <Input label="Data inicial" type="date" value={filtros.dataInicial} onChange={(value) => onChange("dataInicial", value)} />
-          <Input label="Data final" type="date" value={filtros.dataFinal} onChange={(value) => onChange("dataFinal", value)} />
+          <Input label="Data Inicial" type="date" value={filtros.dataInicial} onChange={(value) => onChange("dataInicial", value)} />
+          <Input label="Data Final" type="date" value={filtros.dataFinal} onChange={(value) => onChange("dataFinal", value)} />
         </div>
       )}
 

@@ -15,10 +15,10 @@ export default function FormatosCharts({
 }) {
   return (
     <div className="grid grid-cols-1 gap-[22px] xl:grid-cols-2">
-      <SectionCard title="Quantidade por formato">
+      <SectionCard title="Quantidade por Formato">
         <DataTable items={quantidade} valueLabel="Eventos" />
       </SectionCard>
-      <SectionCard title="Faturamento por formato">
+      <SectionCard title="Faturamento por Formato">
         <DataTable items={faturamento} valueLabel="Faturamento" formatValue={formatarMoeda} />
       </SectionCard>
     </div>

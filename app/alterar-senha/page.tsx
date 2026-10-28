@@ -87,7 +87,7 @@ export default function AlterarSenhaPage() {
             <KeyRound size={24} />
           </div>
           <div>
-            <h1 className="text-[28px] font-black leading-tight tracking-[-0.5px]">Alterar senha</h1>
+            <h1 className="text-[28px] font-black leading-tight tracking-[-0.5px]">Alterar Senha</h1>
             <p className="mt-1 text-sm text-slate-400">Atualize sua senha de acesso à Plataforma GIBA.</p>
           </div>
         </header>
@@ -98,9 +98,9 @@ export default function AlterarSenhaPage() {
             A alteração é feita diretamente no seu acesso seguro. A nova senha não fica visível nem armazenada no cadastro do colaborador.
           </div>
 
-          <PasswordField label="Senha atual" value={senhaAtual} onChange={setSenhaAtual} />
-          <PasswordField label="Nova senha" value={novaSenha} onChange={setNovaSenha} />
-          <PasswordField label="Confirmar nova senha" value={confirmacao} onChange={setConfirmacao} />
+          <PasswordField label="Senha Atual" value={senhaAtual} onChange={setSenhaAtual} />
+          <PasswordField label="Nova Senha" value={novaSenha} onChange={setNovaSenha} />
+          <PasswordField label="Confirmar Nova Senha" value={confirmacao} onChange={setConfirmacao} />
 
           {erro && <p className="rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-200">{erro}</p>}
           {mensagem && <p className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-3 text-sm text-emerald-200">{mensagem}</p>}

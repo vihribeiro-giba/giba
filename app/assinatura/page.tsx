@@ -53,8 +53,8 @@ const planosComerciais: PlanoComercial[] = [
       "Financeiro",
       "Formatos",
       "Contratos",
-      "Contratos Modelo",
-      "Configuracoes",
+      "Modelos de Contrato",
+      "Configurações",
       "Assinatura",
     ],
   },
@@ -66,7 +66,7 @@ const planosComerciais: PlanoComercial[] = [
     destaque: true,
     recursos: [
       "Tudo do Essencial",
-      "Relatorios",
+      "Relatórios",
       "Calculadora de Show",
       "Colaboradores",
       "Agenda do Colaborador",
@@ -76,12 +76,12 @@ const planosComerciais: PlanoComercial[] = [
     id: "expertise",
     nome: "Expertise",
     preco: "R$ 359,90",
-    descricao: "Para operacoes maiores, CRM comercial e recursos avancados.",
+    descricao: "Para operações maiores, CRM comercial e recursos avançados.",
     recursos: [
       "Tudo do Profissional",
-      "CRM Prefeituras",
-      "Modulos avancados",
-      "Automacoes futuras",
+      "CRM",
+      "Módulos Avançados",
+      "Automações Futuras",
     ],
   },
 ];
@@ -140,7 +140,7 @@ export default function AssinaturaPage() {
 
     if (error) {
       console.error(error);
-      setFeedback("Nao foi possivel carregar sua assinatura agora.");
+      setFeedback("Não foi possível carregar sua assinatura agora.");
       setCarregando(false);
       return;
     }
@@ -156,8 +156,8 @@ export default function AssinaturaPage() {
   }
 
   function nomePlano(plano?: string) {
-    if (!plano) return "Sem plano";
-    if (plano === "teste") return `Teste grátis (${FREE_TRIAL_DAYS} dias)`;
+    if (!plano) return "Sem Plano";
+    if (plano === "teste") return `Teste Grátis (${FREE_TRIAL_DAYS} Dias)`;
     if (plano === "essencial") return "Essencial";
     if (plano === "profissional") return "Profissional";
     if (plano === "expertise") return "Expertise";
@@ -167,11 +167,11 @@ export default function AssinaturaPage() {
 
   function acaoPlano(plano: PlanoComercial) {
     if (planoAtual === plano.id && assinatura?.status === "ativo") {
-      return "Plano atual";
+      return "Plano Atual";
     }
 
     if (assinatura?.status === "pendente" && planoAtual === plano.id) {
-      return "Pagamento pendente";
+      return "Pagamento Pendente";
     }
 
     if (!assinatura || planoAtual === "teste") {
@@ -187,14 +187,14 @@ export default function AssinaturaPage() {
 
   async function assinarPlano(plano: PlanoId) {
     if (contaMaster) {
-      setFeedback("Conta master nao contrata planos pelo checkout.");
+      setFeedback("Conta master não contrata planos pelo checkout.");
       return;
     }
 
     const emailTratado = emailPagamento.trim().toLowerCase();
 
     if (!emailTratado || !emailTratado.includes("@")) {
-      setFeedback("Informe um e-mail valido para o pagamento no Mercado Pago.");
+      setFeedback("Informe um e-mail válido para o pagamento no Mercado Pago.");
       return;
     }
 
@@ -206,7 +206,7 @@ export default function AssinaturaPage() {
         await supabase.auth.getSession();
 
       if (sessionError || !sessionData.session?.access_token) {
-        setFeedback("Sessao expirada. Faca login novamente.");
+        setFeedback("Sessão expirada. Faça login novamente.");
         window.location.href = "/login";
         return;
       }
@@ -227,14 +227,14 @@ export default function AssinaturaPage() {
 
       if (!resposta.ok) {
         console.error("Erro ao criar assinatura:", dados);
-        setFeedback(dados?.error || "Nao foi possivel criar a assinatura agora.");
+        setFeedback(dados?.error || "Não foi possível criar a assinatura agora.");
         return;
       }
 
       setFeedback("Assinatura criada. Finalize o pagamento no Mercado Pago.");
 
       if (!dados?.init_point) {
-        setFeedback("Link de pagamento nao retornado pelo Mercado Pago.");
+        setFeedback("Link de pagamento não retornado pelo Mercado Pago.");
         return;
       }
 
@@ -249,14 +249,14 @@ export default function AssinaturaPage() {
 
   async function salvarEmailPagamento() {
     if (!assinatura?.id) {
-      setFeedback("Assinatura nao encontrada para salvar o e-mail.");
+      setFeedback("Assinatura não encontrada para salvar o e-mail.");
       return;
     }
 
     const emailTratado = emailPagamento.trim().toLowerCase();
 
     if (!emailTratado || !emailTratado.includes("@")) {
-      setFeedback("Informe um e-mail valido para o Mercado Pago.");
+      setFeedback("Informe um e-mail válido para o Mercado Pago.");
       return;
     }
 
@@ -267,7 +267,7 @@ export default function AssinaturaPage() {
 
     if (error) {
       console.error("Erro ao salvar e-mail do Mercado Pago:", error);
-      setFeedback("Nao foi possivel salvar o e-mail do Mercado Pago agora.");
+      setFeedback("Não foi possível salvar o e-mail do Mercado Pago agora.");
       return;
     }
 
@@ -290,7 +290,7 @@ export default function AssinaturaPage() {
                   Assinatura
                 </h1>
                 <p className="mt-1 max-w-2xl text-sm text-slate-400">
-                  Gerencie seu plano, pagamento e acesso a Plataforma GIBA.
+                  Gerencie seu plano, pagamento e acesso à Plataforma GIBA.
                 </p>
               </div>
             </div>
@@ -302,7 +302,7 @@ export default function AssinaturaPage() {
                 className="inline-flex h-12 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.07] px-5 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-white/[0.1]"
               >
                 <RefreshCw size={18} />
-                Atualizar status
+                Atualizar Status
               </button>
               <button
                 type="button"
@@ -310,7 +310,7 @@ export default function AssinaturaPage() {
                 className="inline-flex h-12 items-center gap-2 rounded-2xl border border-emerald-400/25 bg-emerald-500/10 px-5 text-sm font-black text-emerald-200 transition hover:-translate-y-0.5 hover:bg-emerald-500/15"
               >
                 <MessageCircle size={18} />
-                Falar com suporte
+                Falar com Suporte
               </button>
             </div>
           </header>
@@ -321,42 +321,41 @@ export default function AssinaturaPage() {
             </div>
           )}
 
-          <section className="mb-7 rounded-[28px] border border-white/10 bg-white/[0.06] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.28)] backdrop-blur-xl md:p-7">
+          <section className="mx-auto mb-8 w-full max-w-6xl rounded-[24px] border border-white/10 bg-white/[0.045] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl md:p-6">
             {carregando ? (
               <p className="text-slate-300">Carregando assinatura...</p>
             ) : (
-              <div className="grid gap-6">
-                <div className="max-w-5xl">
-                  <div className="mb-5 flex flex-wrap items-center gap-3">
-                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.07] px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-300">
+              <div>
+                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-slate-300">
                       <ShieldCheck size={16} />
-                      Status atual
+                      Status Atual
                     </span>
                     <span
-                      className={`inline-flex rounded-full border px-4 py-2 text-xs font-black uppercase tracking-wide ${statusInfo.classe}`}
+                      className={`inline-flex rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-wide ${statusInfo.classe}`}
                     >
                       {statusInfo.label}
                     </span>
                   </div>
 
-                  <h2 className="text-3xl font-black text-white md:text-[40px]">
+                  <h2 className="text-[28px] font-black tracking-[-0.4px] text-white md:text-[32px]">
                     {nomePlano(assinatura?.plano)}
                   </h2>
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+                  <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-400">
                     {assinatura?.status === "pendente"
-                      ? "Pagamento pendente. Aguardando confirmacao do Mercado Pago."
-                      : "Seu acesso e liberado de acordo com o plano ativo mais recente."}
+                      ? "Pagamento pendente. Aguardando confirmação do Mercado Pago."
+                      : "Seu acesso é liberado de acordo com o plano ativo mais recente."}
                   </p>
 
-                  <div className="mt-6 overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/20">
+                  <div className="mt-5 grid gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/10 sm:grid-cols-2 xl:grid-cols-3">
                     <StatusItem label="E-mail GIBA" value={emailGiba || "-"} />
-                    <StatusItem label="Status" value={assinatura?.status || "-"} />
+                    <StatusItem label="Status" value={formatarStatus(assinatura?.status)} />
                     <StatusItem
-                      label="Inicio"
+                      label="Início"
                       value={formatarData(assinatura?.data_inicio)}
                     />
                     <StatusItem
-                      label="Proximo vencimento"
+                      label="Próximo Vencimento"
                       value={formatarData(assinatura?.data_fim)}
                     />
                     <StatusItem
@@ -368,13 +367,13 @@ export default function AssinaturaPage() {
                       value={assinatura?.mercado_pago_customer_id || "-"}
                     />
                     {!contaMaster && (
-                      <div className="grid gap-3 border-t border-white/10 px-4 py-4 lg:grid-cols-[220px_minmax(0,1fr)_150px] lg:items-center">
+                      <div className="grid gap-3 bg-[#0A1324] px-4 py-3 sm:col-span-2 lg:grid-cols-[190px_minmax(0,1fr)_140px] lg:items-center xl:col-span-3">
                         <div className="flex items-center gap-3">
-                          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-violet-500/15 text-violet-200">
-                            <Mail size={18} />
+                          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-500/15 text-violet-200">
+                            <Mail size={17} />
                           </span>
                           <div>
-                            <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+                            <p className="text-xs font-black text-slate-400">
                               E-mail Mercado Pago
                             </p>
                             <p className="text-xs font-semibold text-slate-400">
@@ -396,12 +395,11 @@ export default function AssinaturaPage() {
                           onClick={salvarEmailPagamento}
                           className="h-11 rounded-2xl bg-gradient-to-r from-violet-600 to-sky-500 px-4 text-sm font-black text-white shadow-[0_14px_28px_rgba(139,53,255,0.18)] transition hover:-translate-y-0.5"
                         >
-                          Salvar e-mail
+                          Salvar E-mail
                         </button>
                       </div>
                     )}
                   </div>
-                </div>
               </div>
             )}
           </section>
@@ -412,7 +410,7 @@ export default function AssinaturaPage() {
                 <div>
                   <h2 className="text-3xl font-black text-white">Planos GIBA</h2>
                   <p className="mt-2 text-sm leading-6 text-slate-300">
-                    Escolha, renove ou altere seu plano sem interromper o acesso atual antes da aprovacao.
+                    Escolha, renove ou altere seu plano sem interromper o acesso atual antes da aprovação.
                   </p>
                 </div>
               </div>
@@ -434,13 +432,13 @@ export default function AssinaturaPage() {
                     >
                       {plano.destaque && (
                         <span className="mb-4 inline-flex rounded-full bg-gradient-to-r from-violet-600 to-sky-500 px-4 py-2 text-xs font-black uppercase tracking-wide text-white">
-                          Mais escolhido
+                          Mais Escolhido
                         </span>
                       )}
 
                       {selecionado && (
                         <span className="mb-4 ml-2 inline-flex rounded-full border border-emerald-400/25 bg-emerald-500/10 px-4 py-2 text-xs font-black uppercase tracking-wide text-emerald-200">
-                          Plano atual
+                          Plano Atual
                         </span>
                       )}
 
@@ -460,7 +458,7 @@ export default function AssinaturaPage() {
                           {plano.preco}
                         </strong>
                         <span className="pb-1 text-sm font-bold text-slate-400">
-                          /mes
+                          /mês
                         </span>
                       </div>
 
@@ -472,7 +470,7 @@ export default function AssinaturaPage() {
                       >
                         <CreditCard size={18} />
                         {processandoPlano === plano.id
-                          ? "Gerando checkout..."
+                          ? "Gerando Checkout..."
                           : acaoPlano(plano)}
                       </button>
 
@@ -503,7 +501,7 @@ export default function AssinaturaPage() {
               </div>
               <div>
                 <h2 className="text-2xl font-black text-white">
-                  Pagamento seguro pelo Mercado Pago
+                  Pagamento Seguro pelo Mercado Pago
                 </h2>
                 <p className="mt-2 max-w-4xl text-sm leading-7 text-slate-300">
                   O GIBA salva o plano como pendente, redireciona para o checkout e só atualiza o acesso quando o webhook confirmar a aprovação. Assim, o teste grátis de {FREE_TRIAL_DAYS} dias ou o plano atual não é removido antes da confirmação.
@@ -527,21 +525,26 @@ export default function AssinaturaPage() {
 
 function StatusItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid gap-2 border-t border-white/10 px-4 py-4 first:border-t-0 sm:grid-cols-[220px_minmax(0,1fr)] sm:items-center">
-      <p className="text-[11px] font-black uppercase tracking-wide text-slate-500">
+    <div className="min-w-0 bg-[#0A1324] px-4 py-3.5">
+      <p className="text-xs font-black text-slate-400">
         {label}
       </p>
-      <p className="break-words text-sm font-black leading-5 text-white sm:text-right">
+      <p className="mt-1 break-words text-sm font-black leading-5 text-white">
         {value}
       </p>
     </div>
   );
 }
 
+function formatarStatus(status?: string | null) {
+  if (!status) return "-";
+  return `${status.charAt(0).toUpperCase()}${status.slice(1).toLowerCase()}`;
+}
+
 function obterStatusInfo(status?: string, plano?: string) {
   if (plano === "teste") {
     return {
-      label: `Teste grátis - ${FREE_TRIAL_DAYS} dias`,
+      label: `Teste Grátis - ${FREE_TRIAL_DAYS} Dias`,
       classe: "border-sky-400/25 bg-sky-500/10 text-sky-200",
     };
   }
@@ -575,7 +578,7 @@ function obterStatusInfo(status?: string, plano?: string) {
   }
 
   return {
-    label: status || "Sem status",
+    label: status || "Sem Status",
     classe: "border-white/10 bg-white/[0.07] text-slate-200",
   };
 }

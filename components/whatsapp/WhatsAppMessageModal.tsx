@@ -303,7 +303,7 @@ export default function WhatsAppMessageModal({
                 </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <SelectField label="Tipo de mensagem" value={selectedType} onChange={changeType} options={messageTypes} />
+                <SelectField label="Tipo de Mensagem" value={selectedType} onChange={changeType} options={messageTypes} />
                 <SelectField label="Modelo" value={selectedTemplateId} onChange={changeTemplate} options={typeTemplates.map((template) => ({ value: template.id, label: `${template.name}${template.isDefault ? " • Padrão" : ""}` }))} placeholder="Nenhum modelo disponível" />
               </div>
               <label className="grid gap-2">
@@ -353,7 +353,7 @@ export default function WhatsAppMessageModal({
               <aside className="rounded-2xl border border-white/[0.08] bg-slate-950/30 p-4">
                 {canManage ? <div className="grid gap-3">
                   <h3 className="text-sm font-black text-white">{editingId ? "Editar modelo" : "Novo modelo"}</h3>
-                  <Field label="Nome do modelo" value={formName} onChange={setFormName} placeholder="Ex.: Confirmação simples" />
+                  <Field label="Nome do Modelo" value={formName} onChange={setFormName} placeholder="Ex.: Confirmação simples" />
                   <label className="grid gap-2">
                     <span className="text-xs font-black text-slate-300">Tipo da mensagem</span>
                     <input list="whatsapp-message-types" value={formType} onChange={(event) => setFormType(event.target.value)} className={inputClass} />
@@ -367,7 +367,7 @@ export default function WhatsAppMessageModal({
                     <input type="checkbox" checked={formDefault} onChange={(event) => setFormDefault(event.target.checked)} className="h-4 w-4 accent-cyan-400" /> Definir como padrão deste tipo
                   </label>
                   <button type="button" disabled={busy} onClick={saveTemplate} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-500 px-4 text-xs font-black disabled:opacity-60"><Save size={15} /> {editingId ? "Salvar alterações" : "Salvar modelo"}</button>
-                </div> : <div className="grid min-h-56 place-items-center text-center"><div><Check size={24} className="mx-auto text-emerald-300" /><h3 className="mt-3 text-sm font-black">Modelos disponíveis</h3><p className="mt-1 text-xs leading-5 text-slate-400">Colaboradores podem selecionar e usar modelos, mas não podem alterar a biblioteca global.</p></div></div>}
+                </div> : <div className="grid min-h-56 place-items-center text-center"><div><Check size={24} className="mx-auto text-emerald-300" /><h3 className="mt-3 text-sm font-black">Modelos Disponíveis</h3><p className="mt-1 text-xs leading-5 text-slate-400">Colaboradores podem selecionar e usar modelos, mas não podem alterar a biblioteca global.</p></div></div>}
               </aside>
             </div>
           )}

@@ -35,8 +35,8 @@ export default function InformacoesGerais({
           onChange={setNomeOrcamento}
           placeholder="Ex: Show Prefeitura de Sabará"
         />
-        <TextInput label="Preço de venda" value={valorShow} onChange={setValorShow} placeholder="Ex: 20000" />
-        <TextInput label="Data dos lançamentos" value={dataFinanceiro} onChange={setDataFinanceiro} type="date" />
+        <TextInput label="Preço de Venda" value={valorShow} onChange={setValorShow} placeholder="Ex: 20000" />
+        <TextInput label="Data dos Lançamentos" value={dataFinanceiro} onChange={setDataFinanceiro} type="date" />
         <div className="rounded-2xl border border-white/[0.08] bg-slate-950/25 p-4">
           <div className="mb-2 flex items-center gap-2 text-slate-400">
             <Clock size={16} />

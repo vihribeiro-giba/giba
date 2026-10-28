@@ -59,13 +59,13 @@ export default function ResetPasswordPage() {
       <section className="relative z-10 w-full max-w-[460px] rounded-[28px] border border-white/[0.12] bg-white/[0.06] p-6 shadow-[0_28px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl sm:p-8">
         <div className="mb-7 text-center">
           <img src="/logo-giba-horizontal.png" alt="GIBA" className="mx-auto mb-5 h-auto w-[210px]" />
-          <h1 className="text-3xl font-black tracking-[-0.03em] text-white">Redefinir senha</h1>
+          <h1 className="text-3xl font-black tracking-[-0.03em] text-white">Redefinir Senha</h1>
           <p className="mt-2 text-sm leading-6 text-slate-300">Crie uma nova senha para acessar sua conta GIBA.</p>
         </div>
 
         <form onSubmit={salvarNovaSenha} className="grid gap-4">
           <PasswordInput
-            label="Nova senha"
+            label="Nova Senha"
             value={novaSenha}
             onChange={setNovaSenha}
             placeholder="Mínimo de 6 caracteres"
@@ -83,7 +83,7 @@ export default function ResetPasswordPage() {
           />
 
           <PasswordInput
-            label="Confirmar senha"
+            label="Confirmar Senha"
             value={confirmarSenha}
             onChange={setConfirmarSenha}
             placeholder="Digite a senha novamente"

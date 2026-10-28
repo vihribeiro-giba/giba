@@ -21,7 +21,6 @@ import {
   MessageCircle,
   CalendarPlus,
   MapPin,
-  Mail,
   Phone,
   X,
   Filter,
@@ -35,7 +34,7 @@ type Cliente = {
   nome: string;
   cpf_cnpj: string;
   celular: string;
-  email: string;
+  email?: string;
   endereco_completo: string;
   created_at?: string;
   // Novos campos (opcionais)
@@ -53,9 +52,6 @@ const tipoClienteOptions = [
   "Pessoa Física",
   "Pessoa Jurídica",
   "Prefeitura",
-  "Produtor",
-  "Empresa",
-  "Casa de eventos",
 ];
 
 const origemClienteOptions = [
@@ -274,7 +270,6 @@ export default function ClientesPage() {
   const [tipoCliente, setTipoCliente] = useState("Pessoa Física");
   const [cpfCnpj, setCpfCnpj] = useState("");
   const [celular, setCelular] = useState("");
-  const [email, setEmail] = useState("");
   const [dataAniversario, setDataAniversario] = useState("");
   const [enderecoCompleto, setEnderecoCompleto] = useState("");
   const [cep, setCep] = useState("");
@@ -342,7 +337,6 @@ export default function ClientesPage() {
     setTipoCliente("Pessoa Física");
     setCpfCnpj("");
     setCelular("");
-    setEmail("");
     setDataAniversario("");
     setEnderecoCompleto("");
     setCep("");
@@ -415,13 +409,13 @@ export default function ClientesPage() {
     setSalvando(true);
 
     // Campos atuais obrigatórios da tabela
-    const dadosBase = {
+    const dadosBase: Record<string, unknown> = {
       nome,
       cpf_cnpj: cpfCnpj,
       celular,
-      email,
       endereco_completo: montarEnderecoCompleto(enderecoCompleto, numeroEndereco),
       user_id: user.id,
+      ...(!editandoId ? { email: "" } : {}),
     };
 
     // Novos campos (aplicados com fallback se não existirem no banco)
@@ -472,10 +466,13 @@ export default function ClientesPage() {
   function editarCliente(cliente: Cliente) {
     setEditandoId(cliente.id);
     setNome(cliente.nome || "");
-    setTipoCliente(cliente.tipo_cliente || "Pessoa Física");
+    setTipoCliente(
+      cliente.tipo_cliente && tipoClienteOptions.includes(cliente.tipo_cliente)
+        ? cliente.tipo_cliente
+        : "Pessoa Física",
+    );
     setCpfCnpj(formatarCpfCnpj(cliente.cpf_cnpj || ""));
     setCelular(formatarCelular(cliente.celular || ""));
-    setEmail(cliente.email || "");
     setDataAniversario(formatarAniversarioDiaMes(cliente.data_aniversario));
     const enderecoSeparado = separarEnderecoNumero(cliente.endereco_completo || "");
     setEnderecoCompleto(enderecoSeparado.enderecoBase);
@@ -527,7 +524,6 @@ export default function ClientesPage() {
       cliente: cliente.nome || "",
       telefone: cliente.celular || "",
       endereco: cliente.endereco_completo || "",
-      email: cliente.email || "",
     });
 
     window.location.href = `/agenda?${params.toString()}`;
@@ -562,7 +558,6 @@ export default function ClientesPage() {
         normalizarTexto(cliente.nome).includes(termo) ||
         normalizarTexto(cliente.cpf_cnpj).includes(termo) ||
         normalizarTexto(cliente.celular).includes(termo) ||
-        normalizarTexto(cliente.email).includes(termo) ||
         normalizarTexto(cliente.endereco_completo).includes(termo);
 
       const correspondeTipo =
@@ -628,21 +623,21 @@ export default function ClientesPage() {
               <ResumoCard
                 icon={<Cake size={22} />}
                 color="#F59E0B"
-                label="Aniversariantes do mês"
+                label="Aniversariantes do Mês"
                 value={aniversariantesMes.length}
                 detail="Oportunidade de contato"
               />
               <ResumoCard
                 icon={<CheckCircle2 size={22} />}
                 color="#37E884"
-                label="Clientes ativos"
+                label="Clientes Ativos"
                 value={clientesAtivos}
                 detail="Ativos + recorrentes"
               />
               <ResumoCard
                 icon={<Sparkles size={22} />}
                 color="#00AAFF"
-                label="Potencial de relacionamento"
+                label="Potencial de Relacionamento"
                 value={Math.max(0, clientes.length - clientesAtivos)}
                 detail="Para reativar / nutrir"
               />
@@ -656,7 +651,7 @@ export default function ClientesPage() {
                     <Gift size={26} />
                   </div>
                   <div>
-                    <h2 style={birthdayTitleStyle}>Aniversariantes do mês</h2>
+                    <h2 style={birthdayTitleStyle}>Aniversariantes do Mês</h2>
                     <p style={birthdayTextStyle}>
                       {aniversariantesMes.length}{" "}
                       {aniversariantesMes.length === 1
@@ -708,7 +703,7 @@ export default function ClientesPage() {
                     </div>
 
                 <form onSubmit={salvarCliente} style={formStyle}>
-                  <Campo label="Nome completo" obrigatorio>
+                  <Campo label="Nome Completo" obrigatorio>
                     <input
                       style={inputStyle}
                       placeholder="Digite o nome completo"
@@ -718,7 +713,7 @@ export default function ClientesPage() {
                     />
                   </Campo>
 
-                  <Campo label="Tipo de cliente">
+                  <Campo label="Tipo de Cliente">
                     <div style={chipsRowStyle}>
                       {tipoClienteOptions.map((opcao) => {
                         const ativo = tipoCliente === opcao;
@@ -769,7 +764,6 @@ export default function ClientesPage() {
                             nome: nome || "Cliente",
                             cpf_cnpj: cpfCnpj,
                             celular,
-                            email,
                             endereco_completo: montarEnderecoCompleto(enderecoCompleto, numeroEndereco),
                             data_aniversario: dataAniversario,
                             tipo_cliente: tipoCliente,
@@ -784,17 +778,7 @@ export default function ClientesPage() {
                     </div>
                   </Campo>
 
-                  <Campo label="E-mail">
-                    <input
-                      style={inputStyle}
-                      type="email"
-                      placeholder="email@exemplo.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                    />
-                  </Campo>
-
-                  <Campo label="Data de aniversário">
+                  <Campo label="Data de Aniversário">
                     <input
                       style={inputStyle}
                       placeholder="Dia e Mês"
@@ -841,7 +825,7 @@ export default function ClientesPage() {
                     />
                   </Campo>
 
-                  <Campo label="Origem do cliente">
+                  <Campo label="Origem do Cliente">
                     <DropdownSelect
                       value={origemCliente}
                       placeholder="Selecione a origem"
@@ -897,7 +881,7 @@ export default function ClientesPage() {
                     <Search size={18} color="#94A3B8" />
                     <input
                       style={searchInputStyle}
-                      placeholder="Buscar por nome, CPF/CNPJ, telefone ou e-mail..."
+                      placeholder="Buscar por nome, CPF/CNPJ ou telefone..."
                       value={busca}
                       onChange={(e) => setBusca(e.target.value)}
                     />
@@ -1035,11 +1019,6 @@ export default function ClientesPage() {
                                       <Phone size={13} /> {cliente.celular}
                                     </span>
                                   )}
-                                  {cliente.email && (
-                                    <span style={infoItemStyle}>
-                                      <Mail size={13} /> {cliente.email}
-                                    </span>
-                                  )}
                                 </div>
 
                                 <div style={infoLinhaStyle}>
@@ -1119,7 +1098,6 @@ export default function ClientesPage() {
                 id: whatsappCliente.id,
                 name: whatsappCliente.nome,
                 phone: whatsappCliente.celular,
-                email: whatsappCliente.email,
               } : undefined}
               extraVariables={whatsappCliente ? {
                 aniversario: formatarAniversarioDiaMes(whatsappCliente.data_aniversario),

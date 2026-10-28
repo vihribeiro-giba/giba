@@ -361,7 +361,7 @@ export default function ContratosModeloPage() {
                   <section className="rounded-[18px] border border-slate-400/[.12] bg-white/[.025] p-4 sm:p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h2 className="text-lg font-black">Configuração do modelo</h2>
+                        <h2 className="text-lg font-black">Configuração do Modelo</h2>
                         <p className="mt-0.5 text-xs text-slate-500">Um único modelo ativo por perfil.</p>
                       </div>
                       <span className="rounded-full border border-emerald-400/20 bg-emerald-400/[.07] px-2.5 py-1 text-[11px] font-extrabold text-emerald-300">
@@ -369,7 +369,7 @@ export default function ContratosModeloPage() {
                       </span>
                     </div>
                     <div className="mt-4 grid gap-3">
-                      <Field label="Título do contrato">
+                      <Field label="Título do Contrato">
                         <input value={form.titulo} onChange={(event) => setForm((current) => ({ ...current, titulo: event.target.value }))} className={inputClass} />
                       </Field>
                     </div>
@@ -379,7 +379,7 @@ export default function ContratosModeloPage() {
                     <div className="flex items-center gap-3">
                       <ShieldCheck size={18} className="text-cyan-300" />
                       <div>
-                        <h2 className="text-base font-black">Informações automáticas</h2>
+                        <h2 className="text-base font-black">Informações Automáticas</h2>
                         <p className="text-xs text-slate-400">Preenchidos automaticamente ao gerar o contrato.</p>
                       </div>
                     </div>
@@ -410,7 +410,7 @@ export default function ContratosModeloPage() {
                           </div>
                         </div>
                         <div className="grid gap-3">
-                          <Field label="Título do tópico">
+                          <Field label="Título do Tópico">
                             <input value={topic.title} onChange={(event) => updateTopic(index, { title: event.target.value })} className={inputClass} />
                           </Field>
                         </div>
@@ -427,7 +427,7 @@ export default function ContratosModeloPage() {
                                     <IconButton label="Excluir cláusula" danger onClick={() => removeClause(index, clauseIndex)}><Trash2 size={14} /></IconButton>
                                   </div>
                                 </div>
-                                <Field label="Texto da cláusula e seus parágrafos">
+                                <Field label="Texto da Cláusula e Seus Parágrafos">
                                   <textarea
                                     rows={7}
                                     value={clause.content}

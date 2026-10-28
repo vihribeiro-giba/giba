@@ -898,14 +898,14 @@ export default function AgendaPage() {
               icon={<CalendarCheck size={20} />}
               tint="#8B35FF"
               value={String(metricas.totalMes)}
-              label="Eventos este mês"
+              label="Eventos Este Mês"
               trend="+20% vs Maio"
             />
             <MetricCard
               icon={<Mic2 size={20} />}
               tint="#22C55E"
               value={String(metricas.realizadosMes)}
-              label="Shows realizados"
+              label="Shows Realizados"
               trend="Automático após a data"
               trendPlain
             />
@@ -921,7 +921,7 @@ export default function AgendaPage() {
               icon={<Users size={20} />}
               tint="#EC4899"
               value={String(metricas.escalados)}
-              label="Colaboradores escalados"
+              label="Colaboradores Escalados"
               trend="Equipe do mês"
               trendPlain
             />
@@ -929,7 +929,7 @@ export default function AgendaPage() {
               icon={<DollarSign size={20} />}
               tint="#22C55E"
               value={formatarMoeda(metricas.faturamento)}
-              label="Faturamento previsto"
+              label="Faturamento Previsto"
               trend="Valor bruto do mês"
               trendPlain
             />
@@ -1043,7 +1043,7 @@ export default function AgendaPage() {
                   <div style={isMobile ? mobileHeaderActions : { display: "flex", alignItems: "center", gap: 10 }}>
                     <CalendarCheck size={18} color="#8B35FF" />
                     <div>
-                      <h2 style={panelTitle}>Eventos do dia</h2>
+                      <h2 style={panelTitle}>Eventos do Dia</h2>
                       <p style={panelSub}>
                         {new Date(diaSelecionado + "T00:00:00").getDate()} de{" "}
                         {meses[new Date(diaSelecionado + "T00:00:00").getMonth()]}
@@ -1223,7 +1223,7 @@ export default function AgendaPage() {
                       </Campo>
                     </div>
 
-                    <Campo label="Forma de pagamento">
+                    <Campo label="Forma de Pagamento">
                       <DropdownSelect
                         value={paymentFormat}
                         options={pagamentoOptions}
@@ -1560,7 +1560,7 @@ export default function AgendaPage() {
                       />
                     </Campo>
 
-                    <Campo label="Forma de pagamento">
+                    <Campo label="Forma de Pagamento">
                       <DropdownSelect
                         value={formaPagamentoMovimentacao}
                         options={formasPagamento.map((forma) => ({ value: forma, label: forma }))}
@@ -1568,7 +1568,7 @@ export default function AgendaPage() {
                       />
                     </Campo>
 
-                    <Campo label="Data do pagamento">
+                    <Campo label="Data do Pagamento">
                       <input
                         type="date"
                         value={dataMovimentacao}
@@ -1578,7 +1578,7 @@ export default function AgendaPage() {
                     </Campo>
 
                     <div style={financeWideField}>
-                      <Campo label="Notas (opcional)">
+                      <Campo label="Notas (Opcional)">
                         <textarea
                           value={notasMovimentacao}
                           onChange={(e) => setNotasMovimentacao(e.target.value)}

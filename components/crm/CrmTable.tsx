@@ -53,7 +53,7 @@ export default function CrmTable({ rows, loading, onOpen }: CrmTableProps) {
           <span className="mx-auto grid h-16 w-16 place-items-center rounded-[22px] border border-violet-400/20 bg-violet-500/15 text-violet-200">
             <Landmark size={29} />
           </span>
-          <h3 className="mt-4 text-lg font-black text-white">Nenhuma prefeitura encontrada</h3>
+          <h3 className="mt-4 text-lg font-black text-white">Nenhuma Prefeitura Encontrada</h3>
           <p className="mt-2 text-sm text-slate-400">Ajuste os filtros ou cadastre uma nova oportunidade.</p>
         </div>
       </div>

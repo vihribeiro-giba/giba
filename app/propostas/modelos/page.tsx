@@ -310,7 +310,7 @@ function PreviewModal({
             {page === 2 && (
               <div className="absolute inset-0 flex flex-col justify-center bg-black/25 p-[9%] text-white">
                 <p className="text-[10px] font-black uppercase tracking-[.25em] text-cyan-200">Proposta comercial</p>
-                <h3 className="mt-3 text-2xl font-black sm:text-3xl">Título demonstrativo</h3>
+                <h3 className="mt-3 text-2xl font-black sm:text-3xl">Título Demonstrativo</h3>
                 <p className="mt-3 max-w-md text-xs leading-5 text-slate-100 sm:text-sm sm:leading-6">
                   Este conteúdo demonstra como títulos, textos e informações poderão aparecer sobre o fundo interno do modelo.
                 </p>
@@ -681,7 +681,7 @@ export default function ProposalTemplatesPage() {
                   <LayoutTemplate size={24} />
                 </div>
                 <div>
-                  <h1 className="text-[28px] font-black">Modelos de proposta</h1>
+                  <h1 className="text-[28px] font-black">Modelos de Proposta</h1>
                   <p className="text-sm text-slate-400">
                     Gerencie os modelos visuais usados como ponto de partida para novas propostas.
                   </p>
@@ -728,7 +728,7 @@ export default function ProposalTemplatesPage() {
                   </label>
 
                   <div className="rounded-2xl border border-white/10 bg-white/[.025] p-4">
-                    <h3 className="text-sm font-black text-slate-200">Formato associado ao modelo</h3>
+                    <h3 className="text-sm font-black text-slate-200">Formato Associado ao Modelo</h3>
                     <p className="mt-1 text-xs text-slate-500">Este formato será aplicado automaticamente ao criar uma proposta.</p>
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                       <div className="grid gap-2 text-xs font-bold text-slate-300 sm:col-span-2">
@@ -933,7 +933,7 @@ export default function ProposalTemplatesPage() {
 
               <section className="min-w-0 rounded-[24px] border border-white/10 bg-white/[.025] p-4 sm:p-5">
                 <div className="mb-4 flex items-center justify-between gap-3">
-                  <h2 className="text-xl font-black">Modelos salvos</h2>
+                  <h2 className="text-xl font-black">Modelos Salvos</h2>
                   <span className="rounded-xl bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-400">
                     {templates.length} {templates.length === 1 ? "modelo" : "modelos"}
                   </span>
@@ -947,7 +947,7 @@ export default function ProposalTemplatesPage() {
                   <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-white/15 p-8 text-center">
                     <div>
                       <LayoutTemplate size={34} className="mx-auto text-slate-600" />
-                      <h3 className="mt-4 text-lg font-black">Nenhum modelo cadastrado ainda.</h3>
+                      <h3 className="mt-4 text-lg font-black">Nenhum Modelo Cadastrado Ainda.</h3>
                       <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">
                         Adicione uma capa e um fundo interno para criar seu primeiro modelo de proposta.
                       </p>

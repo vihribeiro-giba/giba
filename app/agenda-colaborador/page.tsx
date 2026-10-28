@@ -587,7 +587,7 @@ export default function AgendaColaboradorPage() {
           <ResumoCard
             icon={<CalendarClock size={22} />}
             color="#00AAFF"
-            label="Este mês"
+            label="Este Mês"
             value={eventosEsteMes}
             detail="Eventos no mês atual"
           />

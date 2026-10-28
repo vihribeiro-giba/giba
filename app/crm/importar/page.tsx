@@ -418,7 +418,7 @@ export default function ImportarCrmPage() {
                 <Upload size={22} />
               </div>
               <div>
-                <h2 style={sectionTitleStyle}>Selecionar planilha</h2>
+                <h2 style={sectionTitleStyle}>Selecionar Planilha</h2>
                 <p style={sectionSubtitleStyle}>
                   Use a planilha de controle para preencher os dados do CRM em
                   lote.
@@ -505,7 +505,7 @@ export default function ImportarCrmPage() {
               <section style={cardStyle}>
                 <div style={topoPreviewStyle}>
                   <div>
-                    <h2 style={sectionTitleStyle}>Prévia da importação</h2>
+                    <h2 style={sectionTitleStyle}>Prévia da Importação</h2>
                     <p style={sectionSubtitleStyle}>
                       Confira os primeiros registros antes de importar.
                     </p>

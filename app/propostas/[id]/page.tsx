@@ -255,7 +255,7 @@ export default function ProposalDetailPage() {
               <section className="space-y-5">
                 <article className="rounded-[24px] border border-white/10 bg-white/[.045] p-6">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <h2 className="text-xl font-black">Informações comerciais</h2>
+                    <h2 className="text-xl font-black">Informações Comerciais</h2>
                     <GibaSelect
                       value={proposal.status}
                       onChange={(value) =>
@@ -284,7 +284,7 @@ export default function ProposalDetailPage() {
                 </article>
 
                 <article className="rounded-[24px] border border-white/10 bg-white/[.045] p-6">
-                  <h2 className="text-xl font-black">Histórico simples</h2>
+                  <h2 className="text-xl font-black">Histórico Simples</h2>
                   <div className="mt-5 border-l border-violet-400/30 pl-5">
                     <p className="font-bold">Proposta atualizada</p>
                     <p className="text-sm text-slate-500">

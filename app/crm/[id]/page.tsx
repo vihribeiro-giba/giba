@@ -376,7 +376,7 @@ export default function CrmDetalhesPage() {
             <p style={{ color: "#b8b8d8" }}>Carregando detalhes...</p>
           ) : !municipio ? (
             <section style={cardStyle}>
-              <h2>Município não encontrado</h2>
+              <h2>Município Não Encontrado</h2>
               <p style={{ color: "#b8b8d8" }}>
                 Esse cadastro não existe ou você não tem acesso a ele.
               </p>
@@ -437,7 +437,7 @@ export default function CrmDetalhesPage() {
                 </div>
 
                 <div style={cardStyle}>
-                  <h2 style={{ marginTop: 0 }}>Registrar interação</h2>
+                  <h2 style={{ marginTop: 0 }}>Registrar Interação</h2>
 
                   <form onSubmit={salvarInteracao}>
                     <label style={labelStyle}>Tipo</label>
@@ -579,7 +579,7 @@ export default function CrmDetalhesPage() {
                 </div>
 
                 <div style={cardStyle}>
-                  <h2 style={{ marginTop: 0 }}>Histórico de interações</h2>
+                  <h2 style={{ marginTop: 0 }}>Histórico de Interações</h2>
 
                   {interacoes.length === 0 ? (
                     <p style={{ color: "#b8b8d8" }}>

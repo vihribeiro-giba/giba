@@ -490,7 +490,7 @@ Use a senha inicial definida pelo titular. Depois de entrar, você poderá alter
               <ResumoCard
                 icon={<KeyRound size={22} />}
                 color="#F59E0B"
-                label="Sem acesso"
+                label="Sem Acesso"
                 value={metricas.semAcesso}
                 detail="Sem conta ativa ou módulos"
               />
@@ -500,7 +500,7 @@ Use a senha inicial definida pelo titular. Depois de entrar, você poderá alter
             <section>
               <div style={panelStyle}>
                 <div style={panelHeaderStyle}>
-                  <h2 style={panelTitleStyle}>Colaboradores cadastrados</h2>
+                  <h2 style={panelTitleStyle}>Colaboradores Cadastrados</h2>
                   <span style={contadorStyle}>{colaboradoresFiltrados.length}</span>
                 </div>
 

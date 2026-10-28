@@ -71,21 +71,21 @@ export default function ColaboradorForm(props: Props) {
 
       <form onSubmit={props.onSubmit} className="mt-6 grid gap-5">
         <section className="grid gap-4">
-          <SectionTitle title="Dados pessoais" subtitle="Informações profissionais e de contato." />
+          <SectionTitle title="Dados Pessoais" subtitle="Informações profissionais e de contato." />
           <AvatarUpload photoUrl={props.photoUrl} nome={props.nome} enviandoFoto={props.enviandoFoto} fileInputRef={props.fileInputRef} onSelecionar={props.onSelecionarFoto} onRemover={props.onRemoverFoto} />
-          <Field label="Nome completo" value={props.nome} onChange={props.setNome} required />
+          <Field label="Nome Completo" value={props.nome} onChange={props.setNome} required />
           <Field label="Função" value={props.funcao} onChange={props.setFuncao} placeholder="Ex.: Baterista, técnico de som, produtor" />
           <Field label="Celular" value={props.celular} onChange={(value) => props.setCelular(formatarCelular(value))} inputMode="numeric" />
           <Field label="Instagram" value={props.instagram} onChange={props.setInstagram} placeholder="@seuperfil" />
           <div className="grid gap-3 sm:grid-cols-2">
-            <Select label="Tipo de chave PIX" value={props.pixTipo} onChange={(value) => props.setPixTipo(value as PixTipo)} options={["CPF", "Telefone", "E-mail", "Chave Aleatória"]} />
+            <Select label="Tipo de Chave PIX" value={props.pixTipo} onChange={(value) => props.setPixTipo(value as PixTipo)} options={["CPF", "Telefone", "E-mail", "Chave Aleatória"]} />
             <Field label="Chave PIX" value={props.pixChave} onChange={props.setPixChave} placeholder={placeholderPix(props.pixTipo)} />
           </div>
           <TextArea label="Observações" value={props.observacoes} onChange={props.setObservacoes} />
         </section>
 
         <section className="grid gap-4 border-t border-white/10 pt-5">
-          <SectionTitle title="Acesso à plataforma" subtitle="Defina o identificador e a senha usados pelo colaborador para entrar na plataforma." icon={<ShieldCheck size={18} />} />
+          <SectionTitle title="Acesso à Plataforma" subtitle="Defina o identificador e a senha usados pelo colaborador para entrar na plataforma." icon={<ShieldCheck size={18} />} />
           {props.domainError ? (
             <div className="rounded-2xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">{props.domainError}</div>
           ) : (
@@ -109,7 +109,7 @@ export default function ColaboradorForm(props: Props) {
 
           <div className="rounded-2xl border border-white/10 bg-slate-950/25 p-3.5">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div><h3 className="font-black text-white">Acessos do colaborador</h3><p className="mt-1 text-xs text-slate-400">Selecione os módulos que este colaborador poderá acessar.</p></div>
+              <div><h3 className="font-black text-white">Acessos do Colaborador</h3><p className="mt-1 text-xs text-slate-400">Selecione os módulos que este colaborador poderá acessar.</p></div>
               <div className="flex gap-2">
                 <button type="button" onClick={() => props.setAllowedModules([...props.availableModules])} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-slate-200">Selecionar todos</button>
                 <button type="button" onClick={() => props.setAllowedModules([])} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-slate-400">Limpar</button>

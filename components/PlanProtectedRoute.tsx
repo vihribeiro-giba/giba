@@ -170,7 +170,7 @@ export default function PlanProtectedRoute({
     return (
       <div style={bloqueioContainerStyle}>
         <div style={bloqueioCardStyle}>
-          <h1 style={tituloStyle}>Módulo bloqueado</h1>
+          <h1 style={tituloStyle}>Módulo Bloqueado</h1>
 
           <p style={textoStyle}>
             {mensagem || "Seu plano atual não permite acessar este módulo."}

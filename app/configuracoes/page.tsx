@@ -254,12 +254,12 @@ export default function ConfiguracoesPage() {
           <main className="grid gap-6">
             <ConfigCard icon={<UserRound size={18} />} title="Perfil do Artista" subtitle="Informações públicas e contatos principais.">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Nome artístico" value={nomeArtistico} onChange={setNomeArtistico} placeholder="Nome artístico" />
-                <Field label="Nome do responsável" value={responsavel} onChange={setResponsavel} placeholder="Responsável" />
+                <Field label="Nome Artístico" value={nomeArtistico} onChange={setNomeArtistico} placeholder="Nome artístico" />
+                <Field label="Nome do Responsável" value={responsavel} onChange={setResponsavel} placeholder="Responsável" />
                 <Field label="CPF" value={cpf} onChange={setCpf} placeholder="CPF" />
                 <Field label="Telefone" value={telefone} onChange={setTelefone} placeholder="Telefone" />
                 <Field label="E-mail" value={email} onChange={setEmail} placeholder="E-mail" />
-                <Field label="Domínio profissional" value={professionalDomain} onChange={setProfessionalDomain} placeholder="exemplo.com.br" />
+                <Field label="Domínio Profissional" value={professionalDomain} onChange={setProfessionalDomain} placeholder="exemplo.com.br" />
                 <Field label="Instagram" value={instagram} onChange={setInstagram} placeholder="@seuperfil" />
                 <Field label="Cidade" value={cidade} onChange={setCidade} placeholder="Cidade" />
                 <Field label="Estado" value={estado} onChange={setEstado} placeholder="Estado" />
@@ -268,12 +268,12 @@ export default function ConfiguracoesPage() {
 
             <ConfigCard icon={<Building2 size={18} />} title="Dados da Empresa" subtitle="Dados fiscais e endereço usados em documentos.">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Field label="Razão social" value={razaoSocial} onChange={setRazaoSocial} placeholder="Razão social" />
+                <Field label="Razão Social" value={razaoSocial} onChange={setRazaoSocial} placeholder="Razão social" />
                 <Field label="CNPJ" value={cnpj} onChange={setCnpj} placeholder="CNPJ" />
                 <Field label="Cidade" value={cidade} onChange={setCidade} placeholder="Cidade" />
                 <Field label="Estado" value={estado} onChange={setEstado} placeholder="Estado" />
                 <div className="md:col-span-2">
-                  <TextArea label="Endereço completo" value={enderecoCompleto} onChange={setEnderecoCompleto} placeholder="Endereço completo" />
+                  <TextArea label="Endereço Completo" value={enderecoCompleto} onChange={setEnderecoCompleto} placeholder="Endereço completo" />
                 </div>
               </div>
             </ConfigCard>

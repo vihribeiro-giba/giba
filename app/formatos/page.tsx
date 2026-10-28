@@ -362,7 +362,7 @@ export default function FormatosPage() {
 
             <section className="formats-section">
               <div className="section-heading">
-                <div><h2>Formatos cadastrados</h2><p>Informações do show e documentos reunidos em um só lugar.</p></div>
+                <div><h2>Formatos Cadastrados</h2><p>Informações do show e documentos reunidos em um só lugar.</p></div>
                 <span className="total-badge">{formatos.length} {formatos.length === 1 ? "formato" : "formatos"}</span>
               </div>
 
@@ -371,7 +371,7 @@ export default function FormatosPage() {
               ) : formatos.length === 0 ? (
                 <div className="empty-state">
                   <div className="empty-icon"><ListMusic size={27} /></div>
-                  <h3>Nenhum formato cadastrado</h3>
+                  <h3>Nenhum Formato Cadastrado</h3>
                   <p>Crie o primeiro formato e anexe seu Input List em PDF.</p>
                   <button type="button" className="btn-primary empty-btn" onClick={novoFormato}><Plus size={17} /> Novo Formato</button>
                 </div>

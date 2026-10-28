@@ -367,7 +367,7 @@ export default function ImportarCrmModal({
               <Upload size={24} />
             </div>
             <div>
-              <h2 style={titleStyle}>Importar planilha</h2>
+              <h2 style={titleStyle}>Importar Planilha</h2>
               <p style={subtitleStyle}>
                 Confira os dados antes de gravar no CRM.
               </p>
@@ -414,7 +414,7 @@ export default function ImportarCrmModal({
         {linhas.length > 0 && (
           <>
             <div style={summaryGridStyle}>
-              <ResumoCard label="Linhas válidas" valor={linhas.length} />
+              <ResumoCard label="Linhas Válidas" valor={linhas.length} />
               <ResumoCard
                 label="CIMVALPI"
                 valor={
@@ -445,7 +445,7 @@ export default function ImportarCrmModal({
             <section style={previewStyle}>
               <div style={previewHeaderStyle}>
                 <div>
-                  <h3 style={sectionTitleStyle}>Prévia da importação</h3>
+                  <h3 style={sectionTitleStyle}>Prévia da Importação</h3>
                   <p style={subtitleStyle}>
                     Exibindo os primeiros 30 registros encontrados.
                   </p>
