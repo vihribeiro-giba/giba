@@ -2,7 +2,7 @@
 
 import ProtectedRoute from "../../components/ProtectedRoute";
 import PlanProtectedRoute from "../../components/PlanProtectedRoute";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import WhatsAppMessageModal from "../../components/whatsapp/WhatsAppMessageModal";
 import { supabase } from "../../lib/supabase";
@@ -1148,11 +1148,33 @@ function DropdownSelect({
 }) {
   const [open, setOpen] = useState(false);
   const selecionado = options.find((option) => option.value === value);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function fecharAoClicarFora(event: PointerEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+
+    function fecharComEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("pointerdown", fecharAoClicarFora);
+    document.addEventListener("keydown", fecharComEscape);
+    return () => {
+      document.removeEventListener("pointerdown", fecharAoClicarFora);
+      document.removeEventListener("keydown", fecharComEscape);
+    };
+  }, [open]);
 
   return (
-    <div style={dropdownContainerStyle}>
+    <div ref={containerRef} style={dropdownContainerStyle}>
       <button
         type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
         onClick={() => setOpen((atual) => !atual)}
         style={dropdownTriggerStyle}
       >
@@ -1163,12 +1185,15 @@ function DropdownSelect({
       </button>
 
       {open && (
-        <div style={dropdownMenuStyle}>
+        <div style={dropdownMenuStyle} role="listbox">
           {options.map((option) => (
             <button
               key={option.value}
               type="button"
-              onClick={() => {
+              role="option"
+              aria-selected={option.value === value}
+              onClick={(event) => {
+                event.stopPropagation();
                 onChange(option.value);
                 setOpen(false);
               }}

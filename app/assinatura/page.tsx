@@ -514,7 +514,7 @@ export default function AssinaturaPage() {
             onOpenChange={setWhatsappSuporteAberto}
             contextType="contratante"
             messageType="solicitacao_informacoes"
-            recipient={{ name: "Suporte GIBA", phone: "5531993575969" }}
+            recipient={{ name: "Suporte GIBA", phone: "5531990915426" }}
             extraVariables={{ empresa: "Plataforma GIBA", status: assinatura?.status }}
           />
         </main>

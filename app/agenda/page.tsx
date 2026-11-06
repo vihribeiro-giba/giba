@@ -1755,6 +1755,32 @@ function SearchSelect({
 }) {
   const [open, setOpen] = useState(false)
   const [term, setTerm] = useState("")
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    function fecharAoClicarFora(event: PointerEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false)
+        setTerm("")
+      }
+    }
+
+    function fecharComEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false)
+        setTerm("")
+      }
+    }
+
+    document.addEventListener("pointerdown", fecharAoClicarFora)
+    document.addEventListener("keydown", fecharComEscape)
+    return () => {
+      document.removeEventListener("pointerdown", fecharAoClicarFora)
+      document.removeEventListener("keydown", fecharComEscape)
+    }
+  }, [open])
 
   const filtradas = options.filter((option) =>
     option.label.toLowerCase().includes(term.toLowerCase()),
@@ -1763,8 +1789,14 @@ function SearchSelect({
   const labelSelecionado = options.find((option) => option.value === value)?.label || value
 
   return (
-    <div style={{ position: "relative" }}>
-      <button type="button" onClick={() => setOpen((atual) => !atual)} style={selectTriggerStyle}>
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((atual) => !atual)}
+        style={selectTriggerStyle}
+      >
         <span style={{ color: value ? "#FFFFFF" : "#94A3B8" }}>
           {value ? labelSelecionado : placeholder}
         </span>
@@ -1772,7 +1804,7 @@ function SearchSelect({
       </button>
 
       {open && (
-        <div style={selectDropdownStyle}>
+        <div style={selectDropdownStyle} role="listbox">
           <input
             autoFocus
             value={term}
@@ -1792,7 +1824,10 @@ function SearchSelect({
               <button
                 key={option.value}
                 type="button"
-                onClick={() => {
+                role="option"
+                aria-selected={option.value === value}
+                onClick={(event) => {
+                  event.stopPropagation()
                   onChange(option.value)
                   setTerm("")
                   setOpen(false)
@@ -1823,22 +1858,51 @@ function DropdownSelect({
 }) {
   const [open, setOpen] = useState(false)
   const selecionado = options.find((option) => option.value === value)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    function fecharAoClicarFora(event: PointerEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+
+    function fecharComEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false)
+    }
+
+    document.addEventListener("pointerdown", fecharAoClicarFora)
+    document.addEventListener("keydown", fecharComEscape)
+    return () => {
+      document.removeEventListener("pointerdown", fecharAoClicarFora)
+      document.removeEventListener("keydown", fecharComEscape)
+    }
+  }, [open])
 
   return (
-    <div style={{ position: "relative" }}>
-      <button type="button" onClick={() => setOpen((atual) => !atual)} style={selectTriggerStyle}>
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((atual) => !atual)}
+        style={selectTriggerStyle}
+      >
         <span>{selecionado?.label || "Selecione"}</span>
         <ChevronDown size={16} color="#94A3B8" />
       </button>
 
       {open && (
-        <div style={selectDropdownStyle}>
+        <div style={selectDropdownStyle} role="listbox">
           <div style={selectOptionsListStyle}>
             {options.map((option) => (
               <button
                 key={option.value}
                 type="button"
-                onClick={() => {
+                role="option"
+                aria-selected={option.value === value}
+                onClick={(event) => {
+                  event.stopPropagation()
                   onChange(option.value)
                   setOpen(false)
                 }}
@@ -1859,10 +1923,10 @@ function DropdownSelect({
 
 function Campo({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <span style={{ fontSize: 12, color: "#94A3B8", fontWeight: 700 }}>{label}</span>
       {children}
-    </label>
+    </div>
   )
 }
 

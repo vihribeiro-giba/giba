@@ -3,7 +3,7 @@ import { Check } from "lucide-react"
 import { FREE_TRIAL_DAYS } from "@/lib/trial"
 
 const whatsapp =
-  "https://wa.me/5531993575969?text=Olá!%20Quero%20assinar%20a%20Plataforma%20GIBA."
+  "https://wa.me/5531990915426?text=Olá!%20Quero%20assinar%20a%20Plataforma%20GIBA."
 
 const plans = [
   {

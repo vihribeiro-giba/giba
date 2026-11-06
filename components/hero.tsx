@@ -13,7 +13,7 @@ import { FREE_TRIAL_DAYS } from "@/lib/trial"
 
 export function Hero() {
   const whatsapp =
-    "https://wa.me/5531993575969?text=Olá!%20Quero%20conhecer%20a%20plataforma%20GIBA."
+    "https://wa.me/5531990915426?text=Olá!%20Quero%20conhecer%20a%20plataforma%20GIBA."
 
   const trustBadges = [
     { icon: Globe, text: "100% Online" },
