@@ -192,14 +192,39 @@ function formatarMoeda(valor: number) {
 }
 
 function parseValorBR(valor: string) {
-  const limpo = valor.trim()
+  const limpo = valor.trim().replace(/[^\d,.-]/g, "")
 
   if (!limpo) return 0
-  if (limpo.includes(",") && limpo.includes(".")) {
-    return Number(limpo.replace(/\./g, "").replace(",", "."))
-  }
-  if (limpo.includes(",")) return Number(limpo.replace(",", "."))
+  if (limpo.includes(",")) return Number(limpo.replace(/\./g, "").replace(",", "."))
+  if (/^\d{1,3}(\.\d{3})+$/.test(limpo)) return Number(limpo.replace(/\./g, ""))
   return Number(limpo)
+}
+
+function formatarValorDigitado(valor: string) {
+  const limpo = valor.replace(/[^\d,.]/g, "")
+  if (!limpo) return ""
+
+  const ultimaVirgula = limpo.lastIndexOf(",")
+  const ultimoPonto = limpo.lastIndexOf(".")
+  const indiceSeparador = Math.max(ultimaVirgula, ultimoPonto)
+  const separador = indiceSeparador >= 0 ? limpo[indiceSeparador] : ""
+  const casasDepois = indiceSeparador >= 0
+    ? limpo.slice(indiceSeparador + 1).replace(/\D/g, "")
+    : ""
+  const separadorDecimal = separador === "," || (separador === "." && casasDepois.length <= 2)
+  const parteInteira = (separadorDecimal ? limpo.slice(0, indiceSeparador) : limpo)
+    .replace(/\D/g, "")
+    .replace(/^0+(?=\d)/, "") || "0"
+  const inteiroFormatado = parteInteira.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+
+  if (!separadorDecimal) return inteiroFormatado
+  return `${inteiroFormatado},${casasDepois.slice(0, 2)}`
+}
+
+function formatarValorParaCampo(valor: string | number) {
+  const numero = typeof valor === "number" ? valor : parseValorBR(String(valor))
+  if (!Number.isFinite(numero) || numero <= 0) return ""
+  return numero.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function iniciais(nome: string) {
@@ -639,7 +664,7 @@ export default function AgendaPage() {
     setDescricaoMovimentacao(descricaoPadraoMovimentacao(evento, "Entrada"))
     setColaboradorMovimentacaoId("")
     setFavorecidoMovimentacao(evento.client_name)
-    setValorMovimentacao(evento.fee ? String(evento.fee) : "")
+    setValorMovimentacao(evento.fee ? formatarValorParaCampo(evento.fee) : "")
     setFormaPagamentoMovimentacao("PIX")
     setDataMovimentacao(hojeStr)
     setNotasMovimentacao("")
@@ -650,7 +675,7 @@ export default function AgendaPage() {
     if (!eventoMovimentacao) return
 
     setTipoMovimentacao(tipo)
-    setCategoriaMovimentacao(tipo === "Entrada" ? "Cachê" : "Combustível")
+    setCategoriaMovimentacao(tipo === "Entrada" ? "Cachê" : "")
     setDescricaoMovimentacao(descricaoPadraoMovimentacao(eventoMovimentacao, tipo))
     setColaboradorMovimentacaoId("")
     setFavorecidoMovimentacao(tipo === "Entrada" ? eventoMovimentacao.client_name : "")
@@ -668,6 +693,16 @@ export default function AgendaPage() {
     e.preventDefault()
     if (!eventoMovimentacao) return
 
+    if (!categoriaMovimentacao) {
+      setErroMovimentacao("Selecione uma categoria.")
+      return
+    }
+
+    if (tipoMovimentacao === "Saída" && categoriaMovimentacao === "Colaboradores" && !colaboradorMovimentacaoId) {
+      setErroMovimentacao("Selecione o colaborador da despesa.")
+      return
+    }
+
     const valor = parseValorBR(valorMovimentacao)
     if (!descricaoMovimentacao.trim() || !Number.isFinite(valor) || valor <= 0) {
       setErroMovimentacao("Informe uma descrição e um valor válido.")
@@ -684,11 +719,14 @@ export default function AgendaPage() {
       return
     }
 
-    const colaboradorSelecionado = colaboradores.find((colaborador) => colaborador.id === colaboradorMovimentacaoId)
-    const nomeFavorecido = tipoMovimentacao === "Saída" && colaboradorSelecionado
+    const despesaDeColaborador = tipoMovimentacao === "Saída" && categoriaMovimentacao === "Colaboradores"
+    const colaboradorSelecionado = despesaDeColaborador
+      ? colaboradores.find((colaborador) => colaborador.id === colaboradorMovimentacaoId)
+      : undefined
+    const nomeFavorecido = despesaDeColaborador && colaboradorSelecionado
       ? colaboradorSelecionado.nome
       : favorecidoMovimentacao.trim()
-    const descricaoFinal = tipoMovimentacao === "Saída" && colaboradorSelecionado && categoriaMovimentacao === "Colaboradores"
+    const descricaoFinal = despesaDeColaborador && colaboradorSelecionado
       ? `${descricaoMovimentacao.trim()} - ${colaboradorSelecionado.nome}`
       : descricaoMovimentacao.trim()
 
@@ -1502,25 +1540,35 @@ export default function AgendaPage() {
                     <Campo label="Categoria">
                       <DropdownSelect
                         value={categoriaMovimentacao}
+                        placeholder="Selecione a categoria"
                         options={(tipoMovimentacao === "Entrada" ? categoriasReceita : categoriasDespesa).map((categoria) => ({
                           value: categoria,
                           label: categoria,
                         }))}
-                        onChange={setCategoriaMovimentacao}
+                        onChange={(categoria) => {
+                          setCategoriaMovimentacao(categoria)
+                          if (categoria !== "Colaboradores") {
+                            setColaboradorMovimentacaoId("")
+                            if (tipoMovimentacao === "Saída") setFavorecidoMovimentacao("")
+                          }
+                        }}
                       />
                     </Campo>
 
                     <Campo label="Valor (R$)">
                       <input
                         value={valorMovimentacao}
-                        onChange={(e) => setValorMovimentacao(e.target.value)}
+                        onChange={(e) => setValorMovimentacao(formatarValorDigitado(e.target.value))}
+                        onBlur={() => {
+                          if (valorMovimentacao) setValorMovimentacao(formatarValorParaCampo(valorMovimentacao))
+                        }}
                         placeholder="0,00"
                         inputMode="decimal"
                         style={inputStyle}
                       />
                     </Campo>
 
-                    {tipoMovimentacao === "Saída" && (
+                    {tipoMovimentacao === "Saída" && categoriaMovimentacao === "Colaboradores" && (
                       <div style={financeWideField}>
                         <Campo label="Colaborador">
                           <SearchSelect
@@ -1851,10 +1899,12 @@ function DropdownSelect({
   value,
   options,
   onChange,
+  placeholder = "Selecione",
 }: {
   value: string
   options: Array<{ value: string; label: string }>
   onChange: (value: string) => void
+  placeholder?: string
 }) {
   const [open, setOpen] = useState(false)
   const selecionado = options.find((option) => option.value === value)
@@ -1888,7 +1938,7 @@ function DropdownSelect({
         onClick={() => setOpen((atual) => !atual)}
         style={selectTriggerStyle}
       >
-        <span>{selecionado?.label || "Selecione"}</span>
+        <span style={{ color: selecionado ? "#FFFFFF" : "#94A3B8" }}>{selecionado?.label || placeholder}</span>
         <ChevronDown size={16} color="#94A3B8" />
       </button>
 

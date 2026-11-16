@@ -124,19 +124,39 @@ function formatarData(data?: string | null) {
 }
 
 function parseValorBR(valor: string) {
-  const limpo = valor.trim()
+  const limpo = valor.trim().replace(/[^\d,.-]/g, "")
 
   if (!limpo) return 0
-
-  if (limpo.includes(",") && limpo.includes(".")) {
-    return Number(limpo.replace(/\./g, "").replace(",", "."))
-  }
-
-  if (limpo.includes(",")) {
-    return Number(limpo.replace(",", "."))
-  }
-
+  if (limpo.includes(",")) return Number(limpo.replace(/\./g, "").replace(",", "."))
+  if (/^\d{1,3}(\.\d{3})+$/.test(limpo)) return Number(limpo.replace(/\./g, ""))
   return Number(limpo)
+}
+
+function formatarValorDigitado(valor: string) {
+  const limpo = valor.replace(/[^\d,.]/g, "")
+  if (!limpo) return ""
+
+  const ultimaVirgula = limpo.lastIndexOf(",")
+  const ultimoPonto = limpo.lastIndexOf(".")
+  const indiceSeparador = Math.max(ultimaVirgula, ultimoPonto)
+  const separador = indiceSeparador >= 0 ? limpo[indiceSeparador] : ""
+  const casasDepois = indiceSeparador >= 0
+    ? limpo.slice(indiceSeparador + 1).replace(/\D/g, "")
+    : ""
+  const separadorDecimal = separador === "," || (separador === "." && casasDepois.length <= 2)
+  const parteInteira = (separadorDecimal ? limpo.slice(0, indiceSeparador) : limpo)
+    .replace(/\D/g, "")
+    .replace(/^0+(?=\d)/, "") || "0"
+  const inteiroFormatado = parteInteira.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+
+  if (!separadorDecimal) return inteiroFormatado
+  return `${inteiroFormatado},${casasDepois.slice(0, 2)}`
+}
+
+function formatarValorParaCampo(valor: string | number) {
+  const numero = typeof valor === "number" ? valor : parseValorBR(String(valor))
+  if (!Number.isFinite(numero) || numero <= 0) return ""
+  return numero.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function corCategoria(cat?: string | null) {
@@ -496,7 +516,7 @@ export default function FinanceiroPage() {
       tipoSelecionado === "Entrada"
         ? CATEGORIAS_ENTRADA[0]
         : tipoSelecionado === "Saída"
-          ? CATEGORIAS_SAIDA[0]
+          ? ""
           : CATEGORIAS_RECORRENTES[0],
     )
     setEventoId("")
@@ -522,6 +542,16 @@ export default function FinanceiroPage() {
   }
 
   async function salvarMovimentacao() {
+    if (!categoria) {
+      alert("Selecione uma categoria.")
+      return
+    }
+
+    if (tipo === "Saída" && categoria === "Colaboradores" && !colaboradorId) {
+      alert("Selecione o colaborador da despesa.")
+      return
+    }
+
     const valorNum = parseValorBR(valor)
 
     if (!descricao.trim() || !valorNum || valorNum <= 0) {
@@ -578,11 +608,14 @@ export default function FinanceiroPage() {
       return
     }
 
-    const colaborador = colaboradores.find((c) => c.id === colaboradorId)
+    const despesaDeColaborador = tipo === "Saída" && categoria === "Colaboradores"
+    const colaborador = despesaDeColaborador
+      ? colaboradores.find((c) => c.id === colaboradorId)
+      : undefined
     const nomeColab = colaborador ? nomeColaborador(colaborador) : ""
-    const clienteFinal = tipo === "Saída" && nomeColab ? nomeColab : clienteNome.trim() || null
+    const clienteFinal = despesaDeColaborador && nomeColab ? nomeColab : clienteNome.trim() || null
     const descricaoFinal =
-      tipo === "Saída" && nomeColab && categoria === "Colaboradores"
+      despesaDeColaborador && nomeColab
         ? `${descricao.trim()} - ${nomeColab}`
         : descricao.trim()
 
@@ -1190,7 +1223,13 @@ export default function FinanceiroPage() {
                         value={categoria}
                         placeholder="Selecione a categoria"
                         options={categoriasAtuais.map((c) => ({ value: c, label: c }))}
-                        onChange={setCategoria}
+                        onChange={(categoriaSelecionada) => {
+                          setCategoria(categoriaSelecionada)
+                          if (categoriaSelecionada !== "Colaboradores" && colaboradorId) {
+                            setColaboradorId("")
+                            setClienteNome("")
+                          }
+                        }}
                       />
                     </Campo>
 
@@ -1205,7 +1244,7 @@ export default function FinanceiroPage() {
                             setEventoId(id)
                             const ev = eventos.find((item) => item.id === id)
                             if (tipo === "Entrada" && ev?.client_name) setClienteNome(ev.client_name)
-                            if (tipo === "Entrada" && ev?.fee) setValor(String(ev.fee))
+                            if (tipo === "Entrada" && ev?.fee) setValor(formatarValorParaCampo(ev.fee))
                             if (ev?.title) {
                               setDescricao(
                                 tipo === "Entrada"
@@ -1218,7 +1257,7 @@ export default function FinanceiroPage() {
                       </Campo>
                     )}
 
-                    {tipo === "Saída" && (
+                    {tipo === "Saída" && categoria === "Colaboradores" && (
                       <Campo rotulo="Colaborador">
                         <DropdownSearch
                           value={colaboradorId}
@@ -1247,7 +1286,7 @@ export default function FinanceiroPage() {
                     </Campo>
 
                     {tipo !== "Recorrente" && (
-                      <Campo rotulo={tipo === "Saída" ? "Colaborador / Favorecido" : "Cliente"}>
+                      <Campo rotulo={tipo === "Saída" ? "Favorecido" : "Cliente"}>
                         <input
                           value={clienteNome}
                           onChange={(e) => setClienteNome(e.target.value)}
@@ -1258,7 +1297,17 @@ export default function FinanceiroPage() {
                     )}
 
                     <Campo rotulo="Valor (R$)">
-                      <input value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" inputMode="decimal" style={inputStyle} required />
+                      <input
+                        value={valor}
+                        onChange={(e) => setValor(formatarValorDigitado(e.target.value))}
+                        onBlur={() => {
+                          if (valor) setValor(formatarValorParaCampo(valor))
+                        }}
+                        placeholder="0,00"
+                        inputMode="decimal"
+                        style={inputStyle}
+                        required
+                      />
                     </Campo>
 
                     <Campo rotulo="Forma de Pagamento">
@@ -1432,10 +1481,10 @@ function ResumoCard({
 
 function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
-    <label style={campoStyle}>
+    <div style={campoStyle}>
       <span style={campoLabelStyle}>{rotulo}</span>
       {children}
-    </label>
+    </div>
   )
 }
 
@@ -1463,6 +1512,7 @@ function DropdownSearch({
 }) {
   const [open, setOpen] = useState(false)
   const [term, setTerm] = useState("")
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const optionsRef = useRef<HTMLDivElement | null>(null)
 
   const selecionado = options.find((o) => o.value === value)
@@ -1480,9 +1530,40 @@ function DropdownSearch({
     optionsRef.current.scrollTop = Math.max(target.offsetTop - 8, 0)
   }, [open, term, scrollTargetValue, filtradas.length])
 
+  useEffect(() => {
+    if (!open) return
+
+    function fecharAoClicarFora(event: PointerEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false)
+        setTerm("")
+      }
+    }
+
+    function fecharComEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setOpen(false)
+        setTerm("")
+      }
+    }
+
+    document.addEventListener("pointerdown", fecharAoClicarFora)
+    document.addEventListener("keydown", fecharComEscape)
+    return () => {
+      document.removeEventListener("pointerdown", fecharAoClicarFora)
+      document.removeEventListener("keydown", fecharComEscape)
+    }
+  }, [open])
+
   return (
-    <div style={{ position: "relative" }}>
-      <button type="button" onClick={() => setOpen((v) => !v)} style={dropdownTriggerStyle}>
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        style={dropdownTriggerStyle}
+      >
         <span style={{ color: selecionado ? "#fff" : "#94A3B8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {selecionado?.label || placeholder}
         </span>
@@ -1490,7 +1571,7 @@ function DropdownSearch({
       </button>
 
       {open && (
-        <div style={dropdownMenuStyle}>
+        <div style={dropdownMenuStyle} role="listbox">
           <input
             autoFocus
             value={term}
@@ -1508,8 +1589,11 @@ function DropdownSearch({
               <button
                 key={option.value}
                 type="button"
+                role="option"
+                aria-selected={option.value === value}
                 data-scroll-target={option.value === scrollTargetValue ? "true" : undefined}
-                onClick={() => {
+                onClick={(event) => {
+                  event.stopPropagation()
                   onChange(option.value)
                   setTerm("")
                   setOpen(false)

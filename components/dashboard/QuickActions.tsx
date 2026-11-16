@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarPlus, Eye, EyeOff, UserPlus, Plus, FileText } from "lucide-react";
+import { CalendarPlus, Eye, EyeOff, FilePlus2, UserPlus } from "lucide-react";
 
 type QuickActionsProps = {
   valoresVisiveis: boolean;
@@ -33,8 +33,7 @@ export default function QuickActions({
       </Link>
 
       <ActionButton href="/clientes" label="Novo Cliente" icon={<UserPlus size={18} />} />
-      <ActionButton href="/financeiro" label="Nova Receita" icon={<Plus size={18} />} />
-      <ActionButton href="/contratos" label="Novo Contrato" icon={<FileText size={18} />} />
+      <ActionButton href="/propostas/nova" label="Nova Proposta" icon={<FilePlus2 size={18} />} />
     </div>
   );
 }
