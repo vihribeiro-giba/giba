@@ -22,7 +22,7 @@ export default function InfoListCard({
   actionHref = "#",
 }: InfoListCardProps) {
   return (
-    <section style={cardStyle}>
+    <section className="giba-card" style={cardStyle}>
       <div style={headerStyle}>
         <h2 style={titleStyle}>{title}</h2>
 

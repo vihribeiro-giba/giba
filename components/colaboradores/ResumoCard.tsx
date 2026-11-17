@@ -16,7 +16,7 @@ export default function ResumoCard({
   detail,
 }: ResumoCardProps) {
   return (
-    <div style={resumoCardStyle}>
+    <div className="giba-card" style={resumoCardStyle}>
       <div
         style={{
           ...resumoIconStyle,

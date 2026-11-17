@@ -831,7 +831,7 @@ export default function FinanceiroPage() {
             </section>
 
             {/* Insights da IA GIBA */}
-            <section style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), marginBottom: "22px" }}>
+            <section className="giba-card" style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), marginBottom: "22px" }}>
               <div style={cardHeaderStyle}>
                 <div style={iaHeaderStyle}>
                   <span style={iaIconStyle}>
@@ -889,7 +889,7 @@ export default function FinanceiroPage() {
 
             {/* Lista de movimentações */}
             <section style={movimentacoesSectionStyle}>
-              <div style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), ...(isMobile ? mobileMovimentacoesCardStyle : movimentacoesCardStyle), width: "100%", minWidth: 0 }}>
+              <div className="giba-card" style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), ...(isMobile ? mobileMovimentacoesCardStyle : movimentacoesCardStyle), width: "100%", minWidth: 0 }}>
                 <div style={cardHeaderStyle}>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <h2 style={cardTitleStyle}>Movimentações</h2>
@@ -1106,7 +1106,7 @@ export default function FinanceiroPage() {
             </section>
 
             {/* Despesas recorrentes */}
-            <section style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), marginTop: "22px" }}>
+            <section className="giba-card" style={{ ...cardStyle, ...(isMobile ? mobileCardStyle : {}), marginTop: "22px" }}>
               <div style={cardHeaderStyle}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <span style={recIconStyle}>
@@ -1451,7 +1451,7 @@ function ResumoCard({
   seta?: "up" | "down"
 }) {
   return (
-    <div style={resumoCardStyle}>
+    <div className="giba-card" style={resumoCardStyle}>
       <div style={resumoTopStyle}>
         <div>
           <p style={resumoLabelStyle}>
@@ -1694,7 +1694,7 @@ const cardsGridStyle: React.CSSProperties = {
 const resumoCardStyle: React.CSSProperties = {
   padding: "20px",
   borderRadius: "22px",
-  background: "rgba(255,255,255,0.04)",
+  background: "var(--giba-surface, #0c1423)",
   border: "1px solid rgba(255,255,255,0.09)",
   boxShadow: "0 20px 45px rgba(0,0,0,0.22)",
 }
@@ -1742,7 +1742,7 @@ const resumoIconStyle: React.CSSProperties = {
 const cardStyle: React.CSSProperties = {
   padding: "22px",
   borderRadius: "24px",
-  background: "rgba(255,255,255,0.04)",
+  background: "var(--giba-surface, #0c1423)",
   border: "1px solid rgba(255,255,255,0.09)",
   boxShadow: "0 22px 50px rgba(0,0,0,0.22)",
 }

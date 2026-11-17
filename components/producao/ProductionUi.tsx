@@ -4,8 +4,8 @@ import { ArrowLeft, ClipboardCheck, Plus } from "lucide-react";
 import { productionStatusColor, productionStatusLabel } from "../../lib/production/constants";
 import type { ProductionStatus } from "../../lib/production/types";
 
-export const productionPanelClass = "rounded-[24px] border border-white/10 bg-[#101827]/90 shadow-[0_20px_60px_rgba(0,0,0,.18)]";
-export const productionInputClass = "h-12 w-full rounded-2xl border border-white/10 bg-[#071225] px-4 text-sm font-semibold text-white outline-none transition focus:border-cyan-400/70 focus:ring-2 focus:ring-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-60";
+export const productionPanelClass = "giba-card rounded-[24px] border border-white/10";
+export const productionInputClass = "giba-control h-12 w-full rounded-2xl border border-white/10 px-4 text-sm font-semibold text-white outline-none transition focus:border-cyan-400/70 focus:ring-2 focus:ring-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-60";
 export const productionTextareaClass = `${productionInputClass} h-auto min-h-28 py-3 resize-y`;
 export const productionPrimaryButtonClass = "inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-cyan-500 px-5 py-3 text-sm font-black text-white shadow-[0_10px_30px_rgba(37,99,235,.25)] transition hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-50";
 export const productionSecondaryButtonClass = "inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-bold text-slate-100 transition hover:border-cyan-400/40 hover:bg-white/[0.08] disabled:pointer-events-none disabled:opacity-50";

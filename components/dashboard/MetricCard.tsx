@@ -18,7 +18,7 @@ export default function MetricCard({
   positive = true,
 }: MetricCardProps) {
   return (
-    <div style={cardStyle}>
+    <div className="giba-card" style={cardStyle}>
       <div
         style={{
           position: "absolute",

@@ -184,7 +184,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [visibleModules]);
 
   return (
-    <div style={appShellStyle}>
+    <div className="giba-app-shell" style={appShellStyle}>
       {isMobile && !mobileOpen && (
         <button
           onClick={() => setMobileOpen(true)}
@@ -296,6 +296,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       <main
+        className="giba-app-main"
         style={{
           ...mainStyle,
           marginLeft: isMobile ? "0" : "280px",
@@ -310,8 +311,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-const appBackground =
-  "radial-gradient(circle at 15% 0%, rgba(139,53,255,0.18), transparent 32%), radial-gradient(circle at 85% 10%, rgba(0,170,255,0.14), transparent 34%), linear-gradient(135deg, #050510, #070B16 45%, #00172F)";
+const appBackground = "var(--giba-bg, #070B16)";
 
 const appShellStyle: React.CSSProperties = {
   minHeight: "100vh",
@@ -356,13 +356,12 @@ const sidebarStyle: React.CSSProperties = {
   width: "280px",
   minWidth: "280px",
   height: "100vh",
-  background: "rgba(7,11,22,0.82)",
+  background: "var(--giba-sidebar, #070B16)",
   borderRight: "1px solid rgba(255,255,255,0.10)",
   top: 0,
   zIndex: 1000,
   transition: "all 0.32s ease",
-  backdropFilter: "blur(18px)",
-  boxShadow: "18px 0 55px rgba(0,0,0,0.25)",
+  boxShadow: "12px 0 40px rgba(0,0,0,0.2)",
 };
 
 const sidebarInnerStyle: React.CSSProperties = {
@@ -487,9 +486,9 @@ const footerStyle: React.CSSProperties = {
 const userCardStyle: React.CSSProperties = {
   padding: "13px",
   borderRadius: "20px",
-  background: "rgba(255,255,255,0.055)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  boxShadow: "0 20px 45px rgba(0,0,0,0.18)",
+  background: "var(--giba-surface-soft, rgba(255,255,255,0.035))",
+  border: "1px solid var(--giba-border, rgba(255,255,255,0.09))",
+  boxShadow: "var(--giba-shadow, 0 18px 45px rgba(0,0,0,0.2))",
 };
 
 const userTopStyle: React.CSSProperties = {

@@ -536,6 +536,11 @@ export default function AgendaPage() {
     if (!diaSelecionado) return alert("Selecione uma data no calendário.")
     if (!clientName) return alert("Selecione um cliente.")
 
+    const valorCache = fee ? parseValorBR(fee) : 0
+    if (!Number.isFinite(valorCache) || valorCache < 0) {
+      return alert("Informe um valor de cachê válido.")
+    }
+
     const dados = {
       user_id: user.id,
       title: `${eventType} - ${clientName}`,
@@ -546,7 +551,7 @@ export default function AgendaPage() {
       event_date: diaSelecionado,
       event_time: eventTime,
       show_duration: showDuration,
-      fee: fee ? Number(fee) : 0,
+      fee: valorCache,
       payment_format: paymentFormat,
       status: eventStatusManual || "pendente",
       notes,
@@ -588,7 +593,7 @@ export default function AgendaPage() {
     setNumeroEndereco(enderecoSeparado.numero)
     setEventTime(evento.event_time)
     setShowDuration(evento.show_duration)
-    setFee(String(evento.fee || ""))
+    setFee(evento.fee ? formatarValorParaCampo(evento.fee) : "")
     setPaymentFormat(evento.payment_format)
     setNotes(evento.notes)
     setEventStatusManual(evento.status || "pendente")
@@ -679,7 +684,7 @@ export default function AgendaPage() {
     setDescricaoMovimentacao(descricaoPadraoMovimentacao(eventoMovimentacao, tipo))
     setColaboradorMovimentacaoId("")
     setFavorecidoMovimentacao(tipo === "Entrada" ? eventoMovimentacao.client_name : "")
-    setValorMovimentacao(tipo === "Entrada" && eventoMovimentacao.fee ? String(eventoMovimentacao.fee) : "")
+    setValorMovimentacao(tipo === "Entrada" && eventoMovimentacao.fee ? formatarValorParaCampo(eventoMovimentacao.fee) : "")
     setErroMovimentacao("")
   }
 
@@ -1257,7 +1262,16 @@ export default function AgendaPage() {
                         <input value={showDuration} onChange={(e) => setShowDuration(e.target.value)} placeholder="Ex: 2 horas" style={inputStyle} />
                       </Campo>
                       <Campo label="Cachê (R$)">
-                        <input value={fee} onChange={(e) => setFee(e.target.value)} placeholder="0,00" inputMode="numeric" style={inputStyle} />
+                        <input
+                          value={fee}
+                          onChange={(e) => setFee(formatarValorDigitado(e.target.value))}
+                          onBlur={() => {
+                            if (fee) setFee(formatarValorParaCampo(fee))
+                          }}
+                          placeholder="0,00"
+                          inputMode="decimal"
+                          style={inputStyle}
+                        />
                       </Campo>
                     </div>
 
@@ -2145,8 +2159,8 @@ const metricCard: React.CSSProperties = {
   padding: "14px 14px",
   borderRadius: 20,
   border: "1px solid rgba(255,255,255,0.10)",
-  background: "rgba(255,255,255,0.045)",
-  boxShadow: "0 18px 40px rgba(0,0,0,0.20)",
+  background: "var(--giba-surface, #0c1423)",
+  boxShadow: "var(--giba-shadow, 0 18px 45px rgba(0,0,0,0.2))",
 }
 const metricIcon: React.CSSProperties = {
   width: 40,

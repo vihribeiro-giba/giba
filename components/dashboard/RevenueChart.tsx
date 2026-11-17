@@ -59,7 +59,7 @@ export default function RevenueChart({
   const activeIndex = hovered ?? data.length - 1;
 
   return (
-    <section style={cardStyle}>
+    <section className="giba-card" style={cardStyle}>
       <div style={headerStyle}>
         <div>
           <h2 style={titleStyle}>Faturamento</h2>

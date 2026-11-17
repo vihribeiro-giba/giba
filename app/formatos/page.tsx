@@ -484,12 +484,12 @@ export default function FormatosPage() {
             .feedback { margin-bottom: 18px; padding: 12px 15px; border-radius: 13px; font-size: 13px; font-weight: 750; }
             .feedback-sucesso { color: #4ade80; background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.28); }
             .feedback-erro { color: #fda4af; background: rgba(244,63,94,.1); border: 1px solid rgba(244,63,94,.28); }
-            .formats-section { padding: 22px; border-radius: 22px; border: 1px solid rgba(255,255,255,.085); background: rgba(255,255,255,.025); }
+            .formats-section { padding: 22px; border-radius: 22px; border: 1px solid var(--giba-border); background: var(--giba-surface); box-shadow: var(--giba-shadow); }
             .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 18px; }
             .section-heading h2 { font-size: 20px; font-weight: 900; }
             .total-badge { padding: 7px 12px; border-radius: 999px; color: #cbd5e1; background: rgba(255,255,255,.055); border: 1px solid rgba(255,255,255,.09); font-size: 12px; font-weight: 800; white-space: nowrap; }
             .formats-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
-            .format-card { min-width: 0; padding: 17px; border-radius: 18px; border: 1px solid rgba(255,255,255,.085); background: rgba(10,18,34,.62); transition: transform .18s ease,border-color .18s ease; }
+            .format-card { min-width: 0; padding: 17px; border-radius: 18px; border: 1px solid var(--giba-border); background: var(--giba-surface-soft); transition: transform .18s ease,border-color .18s ease; }
             .format-card:hover { transform: translateY(-2px); border-color: rgba(139,92,246,.3); }
             .card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
             .format-title-wrap { display: flex; align-items: center; gap: 11px; min-width: 0; }
@@ -532,7 +532,7 @@ export default function FormatosPage() {
             .spinner { width: 34px; height: 34px; border-radius: 50%; border: 3px solid rgba(255,255,255,.1); border-top-color: #8b35ff; animation: spin .8s linear infinite; }
             @keyframes spin { to { transform: rotate(360deg); } }
             .modal-overlay { position: fixed; inset: 0; z-index: 2100; display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto; background: rgba(2,4,12,.76); backdrop-filter: blur(8px); }
-            .format-modal { width: min(680px,100%); max-height: 92vh; overflow-y: auto; padding: 23px; border-radius: 22px; border: 1px solid rgba(255,255,255,.11); background: linear-gradient(145deg,#101326,#091426); box-shadow: 0 40px 90px rgba(0,0,0,.58); color: #fff; scrollbar-width: none; }
+            .format-modal { width: min(680px,100%); max-height: 92vh; overflow-y: auto; padding: 23px; border-radius: 22px; border: 1px solid var(--giba-border-strong); background: var(--giba-surface); box-shadow: 0 40px 90px rgba(0,0,0,.58); color: #fff; scrollbar-width: none; }
             .format-modal::-webkit-scrollbar { display: none; }
             .modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,.07); }
             .modal-eyebrow { color: #22d3ee; font-size: 10px; font-weight: 950; letter-spacing: 1.5px; }

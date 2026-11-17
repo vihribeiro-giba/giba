@@ -370,7 +370,7 @@ export default function ConfiguracoesPage() {
             alignItems: "start",
           }}
         >
-          <section style={panelStyle}>
+          <section className="giba-card" style={panelStyle}>
             <h2 style={{ marginTop: 0 }}>Logo da Empresa</h2>
 
             <div style={logoBox}>
@@ -404,7 +404,7 @@ export default function ConfiguracoesPage() {
             </p>
           </section>
 
-          <section style={panelStyle}>
+          <section className="giba-card" style={panelStyle}>
             <h2 style={{ marginTop: 0 }}>Dados da Empresa</h2>
 
             <form
@@ -476,7 +476,7 @@ function ConfigCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-3xl border border-white/[0.10] bg-white/[0.05] p-5 shadow-[0_22px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+    <section className="giba-card rounded-3xl border border-white/[0.10] p-5">
       <div className="mb-5 flex items-center gap-3">
         <div className="grid h-11 w-11 place-items-center rounded-2xl border border-violet-500/25 bg-violet-500/15 text-violet-200">
           {icon}
@@ -554,7 +554,7 @@ function ResumoConfiguracoes({
   const completo = percentual >= 85 && Boolean(logoUrl);
 
   return (
-    <section className="rounded-3xl border border-white/[0.10] bg-white/[0.05] p-5 shadow-[0_22px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+    <section className="giba-card rounded-3xl border border-white/[0.10] p-5">
       <div className="mb-4 flex items-center gap-3">
         <div className="grid h-11 w-11 place-items-center rounded-2xl border border-emerald-400/25 bg-emerald-500/15 text-emerald-200">
           <BadgeCheck size={18} />
@@ -594,7 +594,7 @@ function ResumoLinha({ label, value }: { label: string; value: string }) {
 }
 
 const panelStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.06)",
+  background: "var(--giba-surface, #0c1423)",
   border: "1px solid rgba(255,255,255,0.10)",
   borderRadius: "24px",
   padding: "24px",

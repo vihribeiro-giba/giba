@@ -1420,7 +1420,7 @@ const mainGridStyle: React.CSSProperties = {
 };
 
 const panelStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.06)",
+  background: "var(--giba-surface, #0c1423)",
   border: "1px solid rgba(255,255,255,0.10)",
   borderRadius: "24px",
   padding: "22px",

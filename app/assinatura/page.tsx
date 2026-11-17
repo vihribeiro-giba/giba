@@ -321,7 +321,7 @@ export default function AssinaturaPage() {
             </div>
           )}
 
-          <section className="mx-auto mb-8 w-full max-w-6xl rounded-[24px] border border-white/10 bg-white/[0.045] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl md:p-6">
+          <section className="giba-card mx-auto mb-8 w-full max-w-6xl rounded-[24px] border border-white/10 p-5 md:p-6">
             {carregando ? (
               <p className="text-slate-300">Carregando assinatura...</p>
             ) : (

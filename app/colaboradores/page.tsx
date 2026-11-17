@@ -498,7 +498,7 @@ Use a senha inicial definida pelo titular. Depois de entrar, você poderá alter
 
             {/* ---------- LISTA PRINCIPAL ---------- */}
             <section>
-              <div style={panelStyle}>
+              <div className="giba-card" style={panelStyle}>
                 <div style={panelHeaderStyle}>
                   <h2 style={panelTitleStyle}>Colaboradores Cadastrados</h2>
                   <span style={contadorStyle}>{colaboradoresFiltrados.length}</span>
@@ -708,7 +708,7 @@ const metricsGridStyle: React.CSSProperties = {
 };
 
 const panelStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.05)",
+  background: "var(--giba-surface, #0c1423)",
   border: "1px solid rgba(255,255,255,0.10)",
   borderRadius: 24,
   padding: 24,

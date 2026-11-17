@@ -1432,9 +1432,9 @@ function ContratosContent() {
             .config-card,
             .panel {
               border-radius: 18px;
-              background: rgba(10, 18, 33, 0.62);
-              border: 1px solid rgba(148, 163, 184, 0.14);
-              box-shadow: none;
+              background: var(--giba-surface);
+              border: 1px solid var(--giba-border);
+              box-shadow: var(--giba-shadow);
             }
 
             .metric-card,
@@ -1528,7 +1528,7 @@ function ContratosContent() {
               padding: 24px;
               border-radius: 26px;
               border: 1px solid rgba(255, 255, 255, 0.12);
-              background: linear-gradient(145deg, #0b0f1c, #0a1426);
+              background: var(--giba-surface);
               box-shadow: 0 40px 90px rgba(0, 0, 0, 0.58);
             }
 
@@ -1719,7 +1719,7 @@ function ContratosContent() {
               gap: 12px;
               padding: 15px;
               border-radius: 14px;
-              background: rgba(15, 23, 42, 0.32);
+              background: var(--giba-surface-soft);
               border: 1px solid rgba(148, 163, 184, 0.1);
               transition: border-color 0.16s ease, background-color 0.16s ease;
             }

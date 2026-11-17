@@ -32,7 +32,7 @@ export default function UpcomingShows({ eventos }: UpcomingShowsProps) {
     .slice(0, 3);
 
   return (
-    <section style={cardStyle}>
+    <section className="giba-card" style={cardStyle}>
       <div style={headerStyle}>
         <h2 style={titleStyle}>Próximos Shows</h2>
         <Link href="/agenda" style={buttonStyle}>

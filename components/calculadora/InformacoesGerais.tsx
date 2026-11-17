@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 import ActionsBar from "./ActionsBar";
 import { TextInput } from "./Fields";
 import SectionShell from "./SectionShell";
@@ -28,25 +28,24 @@ export default function InformacoesGerais({
 }) {
   return (
     <SectionShell title="Informações Gerais" subtitle="Dados principais da simulação." icon={<MapPin size={18} />}>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <TextInput
-          label="Evento"
-          value={nomeOrcamento}
-          onChange={setNomeOrcamento}
-          placeholder="Ex: Show Prefeitura de Sabará"
-        />
-        <TextInput label="Preço de Venda" value={valorShow} onChange={setValorShow} placeholder="Ex: 20000" />
-        <TextInput label="Data dos Lançamentos" value={dataFinanceiro} onChange={setDataFinanceiro} type="date" />
-        <div className="rounded-2xl border border-white/[0.08] bg-slate-950/25 p-4">
-          <div className="mb-2 flex items-center gap-2 text-slate-400">
-            <Clock size={16} />
-            <span className="text-xs font-black uppercase">Simulação</span>
-          </div>
-          <p className="text-sm leading-6 text-slate-300">Use os cards abaixo para preencher custos, equipe, equipamentos e taxas.</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-12">
+        <div className="sm:col-span-2 md:col-span-6">
+          <TextInput
+            label="Evento"
+            value={nomeOrcamento}
+            onChange={setNomeOrcamento}
+            placeholder="Ex: Show Prefeitura de Sabará"
+          />
+        </div>
+        <div className="md:col-span-3">
+          <TextInput label="Preço de Venda" value={valorShow} onChange={setValorShow} placeholder="Ex: 20000" />
+        </div>
+        <div className="md:col-span-3">
+          <TextInput label="Data do Evento" value={dataFinanceiro} onChange={setDataFinanceiro} type="date" />
         </div>
       </div>
 
-      <div className="mt-5">
+      <div className="mt-4">
         <ActionsBar onSalvar={onSalvar} onExportar={onExportar} onLimpar={onLimpar} />
       </div>
     </SectionShell>

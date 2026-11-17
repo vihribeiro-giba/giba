@@ -58,7 +58,7 @@ export default function GibaInsights({
   ];
 
   return (
-    <section style={cardStyle}>
+    <section className="giba-card" style={cardStyle}>
       <div style={glowStyle} />
 
       <div style={headerStyle}>

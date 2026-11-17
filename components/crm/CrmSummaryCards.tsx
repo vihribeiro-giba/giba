@@ -79,7 +79,7 @@ export default function CrmSummaryCards({
         return (
           <article
             key={item.label}
-            className="min-h-[134px] rounded-[20px] border border-white/[0.085] bg-white/[0.03] p-5 transition hover:border-white/15 hover:bg-white/[0.045]"
+            className="giba-card min-h-[134px] rounded-[20px] border border-white/[0.085] p-5 transition hover:border-white/15"
           >
             <div className="flex h-full items-start justify-between gap-4">
               <div className="flex h-full min-w-0 flex-col">

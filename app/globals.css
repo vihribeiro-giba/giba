@@ -4,6 +4,20 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  --giba-bg: #070b16;
+  --giba-sidebar: #070b16;
+  --giba-surface: #0c1423;
+  --giba-surface-raised: #101a2b;
+  --giba-surface-soft: rgba(255, 255, 255, 0.035);
+  --giba-border: rgba(255, 255, 255, 0.09);
+  --giba-border-strong: rgba(255, 255, 255, 0.14);
+  --giba-text: #f8fafc;
+  --giba-text-secondary: #cbd5e1;
+  --giba-text-muted: #94a3b8;
+  --giba-text-subtle: #64748b;
+  --giba-shadow: 0 18px 45px rgba(0, 0, 0, 0.2);
+  --giba-radius-card: 24px;
+  --giba-radius-control: 14px;
   --background: oklch(0.08 0.02 280);
   --foreground: oklch(0.98 0 0);
   --card: oklch(0.12 0.02 280);
@@ -128,6 +142,7 @@
   }
   body {
     @apply bg-background text-foreground;
+    background: var(--giba-bg);
   }
 
   /* Padrão GIBA para caixas de seleção nativas em todos os módulos. */
@@ -165,6 +180,49 @@
     color: #ffffff;
     background: #4c1d95;
   }
+}
+
+/* Sistema visual compartilhado pelos módulos internos da plataforma. */
+.giba-app-shell,
+.giba-app-main {
+  background: var(--giba-bg) !important;
+}
+
+.giba-card {
+  background: var(--giba-surface) !important;
+  border-color: var(--giba-border) !important;
+  box-shadow: var(--giba-shadow) !important;
+}
+
+.giba-panel {
+  background: var(--giba-surface-soft) !important;
+  border-color: var(--giba-border) !important;
+}
+
+.giba-app-main :is(input, textarea):not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.giba-control {
+  background-color: #091221;
+  border-color: var(--giba-border);
+  color: var(--giba-text);
+}
+
+.giba-app-main :is(input, textarea)::placeholder {
+  color: var(--giba-text-subtle);
+}
+
+.giba-app-main :is(input, textarea):focus-visible {
+  border-color: rgba(56, 189, 248, 0.58);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+  outline: none;
+}
+
+.giba-app-main h1 {
+  color: var(--giba-text);
+  letter-spacing: -0.025em;
+}
+
+.giba-app-main :is(p, small) {
+  text-wrap: pretty;
 }
 @keyframes feedback-progress {
   from { transform: scaleX(1); }

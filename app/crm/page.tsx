@@ -2265,7 +2265,7 @@ const botaoPerigo: React.CSSProperties = {
 };
 
 const cardStyle: React.CSSProperties = {
-  background: "rgba(255,255,255,0.03)",
+  background: "var(--giba-surface, #0c1423)",
   border: "1px solid rgba(255,255,255,0.085)",
   borderRadius: 20,
   padding: 22,

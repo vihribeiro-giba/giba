@@ -84,6 +84,7 @@ export default function CalculadoraShowPage() {
   const [nomeOrcamento, setNomeOrcamento] = useState("");
   const [orcamentosSalvos, setOrcamentosSalvos] = useState<OrcamentoSalvo[]>([]);
   const [orcamentoEditandoId, setOrcamentoEditandoId] = useState<string | null>(null);
+  const [modalOrcamentosAberto, setModalOrcamentosAberto] = useState(false);
 
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
 
@@ -641,17 +642,19 @@ async function carregarColaboradores() {
       <PlanProtectedRoute modulo="calculadora-show">
         <AppLayout>
           <div className="min-h-screen text-white">
-            <HeaderCalculadora onNovaSimulacao={limparCalculadora} />
+            <HeaderCalculadora
+              onNovaSimulacao={limparCalculadora}
+              onAbrirSimulacoes={() => setModalOrcamentosAberto(true)}
+              quantidadeSimulacoes={orcamentosSalvos.length}
+            />
 
             <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_340px]">
               <main className="grid gap-6">
                 <ResultadoFinal
                   custoTotal={formatarMoeda(totalCustos)}
                   lucro={formatarMoeda(lucroLiquido)}
-                  precoIdeal={formatarMoeda(valorNumerico(valorShow))}
-                  precoMinimo={formatarMoeda(totalCustos)}
-                  precoSugerido={formatarMoeda(valorNumerico(valorShow))}
-                  lucroPercentual={`${margem.toFixed(2)}%`}
+                  lucroPercentual={`${margem.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`}
+                  valorVenda={formatarMoeda(valorNumerico(valorShow))}
                 />
 
                 <InformacoesGerais
@@ -664,13 +667,6 @@ async function carregarColaboradores() {
                   onSalvar={salvarOrcamento}
                   onExportar={exportarPDF}
                   onLimpar={limparCalculadora}
-                />
-
-                <OrcamentosSalvos
-                  orcamentos={orcamentosSalvos}
-                  formatarDataHora={formatarDataHora}
-                  onCarregar={carregarOrcamento}
-                  onExcluir={excluirOrcamento}
                 />
 
                 <EquipeCard
@@ -741,6 +737,18 @@ async function carregarColaboradores() {
                 />
               </div>
             </div>
+
+            <OrcamentosSalvos
+              aberto={modalOrcamentosAberto}
+              orcamentos={orcamentosSalvos}
+              formatarDataHora={formatarDataHora}
+              onCarregar={(orcamento) => {
+                carregarOrcamento(orcamento);
+                setModalOrcamentosAberto(false);
+              }}
+              onExcluir={excluirOrcamento}
+              onFechar={() => setModalOrcamentosAberto(false)}
+            />
           </div>
 
         {false && (
